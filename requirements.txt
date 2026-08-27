@@ -1,0 +1,13 @@
+aiogram>=3.15
+pydantic>=2.9.0
+pydantic-settings>=2.0
+python-dotenv>=1.0
+sqlalchemy[asyncio]>=2.0
+asyncpg>=0.29
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+orjson>=3.9
+
+# Тесты (tests/test_api.py) гоняются на SQLite — так проверить сквозной сценарий
+# можно без поднятого Postgres. В проде не используется.
+aiosqlite>=0.20

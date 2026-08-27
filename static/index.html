@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="color-scheme" content="light">
+  <title>Тренажёр ЕГЭ</title>
+  <!-- Пути к статике только абсолютные: относительные Telegram запросит от корня
+       и получит 404, приложение молча не запустится (playbook 5.1). -->
+  <link rel="stylesheet" href="/static/fonts/manrope.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <!-- SDK берём у Telegram, чтобы получать обновления, но держим локальную копию:
+       без него Mini App не запустится вообще (playbook 5.2 про сторонние CDN). -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    if (!window.Telegram || !window.Telegram.WebApp) {
+      document.write('<scr' + 'ipt src="/static/telegram-web-app.js"><\/scr' + 'ipt>');
+    }
+  </script>
+</head>
+<body>
+  <!-- Сплэш — состояние по умолчанию. Экран выбирается только после ответа сервера,
+       чтобы зарегистрированному пользователю не мигал не тот раздел (playbook 5.5). -->
+  <div id="splash" class="splash">
+    <div class="splash__dot"></div>
+    <div class="splash__dot"></div>
+    <div class="splash__dot"></div>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <header id="header" class="header">
+      <button id="back" class="header__back" type="button" aria-label="Назад" hidden>←</button>
+      <div class="header__titles">
+        <div id="header-title" class="header__title">Подготовка к ЕГЭ</div>
+        <div id="header-sub" class="header__sub">русский язык</div>
+      </div>
+    </header>
+
+    <main id="screen" class="screen"></main>
+
+    <nav id="tabbar" class="tabbar">
+      <button class="tab" type="button" data-tab="trainer">
+        <span class="tab__icon tab__icon--grid"><i></i><i></i><i></i><i></i></span>
+        <span class="tab__label">Тренажёр</span>
+      </button>
+      <button class="tab" type="button" data-tab="stats">
+        <span class="tab__icon tab__icon--bars"><i></i><i></i><i></i></span>
+        <span class="tab__label">Статистика</span>
+      </button>
+      <button class="tab" type="button" data-tab="profile">
+        <span class="tab__icon tab__icon--user"><i></i></span>
+        <span class="tab__label">Профиль</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="dialog-root"></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

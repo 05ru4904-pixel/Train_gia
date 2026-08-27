@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: oklch(0.93 0.005 250); font-family: Manrope, -apple-system, "SF Pro Text", system-ui, sans-serif; }
+  a { color: oklch(0.55 0.11 250); }
+  a:hover { color: oklch(0.45 0.11 250); }
+  * { box-sizing: border-box; }
+  .sc::-webkit-scrollbar { width: 0; height: 0; }
+  @keyframes pulse { 0%,100% { opacity: 0.55 } 50% { opacity: 1 } }
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 32px 16px;">
+  <div style="width: 390px; height: 844px; background: #fff; border-radius: 44px; box-shadow: 0 1px 2px rgba(20,25,40,0.08), 0 24px 60px -12px rgba(20,25,40,0.28); position: relative; overflow: hidden; display: flex; flex-direction: column;">
+
+    <div style="height: 50px; flex: none; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 26px 8px; font-size: 14px; font-weight: 600; color: oklch(0.28 0.01 250); letter-spacing: 0.01em;">
+      <span>9:41</span>
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <div style="display: flex; align-items: flex-end; gap: 2px; height: 10px;">
+          <div style="width: 3px; height: 4px; background: currentColor; border-radius: 1px;"></div>
+          <div style="width: 3px; height: 6px; background: currentColor; border-radius: 1px;"></div>
+          <div style="width: 3px; height: 8px; background: currentColor; border-radius: 1px;"></div>
+          <div style="width: 3px; height: 10px; background: currentColor; border-radius: 1px;"></div>
+        </div>
+        <div style="width: 22px; height: 11px; border: 1.5px solid currentColor; border-radius: 3px; padding: 1.5px;">
+          <div style="width: 70%; height: 100%; background: currentColor; border-radius: 1px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex: none; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid oklch(0.93 0.004 250);">
+      <div onClick="{{ goBack }}" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: {{ backColor }}; font-size: 22px; font-weight: 500; line-height: 1;">←</div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 15px; font-weight: 700; color: oklch(0.24 0.01 250); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ headerTitle }}</div>
+        <div style="font-size: 11px; font-weight: 500; color: oklch(0.62 0.01 250);">mini app</div>
+      </div>
+      <div style="display: flex; gap: 3px;">
+        <div style="width: 3px; height: 3px; border-radius: 50%; background: oklch(0.6 0.01 250);"></div>
+        <div style="width: 3px; height: 3px; border-radius: 50%; background: oklch(0.6 0.01 250);"></div>
+        <div style="width: 3px; height: 3px; border-radius: 50%; background: oklch(0.6 0.01 250);"></div>
+      </div>
+      <div style="font-size: 15px; color: oklch(0.5 0.01 250); cursor: pointer; font-weight: 500;">✕</div>
+    </div>
+
+    <div class="sc" style="flex: 1; overflow-y: auto; background: {{ pageBg }};">
+
+      <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 20px 16px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="height: 92px; border-radius: 16px; background: oklch(0.95 0.004 250); animation: pulse 1.4s ease-in-out infinite;"></div>
+          <div style="height: 92px; border-radius: 16px; background: oklch(0.95 0.004 250); animation: pulse 1.4s ease-in-out infinite 0.15s;"></div>
+          <div style="height: 64px; border-radius: 16px; background: oklch(0.95 0.004 250); animation: pulse 1.4s ease-in-out infinite 0.3s;"></div>
+          <div style="height: 64px; border-radius: 16px; background: oklch(0.95 0.004 250); animation: pulse 1.4s ease-in-out infinite 0.45s;"></div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 120px 32px; text-align: center;">
+          <div style="width: 44px; height: 44px; margin: 0 auto 18px; border-radius: 50%; border: 2px solid oklch(0.7 0.09 25); color: oklch(0.55 0.14 25); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700;">!</div>
+          <div style="font-size: 16px; font-weight: 700; color: oklch(0.26 0.01 250); line-height: 1.45;">Не удалось загрузить данные.<br />Попробуйте ещё раз.</div>
+          <div onClick="{{ retry }}" style="margin-top: 22px; display: inline-block; padding: 12px 28px; border-radius: 12px; background: {{ accent }}; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;">Повторить</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTrainerHome }}" hint-placeholder-val="{{ true }}">
+        <div style="padding: 22px 16px 28px;">
+          <div style="font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: oklch(0.22 0.01 250);">Тренажёр</div>
+          <div style="margin-top: 6px; font-size: 14px; font-weight: 500; color: oklch(0.58 0.01 250);">ЕГЭ по русскому языку · задания 1–26</div>
+
+          <sc-if value="{{ hasUnfinished }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top: 20px; padding: 16px; border-radius: 18px; background: oklch(0.97 0.012 250); border: 1px solid oklch(0.9 0.02 250);">
+              <div style="font-size: 13px; font-weight: 700; color: {{ accent }}; text-transform: uppercase; letter-spacing: 0.06em;">Продолжить тренировку</div>
+              <div style="margin-top: 8px; font-size: 15px; font-weight: 600; color: oklch(0.26 0.01 250);">{{ unfinishedLabel }}</div>
+              <div style="margin-top: 12px; height: 5px; border-radius: 3px; background: oklch(0.9 0.01 250); overflow: hidden;">
+                <div style="height: 100%; border-radius: 3px; background: {{ accent }}; width: {{ unfinishedPct }}%;"></div>
+              </div>
+              <div onClick="{{ resume }}" style="margin-top: 14px; padding: 11px; border-radius: 12px; background: {{ accent }}; color: #fff; font-size: 15px; font-weight: 700; text-align: center; cursor: pointer;">Продолжить</div>
+            </div>
+          </sc-if>
+
+          <div onClick="{{ startFullVariant }}" style="margin-top: 20px; padding: 18px; border-radius: 18px; border: 1px solid oklch(0.91 0.004 250); background: #fff; cursor: pointer; display: flex; align-items: center; gap: 14px;" style-hover="border-color: oklch(0.8 0.02 250)">
+            <div style="width: 42px; height: 42px; flex: none; border-radius: 12px; background: oklch(0.96 0.01 250); display: flex; align-items: center; justify-content: center;">
+              <div style="width: 16px; height: 20px; border: 2px solid oklch(0.45 0.06 250); border-radius: 3px;"></div>
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 16px; font-weight: 700; color: oklch(0.24 0.01 250);">Решить полный вариант</div>
+              <div style="margin-top: 3px; font-size: 13px; font-weight: 500; color: oklch(0.6 0.01 250);">Задания 1–26, таймер 3:30</div>
+            </div>
+            <div style="color: oklch(0.72 0.01 250); font-size: 18px;">›</div>
+          </div>
+
+          <div onClick="{{ openTaskList }}" style="margin-top: 12px; padding: 18px; border-radius: 18px; border: 1px solid oklch(0.91 0.004 250); background: #fff; cursor: pointer; display: flex; align-items: center; gap: 14px;" style-hover="border-color: oklch(0.8 0.02 250)">
+            <div style="width: 42px; height: 42px; flex: none; border-radius: 12px; background: oklch(0.96 0.01 250); display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 11px;">
+              <div style="background: oklch(0.45 0.06 250); border-radius: 1px;"></div>
+              <div style="background: oklch(0.8 0.02 250); border-radius: 1px;"></div>
+              <div style="background: oklch(0.8 0.02 250); border-radius: 1px;"></div>
+              <div style="background: oklch(0.45 0.06 250); border-radius: 1px;"></div>
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 16px; font-weight: 700; color: oklch(0.24 0.01 250);">Тренировать конкретное задание</div>
+              <div style="margin-top: 3px; font-size: 13px; font-weight: 500; color: oklch(0.6 0.01 250);">Выбрать номер и количество вопросов</div>
+            </div>
+            <div style="color: oklch(0.72 0.01 250); font-size: 18px;">›</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTaskList }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 18px 16px 28px;">
+          <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: oklch(0.22 0.01 250);">Выберите задание</div>
+          <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px;">
+            <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="6">
+              <div onClick="{{ t.pick }}" style="padding: 14px; border-radius: 14px; border: 1px solid oklch(0.92 0.004 250); background: #fff; cursor: pointer; display: flex; align-items: center; gap: 13px;" style-hover="border-color: oklch(0.8 0.02 250)">
+                <div style="width: 38px; height: 38px; flex: none; border-radius: 11px; background: oklch(0.96 0.008 250); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: oklch(0.4 0.05 250);">{{ t.n }}</div>
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 14.5px; font-weight: 700; color: oklch(0.24 0.01 250); line-height: 1.3; text-wrap: pretty;">{{ t.title }}</div>
+                  <div style="margin-top: 2px; font-size: 12.5px; font-weight: 500; color: oklch(0.62 0.01 250); line-height: 1.35; text-wrap: pretty;">{{ t.desc }}</div>
+                </div>
+                <div style="color: oklch(0.75 0.01 250); font-size: 17px;">›</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCountSelect }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 22px 16px;">
+          <div style="font-size: 13px; font-weight: 700; color: {{ accent }}; letter-spacing: 0.05em;">№{{ pickedN }}</div>
+          <div style="margin-top: 6px; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: oklch(0.22 0.01 250); line-height: 1.25;">{{ pickedTitle }}</div>
+          <div style="margin-top: 6px; font-size: 14px; font-weight: 500; color: oklch(0.58 0.01 250);">{{ pickedDesc }}</div>
+          <div style="margin-top: 26px; font-size: 15px; font-weight: 700; color: oklch(0.3 0.01 250);">Сколько заданий решаем?</div>
+          <div style="margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <sc-for list="{{ counts }}" as="c" hint-placeholder-count="4">
+              <div onClick="{{ c.pick }}" style="padding: 22px 0; border-radius: 16px; border: 1px solid oklch(0.91 0.004 250); background: #fff; text-align: center; cursor: pointer;" style-hover="border-color: oklch(0.75 0.03 250)">
+                <div style="font-size: 26px; font-weight: 800; color: oklch(0.24 0.01 250);">{{ c.v }}</div>
+                <div style="margin-top: 2px; font-size: 12px; font-weight: 600; color: oklch(0.62 0.01 250);">{{ c.word }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTraining }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 18px 16px 24px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <div style="font-size: 14px; font-weight: 700; color: oklch(0.3 0.01 250);">{{ qLabel }}</div>
+            <div style="font-size: 13px; font-weight: 700; color: oklch(0.6 0.01 250);">{{ doneLabel }}</div>
+          </div>
+          <div style="margin-top: 10px; height: 5px; border-radius: 3px; background: oklch(0.92 0.006 250); overflow: hidden;">
+            <div style="height: 100%; border-radius: 3px; background: {{ accent }}; width: {{ progressPct }}%; transition: width 0.3s ease;"></div>
+          </div>
+
+          <div style="margin-top: 22px; font-size: 17px; font-weight: 600; line-height: 1.45; color: oklch(0.2 0.01 250); text-wrap: pretty;">{{ qText }}</div>
+
+          <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 9px;">
+            <sc-for list="{{ options }}" as="o" hint-placeholder-count="4">
+              <div onClick="{{ o.tap }}" style="padding: 15px 14px; border-radius: 14px; border: 1.5px solid {{ o.border }}; background: {{ o.bg }}; cursor: {{ o.cursor }}; display: flex; align-items: center; gap: 12px;">
+                <div style="width: 20px; height: 20px; flex: none; border-radius: {{ o.markRadius }}; border: 1.5px solid {{ o.markBorder }}; background: {{ o.markBg }}; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 800;">{{ o.mark }}</div>
+                <div style="flex: 1; font-size: 15.5px; font-weight: 600; color: {{ o.color }}; line-height: 1.35; text-wrap: pretty;">{{ o.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ checked }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top: 18px; padding: 14px 16px; border-radius: 14px; background: {{ verdictBg }};">
+              <div style="font-size: 15px; font-weight: 800; color: {{ verdictColor }};">{{ verdictText }}</div>
+              <sc-if value="{{ showCorrect }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 5px; font-size: 14px; font-weight: 600; color: oklch(0.4 0.01 250);">Правильный ответ: {{ correctLabel }}</div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <div onClick="{{ primaryAction }}" style="margin-top: 20px; padding: 15px; border-radius: 14px; background: {{ primaryBg }}; color: {{ primaryColor }}; font-size: 16px; font-weight: 700; text-align: center; cursor: {{ primaryCursor }};">{{ primaryLabel }}</div>
+          <div onClick="{{ exitTraining }}" style="margin-top: 10px; padding: 12px; text-align: center; font-size: 14px; font-weight: 600; color: oklch(0.6 0.01 250); cursor: pointer;">Выйти — прогресс сохранится</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isResult }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 26px 16px 28px;">
+          <div style="text-align: center;">
+            <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: oklch(0.22 0.01 250);">Тренировка завершена</div>
+            <div style="margin-top: 4px; font-size: 14px; font-weight: 500; color: oklch(0.6 0.01 250);">№{{ pickedN }} · {{ pickedTitle }}</div>
+            <div style="margin: 20px auto 0; font-size: 52px; font-weight: 800; letter-spacing: -0.03em; color: {{ accent }};">{{ scorePct }}%</div>
+          </div>
+          <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+            <div style="padding: 14px 8px; border-radius: 14px; background: oklch(0.97 0.004 250); text-align: center;">
+              <div style="font-size: 20px; font-weight: 800; color: oklch(0.26 0.01 250);">{{ totalQ }}</div>
+              <div style="margin-top: 2px; font-size: 11.5px; font-weight: 600; color: oklch(0.6 0.01 250);">заданий</div>
+            </div>
+            <div style="padding: 14px 8px; border-radius: 14px; background: oklch(0.97 0.02 150); text-align: center;">
+              <div style="font-size: 20px; font-weight: 800; color: oklch(0.48 0.11 150);">{{ correctCount }}</div>
+              <div style="margin-top: 2px; font-size: 11.5px; font-weight: 600; color: oklch(0.5 0.05 150);">верных</div>
+            </div>
+            <div style="padding: 14px 8px; border-radius: 14px; background: oklch(0.97 0.02 25); text-align: center;">
+              <div style="font-size: 20px; font-weight: 800; color: oklch(0.53 0.15 25);">{{ wrongCount }}</div>
+              <div style="margin-top: 2px; font-size: 11.5px; font-weight: 600; color: oklch(0.55 0.07 25);">ошибок</div>
+            </div>
+          </div>
+
+          <sc-if value="{{ hasMistakes }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top: 24px;">
+              <div style="font-size: 15px; font-weight: 700; color: oklch(0.3 0.01 250);">Ваши ошибки</div>
+              <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <sc-for list="{{ mistakes }}" as="m" hint-placeholder-count="3">
+                  <div onClick="{{ m.open }}" style="padding: 13px 14px; border-radius: 13px; border: 1px solid oklch(0.92 0.004 250); background: #fff; cursor: pointer; display: flex; align-items: center; gap: 10px;" style-hover="border-color: oklch(0.8 0.02 250)">
+                    <div style="font-size: 14px; font-weight: 800; color: oklch(0.53 0.15 25);">✕</div>
+                    <div style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: oklch(0.3 0.01 250); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.label }}</div>
+                    <div style="color: oklch(0.75 0.01 250); font-size: 16px;">›</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ noMistakes }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top: 24px; padding: 18px; border-radius: 14px; background: oklch(0.97 0.02 150); font-size: 14px; font-weight: 600; color: oklch(0.45 0.08 150); text-align: center;">Ошибок нет — все ответы верные.</div>
+          </sc-if>
+
+          <div onClick="{{ repeat }}" style="margin-top: 24px; padding: 15px; border-radius: 14px; background: {{ accent }}; color: #fff; font-size: 16px; font-weight: 700; text-align: center; cursor: pointer;">Повторить тренировку</div>
+          <div onClick="{{ toTrainer }}" style="margin-top: 10px; padding: 14px; border-radius: 14px; border: 1px solid oklch(0.9 0.004 250); font-size: 15px; font-weight: 700; color: oklch(0.35 0.01 250); text-align: center; cursor: pointer;">Вернуться в тренажёр</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isMistakeDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 20px 16px 28px;">
+          <div style="font-size: 13px; font-weight: 700; color: oklch(0.6 0.01 250); letter-spacing: 0.04em;">РАЗБОР · {{ mLabel }}</div>
+          <div style="margin-top: 14px; font-size: 16.5px; font-weight: 600; line-height: 1.45; color: oklch(0.2 0.01 250); text-wrap: pretty;">{{ mText }}</div>
+          <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+            <sc-for list="{{ mOptions }}" as="o" hint-placeholder-count="4">
+              <div style="padding: 13px 14px; border-radius: 13px; border: 1.5px solid {{ o.border }}; background: {{ o.bg }}; display: flex; align-items: center; gap: 10px;">
+                <div style="flex: 1; font-size: 15px; font-weight: 600; color: {{ o.color }};">{{ o.label }}</div>
+                <div style="font-size: 11.5px; font-weight: 700; color: {{ o.tagColor }};">{{ o.tag }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="padding: 13px 14px; border-radius: 13px; background: oklch(0.97 0.015 25); font-size: 14px; font-weight: 600; color: oklch(0.45 0.08 25);">Ваш ответ: {{ mYours }}</div>
+            <div style="padding: 13px 14px; border-radius: 13px; background: oklch(0.97 0.02 150); font-size: 14px; font-weight: 600; color: oklch(0.44 0.08 150);">Правильный ответ: {{ mCorrect }}</div>
+          </div>
+          <div onClick="{{ backToResult }}" style="margin-top: 22px; padding: 14px; border-radius: 14px; border: 1px solid oklch(0.9 0.004 250); font-size: 15px; font-weight: 700; color: oklch(0.35 0.01 250); text-align: center; cursor: pointer;">К результату</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isStats }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 20px 16px 28px;">
+          <div style="font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: oklch(0.22 0.01 250);">Статистика</div>
+
+          <div style="margin-top: 16px; padding: 14px; border-radius: 16px; border: 1px solid oklch(0.92 0.004 250); background: #fff;">
+            <div style="font-size: 12.5px; font-weight: 700; color: oklch(0.58 0.01 250); letter-spacing: 0.04em;">ПЕРИОД</div>
+            <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <label style="display: block;">
+                <div style="font-size: 11.5px; font-weight: 600; color: oklch(0.6 0.01 250); margin-bottom: 4px;">С</div>
+                <input type="date" value="{{ dateFrom }}" onChange="{{ setFrom }}" style="width: 100%; padding: 10px; border-radius: 11px; border: 1px solid oklch(0.9 0.004 250); font-family: inherit; font-size: 14px; font-weight: 600; color: oklch(0.26 0.01 250); background: #fff;" />
+              </label>
+              <label style="display: block;">
+                <div style="font-size: 11.5px; font-weight: 600; color: oklch(0.6 0.01 250); margin-bottom: 4px;">По</div>
+                <input type="date" value="{{ dateTo }}" onChange="{{ setTo }}" style="width: 100%; padding: 10px; border-radius: 11px; border: 1px solid oklch(0.9 0.004 250); font-family: inherit; font-size: 14px; font-weight: 600; color: oklch(0.26 0.01 250); background: #fff;" />
+              </label>
+            </div>
+            <div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">
+              <sc-for list="{{ presets }}" as="p" hint-placeholder-count="3">
+                <div onClick="{{ p.pick }}" style="padding: 7px 12px; border-radius: 999px; border: 1px solid {{ p.border }}; background: {{ p.bg }}; font-size: 12.5px; font-weight: 700; color: {{ p.color }}; cursor: pointer;">{{ p.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ statsEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top: 40px; text-align: center; padding: 0 20px;">
+              <div style="width: 52px; height: 52px; margin: 0 auto; border-radius: 14px; background: oklch(0.96 0.006 250); display: flex; align-items: flex-end; justify-content: center; gap: 4px; padding: 12px;">
+                <div style="width: 6px; height: 40%; background: oklch(0.82 0.02 250); border-radius: 2px;"></div>
+                <div style="width: 6px; height: 70%; background: oklch(0.82 0.02 250); border-radius: 2px;"></div>
+                <div style="width: 6px; height: 55%; background: oklch(0.82 0.02 250); border-radius: 2px;"></div>
+              </div>
+              <div style="margin-top: 16px; font-size: 16px; font-weight: 700; color: oklch(0.28 0.01 250);">Здесь появится ваша статистика</div>
+              <div style="margin-top: 6px; font-size: 14px; font-weight: 500; color: oklch(0.6 0.01 250); line-height: 1.45; text-wrap: pretty;">Решите первую тренировку, чтобы начать отслеживать прогресс.</div>
+              <div onClick="{{ openTaskList }}" style="margin-top: 20px; display: inline-block; padding: 12px 24px; border-radius: 12px; background: {{ accent }}; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;">Начать тренировку</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ statsFilled }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top: 14px; padding: 18px; border-radius: 16px; background: oklch(0.97 0.008 250);">
+              <div style="display: flex; align-items: flex-end; justify-content: space-between;">
+                <div>
+                  <div style="font-size: 12.5px; font-weight: 700; color: oklch(0.55 0.01 250); letter-spacing: 0.04em;">ТОЧНОСТЬ</div>
+                  <div style="margin-top: 4px; font-size: 40px; font-weight: 800; letter-spacing: -0.03em; color: oklch(0.24 0.01 250); line-height: 1;">{{ accuracy }}%</div>
+                </div>
+                <div style="text-align: right; font-size: 13px; font-weight: 600; color: oklch(0.5 0.01 250); line-height: 1.6;">
+                  <div>Решено: {{ solved }}</div>
+                  <div style="color: oklch(0.48 0.11 150);">Верно: {{ right }}</div>
+                  <div style="color: oklch(0.53 0.14 25);">Неверно: {{ wrong }}</div>
+                </div>
+              </div>
+              <div style="margin-top: 14px; height: 8px; border-radius: 4px; background: oklch(0.9 0.01 250); overflow: hidden; display: flex;">
+                <div style="height: 100%; background: oklch(0.6 0.1 150); width: {{ accuracy }}%;"></div>
+              </div>
+            </div>
+
+            <div style="margin-top: 24px; font-size: 15px; font-weight: 700; color: oklch(0.3 0.01 250);">По заданиям</div>
+            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 7px;">
+              <sc-for list="{{ taskStats }}" as="s" hint-placeholder-count="6">
+                <div style="padding: 13px 14px; border-radius: 13px; border: 1px solid oklch(0.93 0.004 250); background: #fff;">
+                  <div style="display: flex; align-items: baseline; gap: 8px;">
+                    <div style="font-size: 13.5px; font-weight: 800; color: oklch(0.35 0.03 250);">№{{ s.n }}</div>
+                    <div style="flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: oklch(0.4 0.01 250); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ s.title }}</div>
+                    <div style="font-size: 13.5px; font-weight: 800; color: {{ s.accColor }};">{{ s.acc }}%</div>
+                  </div>
+                  <div style="margin-top: 8px; height: 5px; border-radius: 3px; background: oklch(0.94 0.006 250); overflow: hidden;">
+                    <div style="height: 100%; border-radius: 3px; background: {{ s.accColor }}; width: {{ s.acc }}%;"></div>
+                  </div>
+                  <div style="margin-top: 7px; font-size: 12px; font-weight: 600; color: oklch(0.63 0.01 250);">{{ s.detail }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="margin-top: 26px; font-size: 15px; font-weight: 700; color: oklch(0.3 0.01 250);">История полных вариантов</div>
+            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+              <sc-for list="{{ history }}" as="h" hint-placeholder-count="3">
+                <div style="padding: 14px; border-radius: 14px; border: 1px solid oklch(0.93 0.004 250); background: #fff;">
+                  <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                    <div style="font-size: 14.5px; font-weight: 700; color: oklch(0.26 0.01 250);">Вариант №{{ h.id }}</div>
+                    <div style="font-size: 15px; font-weight: 800; color: {{ accent }};">{{ h.score }} балла</div>
+                  </div>
+                  <div style="margin-top: 6px; display: flex; gap: 14px; font-size: 12.5px; font-weight: 600; color: oklch(0.6 0.01 250);">
+                    <span>{{ h.date }}</span>
+                    <span>{{ h.time }}</span>
+                    <span>{{ h.raw }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 24px 16px 28px;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="width: 62px; height: 62px; flex: none; border-radius: 50%; background: oklch(0.94 0.02 250); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; color: oklch(0.45 0.06 250);">А</div>
+            <div>
+              <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: oklch(0.22 0.01 250);">Александр</div>
+              <div style="margin-top: 2px; font-size: 14px; font-weight: 600; color: oklch(0.58 0.01 250);">@username</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 22px; padding: 16px; border-radius: 16px; border: 1px solid oklch(0.92 0.004 250); background: #fff; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 600;">
+              <span style="color: oklch(0.6 0.01 250);">Тариф</span>
+              <span style="color: oklch(0.24 0.01 250); font-weight: 700;">Free</span>
+            </div>
+            <div style="height: 1px; background: oklch(0.95 0.004 250);"></div>
+            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 600;">
+              <span style="color: oklch(0.6 0.01 250);">Подписка до</span>
+              <span style="color: oklch(0.24 0.01 250); font-weight: 700;">12.10.2026</span>
+            </div>
+            <div style="height: 1px; background: oklch(0.95 0.004 250);"></div>
+            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 600;">
+              <span style="color: oklch(0.6 0.01 250);">В сервисе с</span>
+              <span style="color: oklch(0.24 0.01 250); font-weight: 700;">04.02.2026</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 9px;">
+            <div style="padding: 15px; border-radius: 14px; background: {{ accent }}; color: #fff; font-size: 15px; font-weight: 700; text-align: center; cursor: pointer;">Управление подпиской</div>
+            <div style="padding: 15px; border-radius: 14px; border: 1px solid oklch(0.9 0.004 250); color: oklch(0.32 0.01 250); font-size: 15px; font-weight: 700; text-align: center; cursor: pointer;">Тарифы</div>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+
+    <div style="flex: none; display: flex; border-top: 1px solid oklch(0.93 0.004 250); background: rgba(255,255,255,0.94); backdrop-filter: blur(12px); padding: 8px 0 22px;">
+      <div onClick="{{ navTrainer }}" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer;">
+        <div style="width: 20px; height: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 3px;">
+          <div style="background: {{ nav1 }}; border-radius: 2px;"></div>
+          <div style="background: {{ nav1 }}; border-radius: 2px; opacity: 0.45;"></div>
+          <div style="background: {{ nav1 }}; border-radius: 2px; opacity: 0.45;"></div>
+          <div style="background: {{ nav1 }}; border-radius: 2px;"></div>
+        </div>
+        <div style="font-size: 10.5px; font-weight: 700; color: {{ nav1 }};">Тренажёр</div>
+      </div>
+      <div onClick="{{ navStats }}" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer;">
+        <div style="width: 20px; height: 20px; display: flex; align-items: flex-end; justify-content: center; gap: 3px;">
+          <div style="width: 4px; height: 45%; background: {{ nav2 }}; border-radius: 2px; opacity: 0.5;"></div>
+          <div style="width: 4px; height: 100%; background: {{ nav2 }}; border-radius: 2px;"></div>
+          <div style="width: 4px; height: 70%; background: {{ nav2 }}; border-radius: 2px; opacity: 0.75;"></div>
+        </div>
+        <div style="font-size: 10.5px; font-weight: 700; color: {{ nav2 }};">Статистика</div>
+      </div>
+      <div onClick="{{ navProfile }}" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer;">
+        <div style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;">
+          <div style="width: 16px; height: 16px; border: 2px solid {{ nav3 }}; border-radius: 50%;"></div>
+        </div>
+        <div style="font-size: 10.5px; font-weight: 700; color: {{ nav3 }};">Профиль</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;oklch(0.55 0.11 250)&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;oklch(0.55 0.11 250)&quot;,&quot;oklch(0.52 0.08 200)&quot;,&quot;oklch(0.5 0.1 160)&quot;,&quot;oklch(0.5 0.09 285)&quot;],&quot;section&quot;:&quot;Оформление&quot;},&quot;dataState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;normal&quot;,&quot;options&quot;:[&quot;normal&quot;,&quot;loading&quot;,&quot;error&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Состояния&quot;},&quot;statsEmpty&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Состояния&quot;}}">
+class Component extends DCLogic {
+  tasks = [
+    ["Стилистический анализ текста", "Работа с микротекстом"],
+    ["Средства связи предложений", "Логика и связность текста"],
+    ["Лексическое значение слова", "Словарная статья"],
+    ["Орфоэпические нормы", "Постановка ударения"],
+    ["Лексические нормы", "Паронимы"],
+    ["Лексические нормы", "Плеоназм и тавтология"],
+    ["Морфологические нормы", "Формы слова"],
+    ["Синтаксические нормы", "Грамматические ошибки"],
+    ["Правописание корней", "Чередование гласных"],
+    ["Правописание приставок", "Пре-/при-, з/с"],
+    ["Правописание суффиксов", "Кроме -Н-/-НН-"],
+    ["Личные окончания глаголов", "И суффиксы причастий"],
+    ["Правописание НЕ и НИ", "Слитно или раздельно"],
+    ["Слитное и дефисное написание", "Служебные части речи"],
+    ["Правописание -Н-/-НН-", "Отглагольные формы"],
+    ["Запятые в ССП", "И при однородных членах"],
+    ["Обособленные члены", "Определения и обстоятельства"],
+    ["Вводные слова и обращения", "Пунктуация"],
+    ["Знаки препинания в СПП", "Сложноподчинённое предложение"],
+    ["Сложное предложение", "Разные виды связи"],
+    ["Пунктуационный анализ", "Поиск одинаковых знаков"],
+    ["Текст как речевое произведение", "Соответствие содержанию"],
+    ["Типы речи", "Описание, повествование, рассуждение"],
+    ["Лексика и фразеологизмы", "Работа с фрагментом"],
+    ["Средства связи предложений", "Поиск в диапазоне"],
+    ["Выразительные средства языка", "Термины и примеры"]
+  ];
+
+  qSingle = {
+    kind: "single",
+    text: "В каком слове верно поставлено ударение?",
+    options: ["звонИт", "звОнит", "позвОнит", "квАртал", "тОрты"],
+    correct: [0]
+  };
+
+  qMulti = {
+    kind: "multi",
+    text: "Укажите варианты ответов, в которых верно передана главная информация текста. Запишите номера ответов.",
+    options: [
+      "А — Орфоэпические нормы регулируют постановку ударения.",
+      "Б — Нормы ударения в русском языке неизменны и не зависят от формы слова.",
+      "В — В ряде слов допустимы два варианта ударения.",
+      "Г — Ударение в русском языке всегда падает на первый слог.",
+      "Д — Орфоэпические словари фиксируют нормативные варианты."
+    ],
+    correct: [0, 2, 4]
+  };
+
+  state = {
+    tab: "trainer",
+    screen: "trainerHome",
+    pickedIdx: null,
+    count: null,
+    qi: 0,
+    selected: [],
+    checked: false,
+    results: [],
+    mistakeQi: null,
+    session: { taskIdx: 3, count: 12, answered: 7 },
+    dateFrom: "2026-09-01",
+    dateTo: "2026-09-30",
+    preset: "Сентябрь"
+  };
+
+  q(i) { return i % 3 === 2 ? this.qMulti : this.qSingle; }
+
+  letters(arr, opts) {
+    return arr.map(i => {
+      const raw = opts[i];
+      const m = raw.match(/^([А-Я]) — /);
+      return m ? m[1] : raw;
+    }).join(", ");
+  }
+
+  go(screen, extra) { this.setState(Object.assign({ screen }, extra || {})); }
+
+  startTraining(count) {
+    this.setState({ screen: "training", count, qi: 0, selected: [], checked: false, results: [], session: null });
+  }
+
+  tapOption(i) {
+    if (this.state.checked) return;
+    const q = this.q(this.state.qi);
+    let sel = this.state.selected.slice();
+    if (q.kind === "multi") {
+      sel = sel.includes(i) ? sel.filter(x => x !== i) : sel.concat([i]);
+    } else {
+      sel = [i];
+    }
+    this.setState({ selected: sel });
+  }
+
+  check() {
+    if (!this.state.selected.length) return;
+    const q = this.q(this.state.qi);
+    const sel = this.state.selected.slice().sort((a, b) => a - b);
+    const ok = sel.length === q.correct.length && sel.every((v, k) => v === q.correct[k]);
+    this.setState({
+      checked: true,
+      results: this.state.results.concat([{ qi: this.state.qi, ok, selected: sel }])
+    });
+  }
+
+  next() {
+    const nextQi = this.state.qi + 1;
+    if (nextQi >= this.state.count) { this.setState({ screen: "result" }); return; }
+    this.setState({ qi: nextQi, selected: [], checked: false });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const accent = this.props.accentColor || "oklch(0.55 0.11 250)";
+    const dataState = this.props.dataState || "normal";
+    const statsEmptyProp = this.props.statsEmpty === true;
+    const muted = "oklch(0.62 0.01 250)";
+    const ink = "oklch(0.24 0.01 250)";
+    const green = "oklch(0.5 0.11 150)";
+    const red = "oklch(0.55 0.15 25)";
+
+    const isStats = s.tab === "stats";
+    const isProfile = s.tab === "profile";
+    const trainerScreen = s.tab === "trainer" ? s.screen : null;
+    const isLoading = dataState === "loading" && (isStats || isProfile || trainerScreen === "trainerHome");
+    const isError = dataState === "error" && (isStats || isProfile || trainerScreen === "trainerHome");
+    const gate = !isLoading && !isError;
+
+    const t = s.pickedIdx != null ? this.tasks[s.pickedIdx] : null;
+    const q = this.q(s.qi);
+    const isMulti = q.kind === "multi";
+    const answered = s.results.length;
+    const lastResult = s.results[s.results.length - 1];
+
+    const options = q.options.map((label, i) => {
+      const picked = s.selected.includes(i);
+      const isCorrect = q.correct.includes(i);
+      let border = "oklch(0.91 0.004 250)", bg = "#fff", color = ink, markBg = "#fff", markBorder = "oklch(0.8 0.01 250)", mark = "";
+      if (!s.checked && picked) { border = accent; bg = "oklch(0.985 0.008 250)"; markBg = accent; markBorder = accent; mark = isMulti ? "✓" : "•"; }
+      if (s.checked) {
+        if (isCorrect) { border = "oklch(0.72 0.09 150)"; bg = "oklch(0.98 0.015 150)"; color = "oklch(0.34 0.07 150)"; markBg = green; markBorder = green; mark = "✓"; }
+        else if (picked) { border = "oklch(0.76 0.11 25)"; bg = "oklch(0.98 0.015 25)"; color = "oklch(0.4 0.09 25)"; markBg = red; markBorder = red; mark = "✕"; }
+      }
+      return {
+        label, border, bg, color, markBg, markBorder, mark,
+        markRadius: isMulti ? "6px" : "50%",
+        cursor: s.checked ? "default" : "pointer",
+        tap: () => this.tapOption(i)
+      };
+    });
+
+    const mQi = s.mistakeQi;
+    const mq = mQi != null ? this.q(mQi) : null;
+    const mRes = mQi != null ? s.results.find(r => r.qi === mQi) : null;
+    const mOptions = mq ? mq.options.map((label, i) => {
+      const isC = mq.correct.includes(i);
+      const yours = mRes && mRes.selected.includes(i);
+      return {
+        label,
+        border: isC ? "oklch(0.75 0.08 150)" : yours ? "oklch(0.78 0.1 25)" : "oklch(0.93 0.004 250)",
+        bg: isC ? "oklch(0.98 0.015 150)" : yours ? "oklch(0.98 0.015 25)" : "#fff",
+        color: isC ? "oklch(0.34 0.07 150)" : yours ? "oklch(0.42 0.09 25)" : "oklch(0.35 0.01 250)",
+        tag: isC ? "верно" : yours ? "ваш ответ" : "",
+        tagColor: isC ? green : red
+      };
+    }) : [];
+
+    const correctCount = s.results.filter(r => r.ok).length;
+    const wrongList = s.results.filter(r => !r.ok);
+
+    const taskStats = this.tasks.slice(0, 8).map((tt, i) => {
+      const solved = 12 + ((i * 17) % 40);
+      const acc = 62 + ((i * 13) % 34);
+      return {
+        n: i + 1, title: tt[0], acc,
+        accColor: acc >= 80 ? green : acc >= 65 ? accent : red,
+        detail: "Решено " + solved + " · верно " + Math.round(solved * acc / 100) + " · неверно " + (solved - Math.round(solved * acc / 100))
+      };
+    });
+
+    const presets = ["7 дней", "30 дней", "Сентябрь"].map(label => ({
+      label,
+      pick: () => this.setState({ preset: label }),
+      bg: s.preset === label ? "oklch(0.96 0.015 250)" : "#fff",
+      border: s.preset === label ? accent : "oklch(0.91 0.004 250)",
+      color: s.preset === label ? accent : muted
+    }));
+
+    const headerTitle =
+      trainerScreen === "taskList" ? "Выбор задания" :
+      trainerScreen === "countSelect" ? "Настройка тренировки" :
+      trainerScreen === "training" ? "Тренировка · №" + (s.pickedIdx + 1) :
+      trainerScreen === "result" ? "Результат" :
+      trainerScreen === "mistake" ? "Разбор ошибки" :
+      isStats ? "Статистика" : isProfile ? "Профиль" : "Подготовка к ЕГЭ";
+
+    const canGoBack = trainerScreen && trainerScreen !== "trainerHome";
+
+    return {
+      accent, pageBg: "#fff", headerTitle,
+      backColor: canGoBack ? "oklch(0.45 0.06 250)" : "oklch(0.86 0.01 250)",
+      goBack: () => {
+        if (trainerScreen === "taskList") this.go("trainerHome");
+        else if (trainerScreen === "countSelect") this.go("taskList");
+        else if (trainerScreen === "training") this.go("trainerHome", { session: { taskIdx: s.pickedIdx, count: s.count, answered } });
+        else if (trainerScreen === "result") this.go("trainerHome");
+        else if (trainerScreen === "mistake") this.go("result");
+      },
+
+      isLoading, isError,
+      retry: () => {},
+
+      isTrainerHome: gate && trainerScreen === "trainerHome",
+      isTaskList: gate && trainerScreen === "taskList",
+      isCountSelect: gate && trainerScreen === "countSelect",
+      isTraining: gate && trainerScreen === "training",
+      isResult: gate && trainerScreen === "result",
+      isMistakeDetail: gate && trainerScreen === "mistake",
+      isStats: gate && isStats,
+      isProfile: gate && isProfile,
+
+      hasUnfinished: !!s.session,
+      unfinishedLabel: s.session ? "№" + (s.session.taskIdx + 1) + " · " + this.tasks[s.session.taskIdx][0] + " · " + s.session.answered + "/" + s.session.count + " выполнено" : "",
+      unfinishedPct: s.session ? Math.round(s.session.answered / s.session.count * 100) : 0,
+      resume: () => this.setState({
+        tab: "trainer", screen: "training", pickedIdx: s.session.taskIdx, count: s.session.count,
+        qi: s.session.answered, selected: [], checked: false,
+        results: Array.from({ length: s.session.answered }, (_, i) => ({ qi: i, ok: i % 4 !== 1, selected: [0] })),
+        session: null
+      }),
+
+      openTaskList: () => this.setState({ tab: "trainer", screen: "taskList" }),
+      startFullVariant: () => {},
+
+      tasks: this.tasks.map((tt, i) => ({
+        n: i + 1, title: tt[0], desc: tt[1],
+        pick: () => this.setState({ screen: "countSelect", pickedIdx: i })
+      })),
+
+      pickedN: s.pickedIdx != null ? s.pickedIdx + 1 : "",
+      pickedTitle: t ? t[0] : "",
+      pickedDesc: t ? t[1] : "",
+      counts: [6, 9, 12, 15].map(v => ({
+        v, word: v === 6 ? "задания" : "заданий",
+        pick: () => this.startTraining(v)
+      })),
+
+      qLabel: "Задание " + (s.qi + 1) + " из " + s.count,
+      doneLabel: answered + " / " + s.count,
+      progressPct: s.count ? Math.round(answered / s.count * 100) : 0,
+      qText: q.text,
+      options,
+      checked: s.checked,
+      verdictBg: lastResult && lastResult.ok ? "oklch(0.97 0.02 150)" : "oklch(0.97 0.018 25)",
+      verdictColor: lastResult && lastResult.ok ? "oklch(0.44 0.1 150)" : "oklch(0.5 0.14 25)",
+      verdictText: lastResult && lastResult.ok ? "✓ Верно!" : "✕ Неверно",
+      showCorrect: s.checked && lastResult && !lastResult.ok,
+      correctLabel: this.letters(q.correct, q.options),
+      primaryLabel: s.checked ? (s.qi + 1 >= s.count ? "Показать результат" : "Следующее задание") : (isMulti ? "Отправить ответ" : "Проверить"),
+      primaryBg: s.checked || s.selected.length ? accent : "oklch(0.93 0.004 250)",
+      primaryColor: s.checked || s.selected.length ? "#fff" : "oklch(0.68 0.01 250)",
+      primaryCursor: s.checked || s.selected.length ? "pointer" : "default",
+      primaryAction: () => { s.checked ? this.next() : this.check(); },
+      exitTraining: () => this.go("trainerHome", { session: { taskIdx: s.pickedIdx, count: s.count, answered } }),
+
+      totalQ: s.count,
+      correctCount,
+      wrongCount: wrongList.length,
+      scorePct: s.count ? Math.round(correctCount / s.count * 100) : 0,
+      hasMistakes: wrongList.length > 0,
+      noMistakes: wrongList.length === 0,
+      mistakes: wrongList.map(r => ({
+        label: "Задание " + (r.qi + 1) + " · " + (t ? t[0] : ""),
+        open: () => this.setState({ screen: "mistake", mistakeQi: r.qi })
+      })),
+      repeat: () => this.startTraining(s.count),
+      toTrainer: () => this.go("trainerHome"),
+
+      mLabel: mQi != null ? "Задание " + (mQi + 1) : "",
+      mText: mq ? mq.text : "",
+      mOptions,
+      mYours: mRes && mq ? this.letters(mRes.selected, mq.options) : "",
+      mCorrect: mq ? this.letters(mq.correct, mq.options) : "",
+      backToResult: () => this.go("result"),
+
+      statsEmpty: statsEmptyProp,
+      statsFilled: !statsEmptyProp,
+      dateFrom: s.dateFrom,
+      dateTo: s.dateTo,
+      setFrom: e => this.setState({ dateFrom: e.target.value, preset: null }),
+      setTo: e => this.setState({ dateTo: e.target.value, preset: null }),
+      presets,
+      solved: 248, right: 201, wrong: 47, accuracy: 81,
+      taskStats,
+      history: [
+        { id: 12, date: "15 сентября", time: "01:42:15", score: 82, raw: "43 первичных" },
+        { id: 9, date: "2 сентября", time: "02:05:40", score: 74, raw: "38 первичных" },
+        { id: 6, date: "24 августа", time: "02:28:03", score: 61, raw: "31 первичный" }
+      ],
+
+      navTrainer: () => this.setState({ tab: "trainer" }),
+      navStats: () => this.setState({ tab: "stats" }),
+      navProfile: () => this.setState({ tab: "profile" }),
+      nav1: s.tab === "trainer" ? accent : "oklch(0.72 0.01 250)",
+      nav2: s.tab === "stats" ? accent : "oklch(0.72 0.01 250)",
+      nav3: s.tab === "profile" ? accent : "oklch(0.72 0.01 250)"
+    };
+  }
+}
+</script>
+</body>
+</html>

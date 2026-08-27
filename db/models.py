@@ -1,0 +1,215 @@
+"""Модели данных.
+
+Схема рассчитана на то, что статистика считается запросом по завершённым сессиям,
+а не отдельными счётчиками: так фильтр по датам (ТЗ п.12) работает бесплатно и
+цифры невозможно рассинхронизировать с фактическими ответами.
+"""
+from datetime import datetime
+
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+# В Postgres — JSONB (компактнее и быстрее), в остальных СУБД — обычный JSON.
+# Нужно ради тестов: полный сценарий прогоняется на SQLite, а прод работает на
+# Postgres ровно так же, как если бы здесь стоял голый JSONB.
+JSONColumn = JSON().with_variant(JSONB(), "postgresql")
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+# --- статусы сессии ------------------------------------------------------------
+STATUS_ACTIVE = "active"
+STATUS_FINISHED = "finished"
+STATUS_ABANDONED = "abandoned"
+
+# --- виды сессии ---------------------------------------------------------------
+KIND_TRAINING = "training"
+KIND_VARIANT = "variant"
+
+PLAN_FREE = "free"
+PLAN_PRO = "pro"
+
+
+class User(Base):
+    """Отдельной регистрации нет: пользователь заводится при первом входе (ТЗ п.14)."""
+
+    __tablename__ = "users"
+
+    # Telegram ID и есть первичный ключ — второй идентификатор не нужен.
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    first_name: Mapped[str | None] = mapped_column(String(128))
+    last_name: Mapped[str | None] = mapped_column(String(128))
+    username: Mapped[str | None] = mapped_column(String(64))
+    plan: Mapped[str] = mapped_column(String(16), default=PLAN_FREE, server_default=PLAN_FREE)
+    plan_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def display_name(self) -> str:
+        parts = [p for p in (self.first_name, self.last_name) if p]
+        return " ".join(parts) or (f"@{self.username}" if self.username else f"id{self.id}")
+
+
+class Task(Base):
+    """Задание базы. ID генерируется автоматически и виден админу (ТЗ п.15)."""
+
+    __tablename__ = "tasks"
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Текст-первоисточник для заданий по микротексту. Пока не заполняется,
+    # но колонка заведена сразу — добавлять её в живую базу дороже (playbook 3.2).
+    passage: Mapped[str | None] = mapped_column(Text)
+    options: Mapped[list] = mapped_column(JSONColumn, nullable=False)
+    correct: Mapped[list] = mapped_column(JSONColumn, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (Index("ix_tasks_number", "number"),)
+
+
+class Variant(Base):
+    """Полный вариант ЕГЭ — набор ссылок на задания (ТЗ п.18, 19)."""
+
+    __tablename__ = "variants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    number: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    items: Mapped[list["VariantItem"]] = relationship(
+        back_populates="variant", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class VariantItem(Base):
+    """Одно задание внутри варианта. Одно и то же задание может входить в разные
+    варианты — поэтому связь, а не копия (ТЗ п.19)."""
+
+    __tablename__ = "variant_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    variant_id: Mapped[int] = mapped_column(
+        ForeignKey("variants.id", ondelete="CASCADE"), nullable=False
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)  # позиция 1..26
+    task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id", ondelete="RESTRICT"), nullable=False)
+
+    variant: Mapped[Variant] = relationship(back_populates="items")
+
+    __table_args__ = (
+        UniqueConstraint("variant_id", "number", name="uq_variant_items_slot"),
+        Index("ix_variant_items_variant", "variant_id"),
+    )
+
+
+class Session(Base):
+    """Прохождение: обычная тренировка или полный вариант.
+
+    Одновременно у пользователя может быть только одна активная сессия — при старте
+    новой предыдущая помечается abandoned и в статистику не попадает (ТЗ п.7).
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=STATUS_ACTIVE)
+
+    # для обычной тренировки
+    task_number: Mapped[int | None] = mapped_column(Integer)
+    # для полного варианта
+    variant_id: Mapped[int | None] = mapped_column(ForeignKey("variants.id", ondelete="SET NULL"))
+
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Таймер полного варианта. Время идёт по часам, а не по времени в приложении:
+    # закрытие Mini App его не останавливает (ТЗ п.9). Пока таймер идёт, resumed_at
+    # хранит момент запуска; на паузе он пуст, а накопленное лежит в time_spent_sec.
+    time_limit_sec: Mapped[int | None] = mapped_column(Integer)
+    time_spent_sec: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Снимок результата на момент завершения: правила перевода баллов могут
+    # поменяться, а уже показанный ученику результат меняться не должен.
+    correct_count: Mapped[int | None] = mapped_column(Integer)
+    wrong_count: Mapped[int | None] = mapped_column(Integer)
+    skipped_count: Mapped[int | None] = mapped_column(Integer)
+    raw_score: Mapped[int | None] = mapped_column(Integer)
+    test_score: Mapped[int | None] = mapped_column(Integer)
+
+    items: Mapped[list["SessionItem"]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="SessionItem.position",
+    )
+
+    __table_args__ = (
+        Index("ix_sessions_user_status", "user_id", "status"),
+        Index("ix_sessions_user_finished", "user_id", "status", "finished_at"),
+    )
+
+
+class SessionItem(Base):
+    """Один вопрос внутри сессии вместе с ответом пользователя."""
+
+    __tablename__ = "session_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id", ondelete="RESTRICT"), nullable=False)
+    # Дублируем номер задания, чтобы статистика по заданиям считалась без join к tasks.
+    task_number: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    selected: Mapped[list | None] = mapped_column(JSONColumn)
+    is_correct: Mapped[bool | None] = mapped_column(Boolean)
+    points: Mapped[int | None] = mapped_column(Integer)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    session: Mapped[Session] = relationship(back_populates="items")
+    task: Mapped[Task] = relationship(lazy="selectin")
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "position", name="uq_session_items_slot"),
+        Index("ix_session_items_session", "session_id"),
+        Index("ix_session_items_stats", "session_id", "task_number"),
+    )
+
+    @property
+    def answered(self) -> bool:
+        return self.is_correct is not None
