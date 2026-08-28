@@ -23,6 +23,7 @@ from core.tasks_meta import (
     KIND_CHOICE,
     KIND_DIGITS,
     KIND_MATCH,
+    KIND_OPEN,
     LAST_TASK,
     TASK_NUMBERS,
     kind_of,
@@ -60,7 +61,20 @@ RE_PASSAGE = re.compile(
 # только одну, поэтому второй источник запасной и о нём сообщается отдельно.
 # Двоеточие должно идти сразу после слова: у №8 в пояснении есть заголовок
 # «Ответы в порядке, соответствующем буквам:», и он не ответ, а шапка таблицы.
-RE_ANSWER_FULL = re.compile(r"^Ответы?:\s*(.+)$", re.M)
+# Обычная подпись ответа. Двоеточие сразу после слова: у №8 в пояснении есть
+# заголовок «Ответы в порядке, соответствующем буквам:» — это шапка таблицы.
+RE_ANSWER_PLAIN = re.compile(r"^Ответы?:\s*(.+)$", re.M)
+
+# У части заданий обычной строки нет, зато приводятся две трактовки — «Ответ в
+# демоверсии:» и «Ответ редакции:». Тогда объединяем формы: расхождение
+# источника не повод засчитать ученику ошибку.
+#
+# Только тогда: под заданием бывает обсуждение, и реплика там подписана так же
+# («Ответ редакции: Артём, Вы, однако же, ошибаетесь...»). Если обычная строка
+# «Ответ:» есть, она главная, а всё остальное — разговоры.
+RE_ANSWER_LABELLED = re.compile(
+    r"^Ответ\s+(?:в\s+демоверсии|редакции):\s*(.+)$", re.M
+)
 RE_ANSWER_ONE = re.compile(r"^Ваш ответ:.*?Правильный ответ:\s*(.+)$", re.M)
 
 # Метки вариантов. Латинские двойники приводятся к кириллице при чистке:
@@ -228,25 +242,58 @@ def take_condition(body: str, kind: str) -> tuple[str, str]:
     return condition, "\n".join(lines[cut:])
 
 
-def take_options(rest: str) -> tuple[list[str], list[int], str]:
-    """Пронумерованные варианты -> (варианты, их номера, то что было до них)."""
+def take_options(rest: str) -> tuple[list[str], list[int], str, str]:
+    """Пронумерованные варианты -> (варианты, их номера, что было до, что после).
+
+    Пустая строка закрывает список: если следующий непустой абзац начинается не
+    с метки, значит варианты кончились и дальше идёт что-то другое. Без этого
+    правила текст-источник прилипает к последнему варианту — так и случилось на
+    markdown-выгрузке, где нет строки «Прочитайте текст и выполните задание».
+
+    Перенос варианта на новую строку при этом не страдает: он идёт сразу под
+    своей меткой, без пустой строки между ними.
+    """
     options: list[str] = []
     numbers: list[int] = []
     before: list[str] = []
+    after: list[str] = []
     started = False
+    closed = False
+    blank_seen = False
+
     for line in rest.split("\n"):
         stripped = line.strip()
+
+        if closed:
+            after.append(line)
+            continue
+
         found = RE_OPTION.match(stripped)
         if found:
             started = True
+            blank_seen = False
             numbers.append(int(found.group(1)))
             options.append(found.group(2).strip())
-        elif started and stripped:
+            continue
+
+        if not stripped:
+            if started:
+                blank_seen = True
+            else:
+                before.append(line)
+            continue
+
+        if not started:
+            before.append(line)
+        elif blank_seen:
+            # Непустой абзац после пустой строки, и это не метка — список позади.
+            closed = True
+            after.append(line)
+        else:
             # продолжение предыдущего варианта, перенесённое на новую строку
             options[-1] = f"{options[-1]} {stripped}".strip()
-        elif not started:
-            before.append(line)
-    return options, numbers, "\n".join(before).strip()
+
+    return options, numbers, "\n".join(before).strip(), "\n".join(after).strip()
 
 
 def take_match(rest: str) -> tuple[list[str], list[str], list[str]]:
@@ -274,9 +321,15 @@ def take_answer(explanation: str) -> tuple[str, bool]:
     из-за»), «Правильный ответ:» — только одну. Поэтому основной источник первый,
     но у части заданий его в исходнике нет, и тогда берём второй с пометкой.
     """
-    found = RE_ANSWER_FULL.search(explanation)
+    found = RE_ANSWER_PLAIN.search(explanation)
     if found:
         return found.group(1).strip(), False
+
+    labelled = RE_ANSWER_LABELLED.findall(explanation)
+    if labelled:
+        # Разные трактовки одного задания. Склеиваем через «ИЛИ», дальше их
+        # разберёт split_answer_forms.
+        return " ИЛИ ".join(part.strip() for part in labelled), False
     found = RE_ANSWER_ONE.search(explanation)
     if found:
         return found.group(1).strip(), True
@@ -286,11 +339,35 @@ def take_answer(explanation: str) -> tuple[str, bool]:
 def split_answer_forms(raw: str) -> list[str]:
     """Строка ответа -> список равнозначных форм.
 
-    Источник разделяет их по-разному: «12|21», «вследствие ИЛИ ввиду», «135, 351».
+    Источник разделяет их четырьмя способами: «вследствие ИЛИ ввиду», «12|21»,
+    «в конце концов; может быть», «135, 351».
+
+    С запятой осторожно: она делит формы только когда части — отдельные слова
+    или цифры. У развёрнутого ответа («не столько планы, сколько нас») запятая
+    принадлежит самой фразе, и разрезать по ней значит забраковать ученика,
+    который написал верно целиком.
     """
     raw = raw.strip().rstrip(".")
-    forms = [f.strip(" .,;") for f in re.split(r"\s+ИЛИ\s+|\s*\|\s*", raw)]
-    return [f for f in forms if f]
+    parts = [p.strip(" .") for p in re.split(r"\s+ИЛИ\s+|\s*\|\s*|\s*;\s*", raw)]
+
+    forms: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        pieces = [piece.strip() for piece in part.split(",")]
+        if len(pieces) > 1 and all(pieces) and not any(" " in piece for piece in pieces):
+            forms.extend(pieces)
+        else:
+            forms.append(part)
+
+    seen: set[str] = set()
+    unique: list[str] = []
+    for form in forms:
+        key = form.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(form)
+    return unique
 
 
 def digits_of(value: str) -> list[int]:
@@ -370,7 +447,7 @@ def parse(raw: str) -> Result:
             continue
 
         if kind == KIND_CHOICE:
-            options, numbers, before = take_options(rest)
+            options, numbers, before, after = take_options(rest)
             if len(options) < 2:
                 result.problems.append(
                     Problem(number, f"вид choice, но вариантов найдено {len(options)}")
@@ -390,7 +467,7 @@ def parse(raw: str) -> Result:
                 continue
             task["options"] = options
             task["correct"] = sorted(set(correct))
-            task["material"] = before or None
+            task["material"] = "\n\n".join(p for p in (before, after) if p) or None
 
         elif kind == KIND_MATCH:
             left, right, letters = take_match(rest)
@@ -444,6 +521,33 @@ def parse(raw: str) -> Result:
 
         result.tasks.append(task)
 
+    # Выгрузка через конвертер теряет строку «Прочитайте текст и выполните
+    # задание», и текст-источник оседает в материале каждого задания, которое к
+    # нему относится. Отличить его от настоящего материала можно по повтору:
+    # материал принадлежит одному заданию, общий текст дословно повторяется у
+    # нескольких. Такой выносим в texts и заменяем ссылкой.
+    repeats: dict[str, int] = {}
+    for task in result.tasks:
+        if task.get("material"):
+            key = squeeze(task["material"])
+            repeats[key] = repeats.get(key, 0) + 1
+
+    for task in result.tasks:
+        material = task.get("material")
+        if not material or task.get("text_ref"):
+            continue
+        key = squeeze(material)
+        if repeats.get(key, 0) < 2:
+            continue
+        for index, (known, _) in enumerate(passages, start=1):
+            if known == key:
+                task["text_ref"] = f"t{index}"
+                break
+        else:
+            passages.append((key, material))
+            task["text_ref"] = f"t{len(passages)}"
+        task["material"] = None
+
     result.texts = {f"t{i}": full for i, (_, full) in enumerate(passages, start=1)}
 
     missing = [n for n in TASK_NUMBERS if n not in seen]
@@ -452,3 +556,125 @@ def parse(raw: str) -> Result:
 
     result.tasks.sort(key=lambda t: t["number"])
     return result
+
+
+# ---------------------------------------------------------------------------
+# Читаемый разбор — чтобы проверить глазами до заливки
+# ---------------------------------------------------------------------------
+KIND_NAMES = {
+    KIND_OPEN: "вписать слово",
+    KIND_CHOICE: "выбрать варианты",
+    KIND_DIGITS: "вписать цифры",
+    KIND_MATCH: "соответствие",
+}
+
+RULE = "=" * 58
+THIN = "-" * 58
+
+
+def _wrap(text: str, width: int = 92) -> str:
+    """Мягкий перенос длинных строк: файл читают с телефона."""
+    out = []
+    for paragraph in (text or "").split("\n"):
+        while len(paragraph) > width:
+            cut = paragraph.rfind(" ", 0, width)
+            if cut <= 0:
+                cut = width
+            out.append(paragraph[:cut])
+            paragraph = paragraph[cut:].lstrip()
+        out.append(paragraph)
+    return "\n".join(out)
+
+
+def render_preview(payload: dict, notes: list[str] | None = None) -> str:
+    """Разобранный вариант в виде, пригодном для вычитки.
+
+    Тексты-источники печатаются один раз в начале: один и тот же текст относится
+    к нескольким заданиям, и повторять его четыре раза значит утопить в нём
+    остальное. В заданиях остаётся ссылка.
+    """
+    tasks = payload.get("tasks") or []
+    texts = payload.get("texts") or {}
+    lines: list[str] = [
+        RULE,
+        f"РАЗБОР ВАРИАНТА — заданий {len(tasks)}",
+        RULE,
+        "",
+        "Проверьте и подтвердите кнопкой в боте. В базу пока ничего не залито.",
+        "",
+    ]
+
+    if notes:
+        lines.append("ОБРАТИТЕ ВНИМАНИЕ")
+        lines += [f"  • {note}" for note in notes]
+        lines.append("")
+
+    if texts:
+        users = {key: [] for key in texts}
+        for task in tasks:
+            if task.get("text_ref") in users:
+                users[task["text_ref"]].append(task["number"])
+        lines += [RULE, "ТЕКСТЫ-ИСТОЧНИКИ", RULE, ""]
+        for key, body in texts.items():
+            where = ", ".join(f"№{n}" for n in users.get(key, [])) or "ни к кому"
+            lines += [f"[{key}] — к заданиям: {where}", "", _wrap(body), "", THIN, ""]
+
+    for task in tasks:
+        number = task["number"]
+        kind = task.get("kind") or ""
+        options = task.get("options") or []
+        left = task.get("match_left") or []
+        correct = task.get("correct") or []
+        answers = task.get("answers") or []
+
+        lines += [
+            RULE,
+            f"ЗАДАНИЕ {number}   ·   {KIND_NAMES.get(kind, kind)}",
+            RULE,
+            "",
+            "УСЛОВИЕ",
+            _wrap(task.get("text") or ""),
+            "",
+        ]
+
+        if task.get("text_ref"):
+            lines += [f"ТЕКСТ: [{task['text_ref']}] — напечатан выше", ""]
+
+        if task.get("material"):
+            lines += ["СОДЕРЖИМОЕ", _wrap(task["material"]), ""]
+
+        if kind == KIND_MATCH:
+            lines.append("СОПОСТАВЛЕНИЕ")
+            for index, position in enumerate(left):
+                letter = MATCH_LETTERS[index] if index < len(MATCH_LETTERS) else str(index + 1)
+                chosen = correct[index] if index < len(correct) else None
+                target = options[chosen - 1] if chosen and chosen <= len(options) else "???"
+                lines += [
+                    _wrap(f"  {letter}) {position}"),
+                    _wrap(f"      -> {chosen}) {target}"),
+                    "",
+                ]
+            lines += ["ОТВЕТ", "  " + "".join(str(c) for c in correct), ""]
+        elif options:
+            lines.append("ВАРИАНТЫ   (>> — верный)")
+            for index, option in enumerate(options, start=1):
+                # Пометка идёт в начале строки: в конце её отрывает переносом.
+                mark = ">>" if index in correct else "  "
+                lines.append(_wrap(f" {mark} {index}) {option}"))
+            lines += ["", "ОТВЕТ", "  " + ", ".join(str(c) for c in correct), ""]
+        else:
+            lines += ["ОТВЕТ", "  " + "   или   ".join(answers), ""]
+
+    lines += [RULE, "ВСЕ ОТВЕТЫ СПИСКОМ", RULE, ""]
+    for task in tasks:
+        correct = task.get("correct") or []
+        answers = task.get("answers") or []
+        if task.get("kind") == KIND_MATCH:
+            shown = "".join(str(c) for c in correct)
+        elif correct:
+            shown = "".join(str(c) for c in correct)
+        else:
+            shown = " / ".join(answers)
+        lines.append(f"  №{task['number']:<3} {shown}")
+
+    return "\n".join(lines) + "\n"

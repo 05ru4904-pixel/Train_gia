@@ -14,6 +14,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
+    BufferedInputFile,
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -29,6 +30,7 @@ from core.parser import (
     parse_variant,
 )
 from core.raw_variant import parse as parse_raw_variant
+from core.raw_variant import render_preview
 from core.tasks_meta import LAST_TASK, TASK_NUMBERS, letter, title
 from core.variant_import import import_tasks, load_payload, next_free_variant_number
 from db.crud import (
@@ -350,7 +352,19 @@ async def upload_receive(message: Message, state: FSMContext) -> None:
 
     # Держим разобранный вариант до нажатия кнопки: заливка идёт только по
     # явному подтверждению, чтобы случайный файл не попал в базу.
-    await state.update_data(payload=result.payload())
+    payload = result.payload()
+    await state.update_data(payload=payload)
+
+    # Разбор отправляем файлом: 26 заданий с текстами — это десятки тысяч
+    # символов, в сообщение они не влезут даже близко.
+    preview = render_preview(payload, result.notes)
+    await message.answer_document(
+        BufferedInputFile(
+            preview.encode("utf-8"),
+            filename=f"разбор-{document.file_name or 'варианта'}.txt",
+        ),
+        caption="Разбор целиком — проверьте перед заливкой.",
+    )
 
     lines = [
         f"✅ Разобрано заданий: {len(result.tasks)} из {LAST_TASK}",
@@ -361,7 +375,7 @@ async def upload_receive(message: Message, state: FSMContext) -> None:
     if result.notes:
         lines += ["", "Обратите внимание:"]
         lines += [f"• {html.escape(note)}" for note in result.notes]
-    lines += ["", "Заливаем?"]
+    lines += ["", "Сверьтесь с файлом выше. Заливаем?"]
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Залить и собрать вариант", callback_data="upl:variant")],
