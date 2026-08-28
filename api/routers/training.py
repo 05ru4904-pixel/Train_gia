@@ -7,7 +7,15 @@ from api.serializers import result_payload, session_payload
 from core import scoring
 from core.tasks_meta import LAST_TASK, is_valid_number
 from db import crud
-from db.models import KIND_TRAINING, KIND_VARIANT, STATUS_FINISHED
+from db.models import (
+    KIND_CHOICE,
+    KIND_DIGITS,
+    KIND_MATCH,
+    KIND_OPEN,
+    KIND_TRAINING,
+    KIND_VARIANT,
+    STATUS_FINISHED,
+)
 
 router = APIRouter(tags=["training"])
 
@@ -18,8 +26,14 @@ class StartTraining(BaseModel):
 
 
 class Answer(BaseModel):
+    """Ответ на задание. Способ зависит от вида: выбор вариантов, ввод или соответствие."""
+
     position: int = Field(ge=0)
-    selected: list[int] = Field(min_length=1)
+    selected: list[int] | None = None   # choice: индексы; match: правые позиции по порядку
+    typed: str | None = None            # open и digits: то, что ученик написал
+
+    def is_empty(self) -> bool:
+        return not self.selected and not (self.typed or "").strip()
 
 
 @router.post("/training/start")
@@ -89,12 +103,31 @@ async def answer(payload: Answer, user: CurrentUser, db: DbSession) -> dict:
 
     if session.kind == KIND_TRAINING and item.answered:
         raise HTTPException(409, "На это задание вы уже ответили")
+    if payload.is_empty():
+        raise HTTPException(400, "Ответ пустой")
 
-    option_count = len(item.task.options or [])
-    if any(i < 0 or i >= option_count for i in payload.selected):
-        raise HTTPException(400, "Выбран несуществующий вариант ответа")
+    task = item.task
+    kind = task.kind or KIND_CHOICE
+    options = task.options or []
 
-    item = await crud.answer_item(db, item, payload.selected)
+    if kind in (KIND_OPEN, KIND_DIGITS):
+        if not (payload.typed or "").strip():
+            raise HTTPException(400, "Введите ответ")
+    elif kind == KIND_MATCH:
+        left_count = len(task.match_left or [])
+        selected = payload.selected or []
+        if len(selected) != left_count:
+            raise HTTPException(400, "Заполните все позиции соответствия")
+        if any(value < 1 or value > len(options) for value in selected):
+            raise HTTPException(400, "Указана несуществующая позиция")
+    else:
+        selected = payload.selected or []
+        if not selected:
+            raise HTTPException(400, "Выберите вариант ответа")
+        if any(index < 0 or index >= len(options) for index in selected):
+            raise HTTPException(400, "Выбран несуществующий вариант ответа")
+
+    item = await crud.answer_item(db, item, selected=payload.selected, typed=payload.typed)
 
     items = list(session.items)
     all_answered = all(i.answered for i in items)
@@ -110,6 +143,7 @@ async def answer(payload: Answer, user: CurrentUser, db: DbSession) -> dict:
             "position": item.position,
             "is_correct": item.is_correct,
             "correct": list(item.task.correct or []),
+            "answers": list(item.task.answers or []),
             "result": result_payload(session, list(session.items)),
         }
 
@@ -123,6 +157,7 @@ async def answer(payload: Answer, user: CurrentUser, db: DbSession) -> dict:
     if reveal:
         response["is_correct"] = item.is_correct
         response["correct"] = list(item.task.correct or [])
+        response["answers"] = list(item.task.answers or [])
     return response
 
 

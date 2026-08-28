@@ -91,26 +91,24 @@ def check_answer(kind: str, response, task_correct: list[int], task_answers: lis
     return evaluate(list(response or []), task_correct)
 
 
-def award_points(number: int, selected: list[int], correct: list[int]) -> int:
+def award_points(number: int, is_correct: bool) -> int:
     """Первичные баллы за одно задание.
 
-    Сейчас действует принцип «всё или ничего»: полный вес при полностью верном
-    ответе, иначе ноль. Частичное начисление (актуально для №8 и №26, где в реальном
-    ЕГЭ балл даётся за каждое верное соответствие) добавляется здесь — это
-    единственное место, которое придётся тронуть.
+    Действует принцип «всё или ничего»: полный вес при полностью верном ответе,
+    иначе ноль. Частичное начисление (в реальном ЕГЭ у №8 и №26 балл даётся за
+    каждое верное соответствие) добавляется здесь — это единственное место,
+    которое придётся тронуть.
     """
-    if not evaluate(selected, correct):
-        return 0
-    return TASK_MAX_POINTS.get(number, 1)
+    return TASK_MAX_POINTS.get(number, 1) if is_correct else 0
 
 
 def max_points(number: int) -> int:
     return TASK_MAX_POINTS.get(number, 1)
 
 
-def raw_score(answers: dict[int, tuple[list[int], list[int]]]) -> int:
-    """Первичный балл за вариант. answers: {номер задания: (выбрано, верно)}."""
-    return sum(award_points(n, sel, cor) for n, (sel, cor) in answers.items())
+def raw_score(results: dict[int, bool]) -> int:
+    """Первичный балл за вариант. results: {номер задания: ответ верен}."""
+    return sum(award_points(number, ok) for number, ok in results.items())
 
 
 def test_score(raw: int) -> int:

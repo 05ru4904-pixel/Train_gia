@@ -222,7 +222,12 @@ class SessionItem(Base):
     # Дублируем номер задания, чтобы статистика по заданиям считалась без join к tasks.
     task_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    # Ответ выбором: индексы вариантов (choice) или последовательность
+    # правых позиций по порядку левых (match).
     selected: Mapped[list | None] = mapped_column(JSONColumn)
+    # Ответ вводом: слово или цифры, как их набрал ученик (open, digits).
+    # Храним ровно то, что он написал, — пригодится при разборе ошибок.
+    typed: Mapped[str | None] = mapped_column(Text)
     is_correct: Mapped[bool | None] = mapped_column(Boolean)
     points: Mapped[int | None] = mapped_column(Integer)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

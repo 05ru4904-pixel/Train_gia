@@ -15,9 +15,9 @@ KIND_DIGITS = "digits"
 KIND_MATCH = "match"
 TASK_KINDS = (KIND_CHOICE, KIND_OPEN, KIND_DIGITS, KIND_MATCH)
 
-# Виды, которые приложение уже умеет показывать. Пока фронтенд не научится
-# принимать ввод и рисовать соответствия, тренировки собираются только из choice.
-RENDERABLE_KINDS = (KIND_CHOICE,)
+# Виды, которые приложение умеет показывать. Сузьте набор, если какой-то экран
+# временно сломан: такие задания просто не попадут в тренировки.
+RENDERABLE_KINDS = TASK_KINDS
 
 FIRST_TASK = 1
 LAST_TASK = 26

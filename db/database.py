@@ -57,6 +57,7 @@ _MIGRATIONS = (
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS answers JSONB",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS skipped_count INTEGER",
     "ALTER TABLE session_items ADD COLUMN IF NOT EXISTS points INTEGER",
+    "ALTER TABLE session_items ADD COLUMN IF NOT EXISTS typed TEXT",
 )
 
 # Postgres не индексирует внешние ключи сам (playbook 3.4). Индексы описаны и в

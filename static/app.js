@@ -187,6 +187,7 @@
     session: null,
     picked: null,
     selected: [],
+    typed: '',        // ответ вводом (open, digits)
     checked: null,       // {is_correct, correct} после проверки
     result: null,
     reviewPosition: null,
@@ -381,6 +382,7 @@
         S.busy = false;
         S.session = session;
         S.selected = [];
+        S.typed = '';
         S.checked = null;
         S.result = null;
         go('training');
@@ -411,7 +413,7 @@
           return;
         }
         S.session = data.session;
-        S.selected = (data.session.question && data.session.question.selected) || [];
+        loadAnswer(data.session.question);
         S.checked = revealFrom(data.session.question);
         if (data.session.kind === 'variant') {
           applyTimer(data.session.timer);
@@ -429,7 +431,55 @@
 
   function revealFrom(question) {
     if (!question || !question.answered || question.correct === undefined) return null;
-    return { is_correct: question.is_correct, correct: question.correct };
+    return {
+      is_correct: question.is_correct,
+      correct: question.correct,
+      answers: question.answers || []
+    };
+  }
+
+  /** Ответ ещё не дан целиком — кнопку проверки держим неактивной. */
+  function answerIsEmpty(question) {
+    if (!question) return true;
+    if (question.kind === 'open' || question.kind === 'digits') {
+      return !S.typed.trim();
+    }
+    if (question.kind === 'match') {
+      var left = question.match_left || [];
+      return S.selected.length !== left.length || S.selected.some(function (v) { return !v; });
+    }
+    return !S.selected.length;
+  }
+
+  /** Пустая расстановка нужной длины — по одной ячейке на каждую позицию слева. */
+  function emptyMatch(question) {
+    return (question.match_left || []).map(function () { return 0; });
+  }
+
+  /** Восстанавливает ответ из данных сервера при возврате к заданию. */
+  function loadAnswer(question) {
+    S.typed = (question && question.typed) || '';
+    if (question && question.kind === 'match') {
+      var saved = (question.selected || []).slice();
+      S.selected = saved.length === (question.match_left || []).length
+        ? saved
+        : emptyMatch(question);
+    } else {
+      S.selected = (question && question.selected) || [];
+    }
+  }
+
+  function pickMatch(leftIndex, value) {
+    if (S.checked) return;
+    var question = S.session && S.session.question;
+    if (!question) return;
+    if (S.selected.length !== (question.match_left || []).length) {
+      S.selected = emptyMatch(question);
+    }
+    // Повторное нажатие снимает выбор — иначе ошибочный тап не отменить.
+    S.selected[leftIndex] = S.selected[leftIndex] === value ? 0 : value;
+    haptic('light');
+    render();
   }
 
   function toggleOption(index) {
@@ -448,13 +498,19 @@
   }
 
   function submitAnswer() {
-    if (S.busy || !S.selected.length) return;
-    var question = S.session.question;
+    var question = S.session && S.session.question;
+    if (S.busy || answerIsEmpty(question)) return;
+    var body = { position: question.position };
+    if (question.kind === 'open' || question.kind === 'digits') {
+      body.typed = S.typed.trim();
+    } else {
+      body.selected = S.selected;
+    }
     S.busy = true;
     render();
     api('/api/session/answer', {
       method: 'POST',
-      body: { position: question.position, selected: S.selected }
+      body: body
     }).then(function (data) {
       S.busy = false;
       if (S.session.kind === 'variant') {
@@ -462,7 +518,7 @@
         goToNextUnanswered();
         return;
       }
-      S.checked = { is_correct: data.is_correct, correct: data.correct };
+      S.checked = { is_correct: data.is_correct, correct: data.correct, answers: data.answers || [] };
       S.session.answered = data.answered !== undefined ? data.answered : S.session.answered + 1;
       if (data.finished) S.pendingResult = data.result;
       haptic(data.is_correct ? 'success' : 'error');
@@ -495,6 +551,7 @@
       }
       S.session = data.session;
       S.selected = [];
+      S.typed = '';
       S.checked = null;
       render();
     }).catch(function (error) {
@@ -515,7 +572,7 @@
       .then(function (session) {
         S.busy = false;
         S.session = session;
-        S.selected = (session.question && session.question.selected) || [];
+        loadAnswer(session.question);
         S.checked = null;
         S.result = null;
         applyTimer(session.timer);
@@ -548,7 +605,7 @@
       S.busy = false;
       if (data.finished) { finishedVariant(data.result); return; }
       S.session = data.session;
-      S.selected = (data.session.question && data.session.question.selected) || [];
+      loadAnswer(data.session.question);
       applyTimer(data.session.timer);
       render();
     }).catch(function (error) {
@@ -791,7 +848,7 @@
     ]);
   }
 
-  function optionNode(option, question, index) {
+  function optionNode(option, question) {
     var picked = S.selected.indexOf(option.index) >= 0;
     var classes = ['option'];
     if (question.multi) classes.push('option--multi');
@@ -814,6 +871,119 @@
     ]);
   }
 
+  /** Блок ответа. Что рисовать — решает вид задания. */
+  function answerArea(question) {
+    if (question.kind === 'open' || question.kind === 'digits') return inputArea(question);
+    if (question.kind === 'match') return matchArea(question);
+    return h('div', { class: 'options' }, question.options.map(function (option) {
+      return optionNode(option, question);
+    }));
+  }
+
+  function inputArea(question) {
+    var digits = question.kind === 'digits';
+    var classes = ['answer-input'];
+    if (S.checked) classes.push(S.checked.is_correct ? 'is-correct' : 'is-wrong');
+
+    var input = h('input', {
+      class: classes.join(' '),
+      type: 'text',
+      value: S.typed,
+      placeholder: digits ? 'например 245' : 'впишите ответ',
+      // Цифровая клавиатура там, где ответ — только цифры.
+      inputmode: digits ? 'numeric' : 'text',
+      autocomplete: 'off',
+      autocapitalize: 'off',
+      autocorrect: 'off',
+      spellcheck: 'false',
+      readonly: !!S.checked,
+      onInput: function (event) {
+        // Значение держим в состоянии, но не перерисовываем на каждый символ:
+        // это сбросило бы фокус и позицию курсора.
+        S.typed = event.target.value;
+        var button = document.getElementById('submit-btn');
+        if (button) button.disabled = answerIsEmpty(question) || S.busy;
+      },
+      onKeydown: function (event) {
+        if (event.key === 'Enter') { event.preventDefault(); submitAnswer(); }
+      }
+    });
+
+    return h('div', {}, [
+      input,
+      h('div', {
+        class: 'answer-hint',
+        text: digits
+          ? 'Только цифры, без пробелов и запятых. Порядок не важен.'
+          : 'Одно слово или словосочетание, как в ответе на бланке.'
+      })
+    ]);
+  }
+
+  function matchArea(question) {
+    var left = question.match_left || [];
+    var right = question.options || [];
+
+    var rows = h('div', { class: 'match-list' }, left.map(function (row, leftIndex) {
+      var picked = S.selected[leftIndex] || 0;
+      var classes = ['match-row'];
+      var verdict = null;
+      if (S.checked) {
+        var right_ = S.checked.correct[leftIndex];
+        var ok = picked === right_;
+        classes.push(ok ? 'is-correct' : 'is-wrong');
+        verdict = h('div', {
+          class: 'match-row__verdict',
+          text: ok ? 'верно' : 'верный ответ — ' + right_
+        });
+      }
+      return h('div', { class: classes.join(' ') }, [
+        h('div', { class: 'match-row__head' }, [
+          h('div', { class: 'match-row__letter', text: row.letter }),
+          h('div', { class: 'match-row__text', text: row.text })
+        ]),
+        h('div', { class: 'match-row__picks' }, right.map(function (option, i) {
+          var value = i + 1;
+          return h('button', {
+            class: 'match-pick' + (picked === value ? ' is-picked' : ''),
+            type: 'button',
+            disabled: !!S.checked,
+            onClick: function () { pickMatch(leftIndex, value); }
+          }, value);
+        })),
+        verdict
+      ]);
+    }));
+
+    return h('div', {}, [
+      rows,
+      h('div', { class: 'match-options' }, [
+        h('div', { class: 'match-options__title', text: 'Варианты для сопоставления' }),
+        h('div', { class: 'match-options__list' }, right.map(function (option, i) {
+          return h('div', { class: 'match-option' }, [
+            h('div', { class: 'match-option__num', text: (i + 1) + ')' }),
+            h('div', {}, option.text)
+          ]);
+        }))
+      ])
+    ]);
+  }
+
+  /** Как показать правильный ответ в вердикте — тоже зависит от вида. */
+  function correctLabel(question) {
+    if (!S.checked) return '';
+    if (question.kind === 'open' || question.kind === 'digits') {
+      return (S.checked.answers || []).join(' или ');
+    }
+    if (question.kind === 'match') {
+      return (S.checked.correct || []).map(function (value, i) {
+        var row = (question.match_left || [])[i];
+        return (row ? row.letter : i + 1) + '-' + value;
+      }).join('  ');
+    }
+    return lettersFor(question, S.checked.correct);
+  }
+
   function screenTraining() {
     var session = S.session;
     if (!session || !session.question) return screenLoading();
@@ -830,22 +1000,20 @@
       question.passage ? h('div', { class: 'q-passage', text: question.passage }) : null,
       h('div', { class: 'q-text', text: question.text }),
       question.multi ? h('div', { class: 'q-hint', text: 'Выберите все верные варианты' }) : null,
-      h('div', { class: 'options' }, question.options.map(function (option, index) {
-        return optionNode(option, question, index);
-      })),
+      answerArea(question),
       answeredNow ? h('div', { class: 'verdict ' + (S.checked.is_correct ? 'verdict--ok' : 'verdict--no') }, [
         h('div', { class: 'verdict__title', text: S.checked.is_correct ? '✅ Верно!' : '❌ Неверно' }),
         S.checked.is_correct ? null : h('div', {
           class: 'verdict__note',
-          text: 'Правильный ответ: ' + lettersFor(question, S.checked.correct)
+          text: 'Правильный ответ: ' + correctLabel(question)
         })
       ]) : null,
       answeredNow
         ? h('button', { class: 'btn btn--primary mt-20', type: 'button', onClick: nextQuestion },
             S.pendingResult ? 'Показать результат' : 'Следующее задание')
         : h('button', {
-            class: 'btn btn--primary mt-20', type: 'button',
-            disabled: !S.selected.length || S.busy,
+            class: 'btn btn--primary mt-20', id: 'submit-btn', type: 'button',
+            disabled: answerIsEmpty(question) || S.busy,
             onClick: submitAnswer
           }, S.busy ? 'Проверяем…' : 'Проверить'),
       h('button', { class: 'btn btn--quiet', type: 'button', onClick: goBack },
@@ -932,12 +1100,10 @@
       question.passage ? h('div', { class: 'q-passage', text: question.passage }) : null,
       h('div', { class: 'q-text', text: question.text }),
       question.multi ? h('div', { class: 'q-hint', text: 'Выберите все верные варианты' }) : null,
-      h('div', { class: 'options' }, question.options.map(function (option, index) {
-        return optionNode(option, question, index);
-      })),
+      answerArea(question),
       h('button', {
-        class: 'btn btn--primary mt-20', type: 'button',
-        disabled: !S.selected.length || S.busy,
+        class: 'btn btn--primary mt-20', id: 'submit-btn', type: 'button',
+        disabled: answerIsEmpty(question) || S.busy,
         onClick: submitAnswer
       }, question.answered ? 'Сохранить и дальше' : 'Ответить и дальше'),
       h('button', {
@@ -996,32 +1162,69 @@
     ]);
   }
 
+  /** Тело разбора: варианты, столбцы соответствия или ничего для заданий с вводом. */
+  function reviewBody(item) {
+    if (item.kind === 'open' || item.kind === 'digits') {
+      return null;   // вариантов нет, всё видно в строках «ваш» и «правильный»
+    }
+
+    if (item.kind === 'match') {
+      return h('div', { class: 'match-list mt-14' }, (item.match_left || []).map(function (row, i) {
+        var yours = (item.selected || [])[i] || 0;
+        var right = (item.correct || [])[i];
+        var ok = yours === right;
+        var option = (item.options || [])[right - 1];
+        return h('div', { class: 'match-row ' + (ok ? 'is-correct' : 'is-wrong') }, [
+          h('div', { class: 'match-row__head' }, [
+            h('div', { class: 'match-row__letter', text: row.letter }),
+            h('div', { class: 'match-row__text', text: row.text })
+          ]),
+          h('div', {
+            class: 'match-row__verdict',
+            text: ok
+              ? 'верно — ' + right + ') ' + (option ? option.text : '')
+              : 'вы указали ' + (yours || '—') + ', верно ' + right + ') ' + (option ? option.text : '')
+          })
+        ]);
+      }));
+    }
+
+    return h('div', { class: 'stack mt-14' }, (item.options || []).map(function (option) {
+      var isCorrect = item.correct.indexOf(option.index) >= 0;
+      var isYours = (item.selected || []).indexOf(option.index) >= 0;
+      var classes = ['review-option'];
+      if (isCorrect) classes.push('is-correct');
+      else if (isYours) classes.push('is-yours');
+      return h('div', { class: classes.join(' ') }, [
+        h('div', { class: 'option__letter', text: option.letter }),
+        h('div', { class: 'review-option__text', text: option.text }),
+        h('div', {
+          class: 'review-option__tag',
+          text: isCorrect ? 'верно' : isYours ? 'ваш ответ' : ''
+        })
+      ]);
+    }));
+  }
+
   function screenMistake() {
     var result = S.result;
     var item = result && result.review.filter(function (row) { return row.position === S.reviewPosition; })[0];
     if (!item) return screenLoading();
 
     return h('div', { class: 'page' }, [
-      h('div', { class: 'eyebrow', text: 'Разбор · вопрос ' + (item.position + 1) }),
+      h('div', { class: 'eyebrow', text: 'Разбор · №' + item.number }),
+      item.passage ? h('div', { class: 'q-passage', text: item.passage }) : null,
       h('div', { class: 'q-text', style: 'margin-top:14px', text: item.text }),
-      h('div', { class: 'stack mt-14' }, item.options.map(function (option) {
-        var isCorrect = item.correct.indexOf(option.index) >= 0;
-        var isYours = item.selected.indexOf(option.index) >= 0;
-        var classes = ['review-option'];
-        if (isCorrect) classes.push('is-correct');
-        else if (isYours) classes.push('is-yours');
-        return h('div', { class: classes.join(' ') }, [
-          h('div', { class: 'option__letter', text: option.letter }),
-          h('div', { class: 'review-option__text', text: option.text }),
-          h('div', {
-            class: 'review-option__tag',
-            text: isCorrect ? 'верно' : isYours ? 'ваш ответ' : ''
-          })
-        ]);
-      })),
+      reviewBody(item),
       h('div', { class: 'stack mt-14' }, [
-        h('div', { class: 'answer-line answer-line--yours', text: 'Ваш ответ: ' + (lettersFor(item, item.selected) || '—') }),
-        h('div', { class: 'answer-line answer-line--correct', text: 'Правильный ответ: ' + item.correct_letters })
+        h('div', {
+          class: 'answer-line answer-line--yours',
+          text: 'Ваш ответ: ' + (item.yours_label || '—')
+        }),
+        h('div', {
+          class: 'answer-line answer-line--correct',
+          text: 'Правильный ответ: ' + item.correct_letters
+        })
       ]),
       h('button', {
         class: 'btn btn--ghost mt-20', type: 'button',

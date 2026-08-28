@@ -6,9 +6,17 @@
 ответ можно менять (ТЗ п.8).
 """
 from db import crud
-from db.models import KIND_VARIANT, Session, SessionItem
+from db.models import (
+    KIND_CHOICE,
+    KIND_DIGITS,
+    KIND_OPEN,
+    KIND_MATCH,
+    KIND_VARIANT,
+    Session,
+    SessionItem,
+)
 from core import scoring
-from core.tasks_meta import subtitle, title
+from core.tasks_meta import letter, subtitle, title
 
 
 def label(index: int) -> str:
@@ -19,11 +27,13 @@ def label(index: int) -> str:
 
 def question_payload(item: SessionItem, reveal: bool) -> dict:
     task = item.task
+    kind = task.kind or KIND_CHOICE
     correct = list(task.correct or [])
     payload = {
         "position": item.position,
         "task_id": task.id,
         "number": item.task_number,
+        "kind": kind,
         "title": title(item.task_number),
         "subtitle": subtitle(item.task_number),
         "text": task.text,
@@ -32,14 +42,23 @@ def question_payload(item: SessionItem, reveal: bool) -> dict:
             {"index": i, "letter": label(i), "text": text}
             for i, text in enumerate(task.options or [])
         ],
-        "multi": len(correct) > 1,
+        # Левый столбец задания на соответствие: подписывается буквами А-Д,
+        # в отличие от вариантов ответа, которые нумеруются цифрами.
+        "match_left": [
+            {"index": i, "letter": letter(i), "text": text}
+            for i, text in enumerate(task.match_left or [])
+        ],
+        # Несколько верных ответов бывает только там, где вообще есть выбор.
+        "multi": kind == KIND_CHOICE and len(correct) > 1,
         "selected": list(item.selected or []),
+        "typed": item.typed or "",
         "answered": item.answered,
     }
     if reveal and item.answered:
         payload["is_correct"] = item.is_correct
         payload["correct"] = correct
         payload["correct_letters"] = ", ".join(label(i) for i in correct)
+        payload["answers"] = list(task.answers or [])
     return payload
 
 
@@ -119,19 +138,46 @@ def review_payload(items: list[SessionItem]) -> list[dict]:
     review = []
     for item in items:
         task = item.task
+        kind = task.kind or KIND_CHOICE
         correct = list(task.correct or [])
+        answers = list(task.answers or [])
+
+        # Как показать правильный ответ — зависит от вида задания.
+        if kind in (KIND_OPEN, KIND_DIGITS):
+            correct_label = " или ".join(answers)
+            yours_label = item.typed or ""
+        elif kind == KIND_MATCH:
+            correct_label = " ".join(
+                f"{letter(i)}-{value}" for i, value in enumerate(correct)
+            )
+            yours_label = " ".join(
+                f"{letter(i)}-{value}" for i, value in enumerate(item.selected or [])
+            )
+        else:
+            correct_label = ", ".join(label(i) for i in correct)
+            yours_label = ", ".join(label(i) for i in (item.selected or []))
+
         review.append({
             "position": item.position,
             "number": item.task_number,
+            "kind": kind,
             "title": title(item.task_number),
             "text": task.text,
+            "passage": task.passage,
             "options": [
                 {"index": i, "letter": label(i), "text": text}
                 for i, text in enumerate(task.options or [])
             ],
+            "match_left": [
+                {"index": i, "letter": letter(i), "text": text}
+                for i, text in enumerate(task.match_left or [])
+            ],
             "selected": list(item.selected or []),
+            "typed": item.typed or "",
             "correct": correct,
-            "correct_letters": ", ".join(label(i) for i in correct),
+            "answers": answers,
+            "correct_letters": correct_label,
+            "yours_label": yours_label,
             "is_correct": item.is_correct,
             "answered": item.answered,
         })

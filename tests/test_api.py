@@ -29,6 +29,8 @@ os.environ["BOT_TOKEN"] = TOKEN
 os.environ["ADMIN_BOT_TOKEN"] = ""
 os.environ["WEBAPP_URL"] = "https://example.test/app"
 
+from sqlalchemy import select  # noqa: E402
+
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
 from api.main import app  # noqa: E402
@@ -37,6 +39,7 @@ from core.parser import ParsedTask  # noqa: E402
 from core.tasks_meta import TASK_NUMBERS  # noqa: E402
 from db import crud  # noqa: E402
 from db.database import SessionMaker, engine, init_db  # noqa: E402
+from db.models import Task  # noqa: E402
 from db.models import Base  # noqa: E402
 
 USER = {"id": 4242, "first_name": "Заур", "username": "zaur"}
@@ -313,6 +316,117 @@ async def scenario_variant(client):
     return result
 
 
+async def make_kind_task(number: int, kind: str) -> str:
+    """Кладёт в базу задание нужного вида напрямую, минуя шаблон админ-бота."""
+    async with SessionMaker() as db:
+        task = await crud.create_task(db, make_task(number, 0))
+        task.kind = kind
+        if kind == "open":
+            task.options, task.correct, task.answers = [], [], ["которой", "который"]
+        elif kind == "digits":
+            task.options, task.correct, task.answers = [], [], ["1234"]
+        elif kind == "match":
+            task.match_left = ["А-строка", "Б-строка", "В-строка"]
+            task.options = ["первый", "второй", "третий", "четвёртый"]
+            task.correct = [3, 1, 4]
+            task.answers = None
+        await db.commit()
+        return task.id
+
+
+async def answer_one_task_of_kind(client, number: int, kind: str, body_maker, expect_correct: bool):
+    """Заводит тренировку из одного задания нужного вида и отвечает на него."""
+    async with SessionMaker() as db:
+        # чистим номер, чтобы в тренировку попало ровно наше задание
+        rows = await db.execute(select(Task).where(Task.number == number))
+        for old in rows.scalars():
+            await db.delete(old)
+        await db.commit()
+
+    for _ in range(6):
+        await make_kind_task(number, kind)
+
+    session = await client.post("/api/training/start", {"number": number, "count": 6})
+    question = session["question"]
+    assert question["kind"] == kind, f"вид пришёл как {question['kind']}"
+
+    data = await client.post("/api/session/answer", body_maker(question))
+    assert data["is_correct"] is expect_correct, (
+        f"{kind}: ожидали is_correct={expect_correct}, получили {data['is_correct']}"
+    )
+    await client.post("/api/session/finish")
+    return question
+
+
+async def scenario_open_and_digits(client):
+    """Задания с вводом ответа: проверка идёт по тексту, а не по выбору."""
+    question = await answer_one_task_of_kind(
+        client, 5, "open",
+        lambda q: {"position": q["position"], "typed": "  Которой  "},
+        expect_correct=True,
+    )
+    assert question["options"] == [], "у задания с вводом не должно быть вариантов"
+    assert question["multi"] is False
+
+    await answer_one_task_of_kind(
+        client, 6, "open",
+        lambda q: {"position": q["position"], "typed": "неверное"},
+        expect_correct=False,
+    )
+
+    # порядок цифр значения не имеет — как на бланке
+    await answer_one_task_of_kind(
+        client, 7, "digits",
+        lambda q: {"position": q["position"], "typed": "4321"},
+        expect_correct=True,
+    )
+    await answer_one_task_of_kind(
+        client, 15, "digits",
+        lambda q: {"position": q["position"], "typed": "124"},
+        expect_correct=False,
+    )
+    print("  ok  задания с вводом ответа: слово и цифры")
+
+
+async def scenario_match(client):
+    """Соответствие: засчитывается только точная последовательность."""
+    question = await answer_one_task_of_kind(
+        client, 8, "match",
+        lambda q: {"position": q["position"], "selected": [3, 1, 4]},
+        expect_correct=True,
+    )
+    assert len(question["match_left"]) == 3, "левый столбец должен приехать на клиент"
+    assert question["match_left"][0]["letter"] == "А"
+    assert len(question["options"]) == 4
+
+    await answer_one_task_of_kind(
+        client, 22, "match",
+        lambda q: {"position": q["position"], "selected": [1, 3, 4]},
+        expect_correct=False,
+    )
+    print("  ok  задания на соответствие")
+
+
+async def scenario_answer_validation(client):
+    """Сервер не должен принимать заведомо кривые ответы."""
+    async with SessionMaker() as db:
+        rows = await db.execute(select(Task).where(Task.number == 9))
+        for old in rows.scalars():
+            await db.delete(old)
+        await db.commit()
+    for _ in range(6):
+        await make_kind_task(9, "match")
+
+    session = await client.post("/api/training/start", {"number": 9, "count": 6})
+    position = session["question"]["position"]
+
+    await client.post("/api/session/answer", {"position": position}, expect=400)
+    await client.post("/api/session/answer", {"position": position, "selected": [3, 1]}, expect=400)
+    await client.post("/api/session/answer", {"position": position, "selected": [3, 1, 99]}, expect=400)
+    await client.post("/api/session/finish")
+    print("  ok  кривые ответы отклоняются")
+
+
 async def scenario_stats(client, variant_result):
     stats = await client.get("/api/stats")
     overall = stats["overall"]
@@ -392,6 +506,9 @@ async def main() -> int:
             await scenario_abandoned_not_counted(client)
             variant_result = await scenario_variant(client)
             await scenario_stats(client, variant_result)
+            await scenario_open_and_digits(client)
+            await scenario_match(client)
+            await scenario_answer_validation(client)
             await scenario_profile(client)
             await scenario_isolation(http)
             await scenario_mini_app_page(http)

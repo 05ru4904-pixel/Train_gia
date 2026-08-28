@@ -9,6 +9,10 @@ from core import scoring
 from core.parser import ParsedTask, generate_task_id
 from core.tasks_meta import LAST_TASK, RENDERABLE_KINDS, TASK_NUMBERS
 from db.models import (
+    KIND_CHOICE,
+    KIND_DIGITS,
+    KIND_MATCH,
+    KIND_OPEN,
     KIND_TRAINING,
     KIND_VARIANT,
     PLAN_FREE,
@@ -407,12 +411,36 @@ async def get_item(db, session_id: int, position: int) -> SessionItem | None:
     return rows.scalar_one_or_none()
 
 
-async def answer_item(db, item: SessionItem, selected: list[int]) -> SessionItem:
+async def answer_item(
+    db, item: SessionItem, selected: list[int] | None = None, typed: str | None = None
+) -> SessionItem:
+    """Записывает ответ и сразу его проверяет.
+
+    Способ ответа зависит от вида задания: где-то выбирают варианты, где-то
+    вписывают слово или цифры, где-то расставляют соответствия. Сохраняем ровно
+    то, что сделал ученик, — это нужно для разбора ошибок.
+    """
     task = item.task
-    correct = list(task.correct)
-    item.selected = sorted(set(selected))
-    item.is_correct = scoring.evaluate(selected, correct)
-    item.points = scoring.award_points(item.task_number, selected, correct)
+    kind = task.kind or KIND_CHOICE
+    correct = list(task.correct or [])
+    answers = list(task.answers or [])
+
+    if kind in (KIND_OPEN, KIND_DIGITS):
+        item.typed = (typed or "").strip()
+        item.selected = None
+        response = item.typed
+    elif kind == KIND_MATCH:
+        # Порядок важен: значение под i отвечает i-й позиции левого столбца.
+        item.selected = list(selected or [])
+        item.typed = None
+        response = item.selected
+    else:
+        item.selected = sorted(set(selected or []))
+        item.typed = None
+        response = item.selected
+
+    item.is_correct = scoring.check_answer(kind, response, correct, answers)
+    item.points = scoring.award_points(item.task_number, item.is_correct)
     item.answered_at = utcnow()
     await db.commit()
     return item
