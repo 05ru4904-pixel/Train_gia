@@ -1518,6 +1518,20 @@
     profile: ['Профиль', 'аккаунт и подписка']
   };
 
+  var lastViewKey = null;
+
+  /** Что считается «тем же самым видом» для сохранения прокрутки. */
+  function viewKey() {
+    var parts = [S.status, S.tab, S.screen];
+    if (S.session) {
+      parts.push(S.session.id);
+      if (S.session.question) parts.push(S.session.question.position);
+    }
+    if (S.screen === 'mistake') parts.push(S.reviewPosition);
+    if (S.result) parts.push(S.result.id);
+    return parts.join('|');
+  }
+
   function render() {
     if (S.status === 'loading') return;
 
@@ -1534,6 +1548,14 @@
     Array.prototype.forEach.call(dom.tabs, function (tab) {
       tab.classList.toggle('is-active', tab.getAttribute('data-tab') === S.tab);
     });
+
+    // Прокрутку сбрасываем только при переходе на другой экран или к другому
+    // заданию. Иначе выбор варианта — он тоже вызывает перерисовку — отбрасывал
+    // бы к началу длинного текста, и его приходилось бы пролистывать заново.
+    var key = viewKey();
+    var keepScroll = key === lastViewKey;
+    var savedScroll = dom.screen.scrollTop;
+    lastViewKey = key;
 
     clear(dom.screen);
     var node;
@@ -1556,7 +1578,7 @@
       node = (screens[S.screen] || screenHome)();
     }
     dom.screen.appendChild(node);
-    dom.screen.scrollTop = 0;
+    dom.screen.scrollTop = keepScroll ? savedScroll : 0;
 
     if (S.screen === 'variant' && !timerSync.paused) startTimer();
     else if (S.screen !== 'variant') stopTimer();
