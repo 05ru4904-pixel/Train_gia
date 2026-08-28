@@ -201,6 +201,29 @@ def _parse_answer(raw: str, option_count: int, system: str) -> list[int]:
     return sorted(indexes)
 
 
+def parse_answer(raw: str, option_count: int) -> list[int]:
+    """Разбирает ответ, когда варианты приходят отдельным списком, а не текстом.
+
+    Нужна импорту из таблицы: там колонка «ответ» живёт сама по себе, и алфавит
+    определить по вариантам нельзя. Поэтому пробуем кириллицу, потом латиницу —
+    берём первое прочтение, при котором все буквы попадают в диапазон вариантов.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        raise ParseError("ответ не указан")
+
+    first_error: ParseError | None = None
+    for system in ("cyr", "lat"):
+        try:
+            return _parse_answer(raw, option_count, system)
+        except ParseError as exc:
+            # Сообщение показываем от кириллицы: материал русский, и подсказка
+            # «от А до Д» полезнее, чем «от A до D» латиницей.
+            if first_error is None:
+                first_error = exc
+    raise first_error if first_error else ParseError("не удалось разобрать ответ")
+
+
 def parse_variant(raw: str) -> ParsedVariant:
     """Разбирает сборку варианта из существующих ID (ТЗ п.19).
 
