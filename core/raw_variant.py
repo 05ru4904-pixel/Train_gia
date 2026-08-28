@@ -34,15 +34,27 @@ SOFT_HYPHEN = "­"
 # Выглядят как пробел, но переносятся иначе и ломают поиск по подстроке.
 EXOTIC_SPACES = str.maketrans({" ": " ", " ": " ", " ": " ", " ": " "})
 
-# Шапка блока: «↑ Задание 8 № 10262 тип 8 (решено неверно или не решено)».
-# Первые символы необязательны — при копировании у самой первой строки файла
-# нередко отваливается начало («адание 1» вместо «Задание 1»).
-# Съедаем строку целиком: хвост «(решено неверно...)» не должен попасть в условие.
-RE_HEADER = re.compile(r"^.{0,3}?адание\s+(\d+)\s+№\s*(\d+)\s+тип\s+(\d+).*$", re.M)
+# Разметка markdown: часть выгрузок со страницы проходит через конвертер, и тогда
+# шапки выглядят как «↑ **Задание 2 № 45125 тип 2**», а «Пояснение.» — как
+# «**Пояснение.**». Снимаем оформление, оставляя текст.
+RE_BOLD = re.compile(r"\*\*(.+?)\*\*", re.S)
+RE_ITALIC = re.compile(r"(?<!\*)\*([^*\n]+?)\*(?!\*)")
+RE_HEADING = re.compile(r"^#{1,6}[ \t]*", re.M)
 
-# Границы внутри блока.
-RE_EXPLANATION = re.compile(r"^Пояснение\.\s*$", re.M)
-RE_PASSAGE = re.compile(r"^Прочитайте текст и выполните задани[ея]\.\s*$", re.M)
+# Шапка блока: «↑ Задание 8 № 10262 тип 8 (решено неверно или не решено)».
+# Перед словом допускаются служебные значки (стрелка возврата, остатки разметки),
+# а буква «З» необязательна: при копировании у самой первой строки файла нередко
+# отваливается начало («адание 1» вместо «Задание 1»).
+# Съедаем строку целиком: хвост «(решено неверно...)» не должен попасть в условие.
+RE_HEADER = re.compile(
+    r"^[\s#>*\-–—↑•]{0,8}[Зз]?адание\s+(\d+)\s+№\s*(\d+)\s+тип\s+(\d+).*$", re.M
+)
+
+# Границы внутри блока. Ведущие значки допускаются по той же причине.
+RE_EXPLANATION = re.compile(r"^[\s#>*\-]{0,8}Пояснение\.\s*$", re.M)
+RE_PASSAGE = re.compile(
+    r"^[\s#>*\-]{0,8}Прочитайте текст и выполните задани[ея]\.\s*$", re.M
+)
 
 # Ответы. «Ответ:» перечисляет все засчитываемые формы, «Правильный ответ:» —
 # только одну, поэтому второй источник запасной и о нём сообщается отдельно.
@@ -107,21 +119,37 @@ class Result:
 def normalize(raw: str) -> str:
     """Приводит сырой текст к виду, пригодному для разбора.
 
-    Четыре вещи, каждая из которых иначе ломает поиск:
+    Шесть вещей, каждая из которых иначе ломает поиск:
       * мягкий перенос U+00AD — невидим, но рвёт слова («За­да­ние»);
       * экзотические пробелы — выглядят обычными, но это другие символы;
+      * разметка markdown — если страницу сохраняли конвертером, шапка выглядит
+        как «↑ **Задание 2 № 45125 тип 2**», и слово тонет в звёздочках;
+      * дубли соседних строк — тот же конвертер повторяет часть строк дважды,
+        из-за чего варианты ответа нумеруются как 1, 2, 3, 3, 4, 4, 5, 5;
       * строки из одних пробелов — при другом способе копирования их не будет,
         поэтому считаем их обычными пустыми, а не разделителем;
       * латинские буквы в метках столбца — «A)» вместо «А)».
     """
     text = raw.replace(SOFT_HYPHEN, "").replace("\r\n", "\n").replace("\r", "\n")
     text = text.translate(EXOTIC_SPACES)
+
+    # Оформление снимаем до всего остального: дальше ищем по чистому тексту.
+    text = RE_BOLD.sub(r"\1", text)
+    text = RE_ITALIC.sub(r"\1", text)
+    text = RE_HEADING.sub("", text)
+
     lines = []
+    previous = None
     for line in text.split("\n"):
         line = "" if not line.strip() else line.rstrip()
         # Только первый символ метки: внутри задания латиница бывает законной.
         if len(line) > 1 and line[1] == ")":
             line = line[0].translate(_HOMOGLYPHS) + line[1:]
+        # Повтор строки подряд — артефакт выгрузки. Пустые не трогаем: они
+        # разделяют абзацы, и по ним же отделяется условие от материала.
+        if line and line == previous:
+            continue
+        previous = line
         lines.append(line)
     return "\n".join(lines)
 
@@ -151,22 +179,53 @@ def split_block(block: str) -> tuple[str, str, str]:
     return body, passage.strip(), explanation
 
 
-def take_condition(body: str) -> tuple[str, str]:
+def take_condition(body: str, kind: str) -> tuple[str, str]:
     """Условие -> (условие, остаток).
 
-    Два признака должны выполняться одновременно: условие занимает ровно первый
-    абзац, и в нём есть глагол-команда. Опора сразу на разметку и на смысл —
-    если копирование склеит абзацы, второй признак это поймает.
+    Границу ищем двумя способами и берём ту, что встретится раньше:
+      * конец первого абзаца — опора на разметку;
+      * первая метка «1)» или «А)» — опора на структуру задания.
+
+    Одного мало. Пустой строки перед списком вариантов нет в markdown-выгрузках,
+    и тогда «первый абзац» проглатывает весь список. А метка есть не у всех
+    видов, и у №21 список в материале — не варианты ответа, поэтому её ищем
+    только там, где вид обещает варианты.
+
+    Сверх того условие обязано содержать глагол-команду: формулировка ЕГЭ всегда
+    кончается командой, и это ловит случай, когда граница всё-таки уехала.
     """
-    pars = paragraphs(body)
-    if not pars:
+    lines = body.split("\n")
+    start = 0
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    if start >= len(lines):
         raise ValueError("пустое тело задания")
-    condition = squeeze(pars[0])
+
+    paragraph_end = len(lines)
+    for index in range(start, len(lines)):
+        if not lines[index].strip():
+            paragraph_end = index
+            break
+
+    cut = paragraph_end
+    if kind in (KIND_CHOICE, KIND_MATCH):
+        pattern = RE_LEFT if kind == KIND_MATCH else RE_OPTION
+        # Ищем только внутри первого абзаца: если метка дальше, абзац и так
+        # обрывается раньше и служит границей сам.
+        for index in range(start, paragraph_end):
+            found = pattern.match(lines[index].strip())
+            if found and (kind != KIND_MATCH or found.group(1) in MATCH_LETTERS):
+                cut = index
+                break
+
+    condition = squeeze("\n".join(lines[start:cut]))
+    if not condition:
+        raise ValueError("условие пустое — список вариантов начинается сразу после шапки")
     if not RE_COMMAND.search(condition):
         raise ValueError(
-            f"в первом абзаце нет глагола-команды, условие выделено неверно: {condition[:80]!r}"
+            f"в условии нет глагола-команды, граница выделена неверно: {condition[:80]!r}"
         )
-    return condition, "\n\n".join(pars[1:])
+    return condition, "\n".join(lines[cut:])
 
 
 def take_options(rest: str) -> tuple[list[str], list[int], str]:
@@ -281,7 +340,7 @@ def parse(raw: str) -> Result:
         body, passage, explanation = split_block(block)
 
         try:
-            condition, rest = take_condition(body)
+            condition, rest = take_condition(body, kind)
             answer_raw, fallback = take_answer(explanation)
         except ValueError as exc:
             result.problems.append(Problem(number, str(exc)))
