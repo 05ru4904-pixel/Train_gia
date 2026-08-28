@@ -28,7 +28,9 @@ from core.parser import (
     parse_task_batch,
     parse_variant,
 )
+from core.raw_variant import parse as parse_raw_variant
 from core.tasks_meta import LAST_TASK, TASK_NUMBERS, letter, title
+from core.variant_import import import_tasks, load_payload, next_free_variant_number
 from db.crud import (
     create_task,
     create_variant,
@@ -64,6 +66,7 @@ TEMPLATE = (
 MENU = (
     "<b>Админ-панель тренажёра ЕГЭ</b>\n\n"
     "/add — добавить задание\n"
+    "/upload — залить вариант файлом, скопированным с РЕШУ ЕГЭ\n"
     "/batch — добавить сразу несколько заданий (целый вариант)\n"
     "/find — найти задание по ID\n"
     "/list — задания по номеру\n"
@@ -79,6 +82,10 @@ class Add(StatesGroup):
 
 
 class Batch(StatesGroup):
+    waiting = State()
+
+
+class Upload(StatesGroup):
     waiting = State()
 
 
@@ -278,6 +285,143 @@ async def batch_make_variant(callback: CallbackQuery, state: FSMContext) -> None
         f"✅ Вариант №{variant.number} собран из {len(task_ids)} заданий."
     )
     await callback.answer()
+
+
+# --------------------------------------------------------------------------- #
+# Заливка сырого варианта файлом
+# --------------------------------------------------------------------------- #
+# Только документом: сырой вариант весит около сотни килобайт, а в сообщение
+# Telegram влезает 4096 символов. Разбор — core/raw_variant.py, тот же, что и у
+# скрипта parse_raw.py, поэтому поведение здесь и в терминале совпадает.
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+TELEGRAM_LIMIT = 4000
+
+
+def clip(text: str, limit: int = TELEGRAM_LIMIT) -> str:
+    """Обрезает сообщение до лимита Telegram, честно сообщая об обрезке."""
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n\n… сообщение обрезано"
+
+
+@router.message(Command("upload"))
+async def upload_prompt(message: Message, state: FSMContext) -> None:
+    await state.set_state(Upload.waiting)
+    await message.answer(
+        "Пришлите <b>файлом</b> вариант, скопированный с РЕШУ ЕГЭ как есть — "
+        "вместе с «Пояснениями», ничего не вычищая.\n\n"
+        "Текстом не получится: вариант весит больше, чем помещается в сообщение. "
+        "Сохраните его в <code>.txt</code> в кодировке UTF-8 и отправьте документом.\n\n"
+        "/cancel — отмена."
+    )
+
+
+@router.message(Upload.waiting, F.document)
+async def upload_receive(message: Message, state: FSMContext) -> None:
+    document = message.document
+    if document.file_size and document.file_size > MAX_UPLOAD_BYTES:
+        await message.answer(
+            f"❌ Файл {document.file_size // 1024} КБ — это слишком много. "
+            f"Ожидается вариант примерно на 100-200 КБ."
+        )
+        return
+
+    await message.answer("Читаю файл…")
+    buffer = await message.bot.download(document)
+    try:
+        raw = buffer.read().decode("utf-8")
+    except UnicodeDecodeError:
+        await state.clear()
+        await message.answer(
+            "❌ Файл не в кодировке UTF-8, прочитать не могу.\n\n"
+            "В «Блокноте» при сохранении выберите кодировку <b>UTF-8</b> и пришлите снова."
+        )
+        return
+
+    result = parse_raw_variant(raw)
+
+    if result.problems:
+        await state.clear()
+        lines = [f"❌ Разбор остановлен, проблем: {len(result.problems)}", ""]
+        lines += [html.escape(str(p)) for p in result.problems]
+        lines += ["", "Ничего не залито. Поправьте исходник и пришлите заново."]
+        await message.answer(clip("\n".join(lines)))
+        return
+
+    # Держим разобранный вариант до нажатия кнопки: заливка идёт только по
+    # явному подтверждению, чтобы случайный файл не попал в базу.
+    await state.update_data(payload=result.payload())
+
+    lines = [
+        f"✅ Разобрано заданий: {len(result.tasks)} из {LAST_TASK}",
+    ]
+    if result.texts:
+        sizes = ", ".join(f"{k} — {len(v)} симв" for k, v in result.texts.items())
+        lines.append(f"Тексты: {sizes}")
+    if result.notes:
+        lines += ["", "Обратите внимание:"]
+        lines += [f"• {html.escape(note)}" for note in result.notes]
+    lines += ["", "Заливаем?"]
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Залить и собрать вариант", callback_data="upl:variant")],
+        [InlineKeyboardButton(text="Только задания", callback_data="upl:tasks")],
+        [InlineKeyboardButton(text="Отмена", callback_data="upl:no")],
+    ])
+    await message.answer(clip("\n".join(lines)), reply_markup=keyboard)
+
+
+@router.message(Upload.waiting)
+async def upload_not_a_file(message: Message) -> None:
+    await message.answer(
+        "Жду именно файл. Сохраните вариант в <code>.txt</code> и отправьте документом.\n"
+        "/cancel — отмена."
+    )
+
+
+@router.callback_query(F.data == "upl:no")
+async def upload_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer("Отменено, база не тронута")
+
+
+@router.callback_query(F.data.startswith("upl:"))
+async def upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    payload = data.get("payload")
+    if not payload:
+        await callback.answer("Разобранный вариант потерялся, пришлите файл заново", show_alert=True)
+        return
+
+    with_variant = callback.data == "upl:variant"
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer()
+    await callback.message.answer("Заливаю…")
+
+    # Вторая проверка перед базой: у бота и у скрипта она одна и та же.
+    loaded = load_payload(payload, where="вариант")
+    if loaded.errors:
+        await state.clear()
+        lines = [f"❌ Проверка перед заливкой не прошла, ошибок: {len(loaded.errors)}", ""]
+        lines += [html.escape(e) for e in loaded.errors]
+        lines += ["", "Ничего не залито."]
+        await callback.message.answer(clip("\n".join(lines)))
+        return
+
+    number = await next_free_variant_number() if with_variant else None
+    report = await import_tasks(loaded.tasks, number)
+    await state.clear()
+
+    lines = [f"✅ Добавлено заданий: {len(report.created)}"]
+    if report.duplicates:
+        lines.append(f"Пропущено как уже залитые: {report.duplicates}")
+    if report.variant_status:
+        lines.append(f"Вариант №{report.variant_number} {report.variant_status}.")
+    for warning in report.warnings:
+        lines.append(f"⚠️ {html.escape(warning)}")
+    lines.append(f"Всего заданий в базе: {report.total_in_db}")
+    await callback.message.answer(clip("\n".join(lines)))
 
 
 # --------------------------------------------------------------------------- #
