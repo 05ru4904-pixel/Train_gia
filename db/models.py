@@ -22,6 +22,15 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from core.tasks_meta import (  # виды заданий живут в чистом модуле без SQLAlchemy
+    KIND_CHOICE,
+    KIND_DIGITS,
+    KIND_MATCH,
+    KIND_OPEN,
+    RENDERABLE_KINDS,
+    TASK_KINDS,
+)
+
 # В Postgres — JSONB (компактнее и быстрее), в остальных СУБД — обычный JSON.
 # Нужно ради тестов: полный сценарий прогоняется на SQLite, а прод работает на
 # Postgres ровно так же, как если бы здесь стоял голый JSONB.
@@ -75,18 +84,35 @@ class Task(Base):
 
     id: Mapped[str] = mapped_column(String(12), primary_key=True)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Вид задания определяет и способ ответа, и способ проверки — см. core/scoring.py.
+    kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=KIND_CHOICE, server_default=KIND_CHOICE
+    )
     text: Mapped[str] = mapped_column(Text, nullable=False)
-    # Текст-первоисточник для заданий по микротексту. Пока не заполняется,
-    # но колонка заведена сразу — добавлять её в живую базу дороже (playbook 3.2).
+    # Исходный текст, к которому относится задание. В варианте один текст обслуживает
+    # несколько заданий, но хранится он у каждого свой: так задание остаётся
+    # самодостаточным и его можно переносить между вариантами.
     passage: Mapped[str | None] = mapped_column(Text)
+    # Варианты ответа. Для choice — список для выбора, для match — правый столбец
+    # (позиции 1-9). Для open и digits пустой.
     options: Mapped[list] = mapped_column(JSONColumn, nullable=False)
+    # Левый столбец задания на соответствие (позиции А-Д).
+    match_left: Mapped[list | None] = mapped_column(JSONColumn)
+    # Для choice — индексы верных вариантов. Для match — номер правой позиции для
+    # каждой левой по порядку. Для open и digits пустой.
     correct: Mapped[list] = mapped_column(JSONColumn, nullable=False)
+    # Допустимые текстовые ответы для open и digits: источник перечисляет все формы
+    # («заклятым», «заклятый», «злейшим»), любая из них засчитывается.
+    answers: Mapped[list | None] = mapped_column(JSONColumn)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
 
-    __table_args__ = (Index("ix_tasks_number", "number"),)
+    __table_args__ = (
+        Index("ix_tasks_number", "number"),
+        Index("ix_tasks_number_kind", "number", "kind"),
+    )
 
 
 class Variant(Base):

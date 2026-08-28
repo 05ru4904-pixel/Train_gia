@@ -8,7 +8,13 @@
 from db import crud
 from db.models import KIND_VARIANT, Session, SessionItem
 from core import scoring
-from core.tasks_meta import letter, subtitle, title
+from core.tasks_meta import subtitle, title
+
+
+def label(index: int) -> str:
+    """Подпись варианта. Цифры, а не буквы: условия ЕГЭ говорят
+    «запишите номера ответов», и нумерация должна совпадать."""
+    return str(index + 1)
 
 
 def question_payload(item: SessionItem, reveal: bool) -> dict:
@@ -23,7 +29,7 @@ def question_payload(item: SessionItem, reveal: bool) -> dict:
         "text": task.text,
         "passage": task.passage,
         "options": [
-            {"index": i, "letter": letter(i), "text": text}
+            {"index": i, "letter": label(i), "text": text}
             for i, text in enumerate(task.options or [])
         ],
         "multi": len(correct) > 1,
@@ -33,7 +39,7 @@ def question_payload(item: SessionItem, reveal: bool) -> dict:
     if reveal and item.answered:
         payload["is_correct"] = item.is_correct
         payload["correct"] = correct
-        payload["correct_letters"] = ", ".join(letter(i) for i in correct)
+        payload["correct_letters"] = ", ".join(label(i) for i in correct)
     return payload
 
 
@@ -120,12 +126,12 @@ def review_payload(items: list[SessionItem]) -> list[dict]:
             "title": title(item.task_number),
             "text": task.text,
             "options": [
-                {"index": i, "letter": letter(i), "text": text}
+                {"index": i, "letter": label(i), "text": text}
                 for i, text in enumerate(task.options or [])
             ],
             "selected": list(item.selected or []),
             "correct": correct,
-            "correct_letters": ", ".join(letter(i) for i in correct),
+            "correct_letters": ", ".join(label(i) for i in correct),
             "is_correct": item.is_correct,
             "answered": item.answered,
         })

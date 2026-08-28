@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from core import scoring
 from core.parser import ParsedTask, generate_task_id
-from core.tasks_meta import LAST_TASK, TASK_NUMBERS
+from core.tasks_meta import LAST_TASK, RENDERABLE_KINDS, TASK_NUMBERS
 from db.models import (
     KIND_TRAINING,
     KIND_VARIANT,
@@ -111,9 +111,17 @@ async def delete_task(db, task: Task) -> None:
     await db.commit()
 
 
-async def task_counts(db) -> dict[int, int]:
-    """Сколько заданий в базе по каждому номеру — нужно и админу, и Mini App."""
-    rows = await db.execute(select(Task.number, func.count()).group_by(Task.number))
+async def task_counts(db, kinds: tuple[str, ...] | None = None) -> dict[int, int]:
+    """Сколько заданий в базе по каждому номеру.
+
+    По умолчанию считаются все виды — так админу видно реальное наполнение базы.
+    Mini App передаёт RENDERABLE_KINDS, иначе экран выбора обещал бы задания,
+    которые приложение пока не умеет показать.
+    """
+    query = select(Task.number, func.count())
+    if kinds:
+        query = query.where(Task.kind.in_(kinds))
+    rows = await db.execute(query.group_by(Task.number))
     return {number: count for number, count in rows.all()}
 
 
@@ -125,11 +133,18 @@ async def list_tasks(db, number: int, limit: int = 20, offset: int = 0) -> list[
     return list(rows.scalars())
 
 
-async def pick_random_tasks(db, number: int, count: int) -> list[Task]:
-    """Случайные неповторяющиеся задания одного номера (ТЗ п.4)."""
-    rows = await db.execute(
-        select(Task).where(Task.number == number).order_by(func.random()).limit(count)
-    )
+async def pick_random_tasks(
+    db, number: int, count: int, kinds: tuple[str, ...] = RENDERABLE_KINDS
+) -> list[Task]:
+    """Случайные неповторяющиеся задания одного номера (ТЗ п.4).
+
+    Отбираются только виды, которые приложение умеет отрисовать: задание с вводом
+    ответа сейчас выглядело бы как вопрос без единого варианта.
+    """
+    query = select(Task).where(Task.number == number)
+    if kinds:
+        query = query.where(Task.kind.in_(kinds))
+    rows = await db.execute(query.order_by(func.random()).limit(count))
     return list(rows.scalars())
 
 

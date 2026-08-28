@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from api.deps import CurrentUser, DbSession
 from api.serializers import unfinished_payload
 from core import scoring
-from core.tasks_meta import TASK_NUMBERS, subtitle, title
+from core.tasks_meta import RENDERABLE_KINDS, TASK_NUMBERS, subtitle, title
 from db import crud
 from db.models import PLAN_PRO
 
@@ -25,7 +25,7 @@ async def state(user: CurrentUser, db: DbSession) -> dict:
         if active.status != "active":
             active = None
 
-    counts = await crud.task_counts(db)
+    counts = await crud.task_counts(db, kinds=RENDERABLE_KINDS)
     return {
         "user": {
             "id": user.id,
@@ -46,7 +46,7 @@ async def state(user: CurrentUser, db: DbSession) -> dict:
 @router.get("/tasks")
 async def tasks(user: CurrentUser, db: DbSession) -> dict:
     """Список заданий №1-26 с темами и количеством доступных вопросов (ТЗ п.3.1)."""
-    counts = await crud.task_counts(db)
+    counts = await crud.task_counts(db, kinds=RENDERABLE_KINDS)
     return {
         "tasks": [
             {

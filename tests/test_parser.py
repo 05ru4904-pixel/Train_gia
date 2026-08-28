@@ -120,11 +120,12 @@ def test_errors_are_readable():
 def test_generated_id_format():
     ids = {generate_task_id() for _ in range(200)}
     assert len(ids) > 190, "ID слишком часто повторяются"
+    # Проверяем принадлежность алфавиту, а не isupper(): ID вида «359582» состоит
+    # из одних цифр, и isupper() для него False — букв в строке просто нет.
+    allowed = set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
     for task_id in ids:
-        assert len(task_id) == ID_LENGTH
-        assert task_id.isalnum() and task_id.isupper()
-        assert "0" not in task_id and "O" not in task_id
-        assert "1" not in task_id and "I" not in task_id
+        assert len(task_id) == ID_LENGTH, task_id
+        assert set(task_id) <= allowed, f"{task_id}: недопустимые символы"
 
 
 def test_normalize_task_id():

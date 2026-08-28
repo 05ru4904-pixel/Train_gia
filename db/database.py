@@ -51,6 +51,10 @@ _MIGRATIONS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_until TIMESTAMPTZ",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS passage TEXT",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ",
+    # Виды заданий: всё, что было в базе до появления колонки, — это choice.
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS kind VARCHAR(16) NOT NULL DEFAULT 'choice'",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS match_left JSONB",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS answers JSONB",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS skipped_count INTEGER",
     "ALTER TABLE session_items ADD COLUMN IF NOT EXISTS points INTEGER",
 )
@@ -59,6 +63,7 @@ _MIGRATIONS = (
 # моделях, но здесь дублируются как страховка для баз, созданных прошлыми версиями.
 _INDEXES = (
     "CREATE INDEX IF NOT EXISTS ix_tasks_number ON tasks (number)",
+    "CREATE INDEX IF NOT EXISTS ix_tasks_number_kind ON tasks (number, kind)",
     "CREATE INDEX IF NOT EXISTS ix_sessions_user_status ON sessions (user_id, status)",
     "CREATE INDEX IF NOT EXISTS ix_sessions_user_finished ON sessions (user_id, status, finished_at)",
     "CREATE INDEX IF NOT EXISTS ix_session_items_session ON session_items (session_id)",

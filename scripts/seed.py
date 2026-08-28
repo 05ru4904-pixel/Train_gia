@@ -24,7 +24,7 @@ from core.parser import ParsedTask  # noqa: E402
 from core.tasks_meta import TASK_NUMBERS, subtitle, title  # noqa: E402
 from db import crud  # noqa: E402
 from db.database import SessionMaker, dispose_db, init_db  # noqa: E402
-from db.models import Task, VariantItem  # noqa: E402
+from db.models import Session, SessionItem, Task, VariantItem  # noqa: E402
 
 DEMO_MARK = "[демо]"
 
@@ -98,7 +98,7 @@ async def seed(per_number: int) -> None:
     print("Полный вариант соберётся автоматически из случайных заданий.")
 
 
-async def clear() -> None:
+async def clear(with_sessions: bool = False) -> None:
     await init_db()
     async with SessionMaker() as db:
         rows = await db.execute(select(Task))
@@ -106,20 +106,45 @@ async def clear() -> None:
         if not demo_ids:
             print("Демо-заданий в базе нет.")
             return
-        # Сначала убираем их из собранных вариантов, иначе внешний ключ не пустит.
+
+        # Задание, попавшее в чьё-то прохождение, просто так не удалить: внешний ключ
+        # стоит на RESTRICT, чтобы удаление не портило уже показанные результаты.
+        used = (await db.execute(
+            select(SessionItem.session_id)
+            .where(SessionItem.task_id.in_(demo_ids))
+            .distinct()
+        )).scalars().all()
+
+        if used and not with_sessions:
+            print(f"Демо-заданий найдено: {len(demo_ids)}")
+            print(f"Но {len(used)} прохождений на них ссылаются, и удалять их молча нельзя —")
+            print("иначе из истории пропадут уже показанные ученикам результаты.")
+            print("\nЕсли это тестовые прохождения и их не жалко:")
+            print("    python scripts/seed.py --clear --with-sessions")
+            return
+
+        if used:
+            await db.execute(delete(SessionItem).where(SessionItem.session_id.in_(used)))
+            await db.execute(delete(Session).where(Session.id.in_(used)))
+        # Из собранных вариантов задания тоже надо убрать.
         await db.execute(delete(VariantItem).where(VariantItem.task_id.in_(demo_ids)))
         await db.execute(delete(Task).where(Task.id.in_(demo_ids)))
         await db.commit()
+
     print(f"Удалено демо-заданий: {len(demo_ids)}")
+    if used:
+        print(f"Удалено связанных прохождений: {len(used)}")
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Демо-задания для тренажёра ЕГЭ")
     parser.add_argument("--clear", action="store_true", help="удалить демо-задания")
+    parser.add_argument("--with-sessions", action="store_true",
+                        help="вместе с демо удалить и прохождения, которые на них ссылаются")
     parser.add_argument("--per", type=int, default=15, help="заданий на каждый номер")
     args = parser.parse_args()
     try:
-        await (clear() if args.clear else seed(args.per))
+        await (clear(args.with_sessions) if args.clear else seed(args.per))
     finally:
         await dispose_db()
 

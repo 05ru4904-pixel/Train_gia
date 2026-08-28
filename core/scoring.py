@@ -3,7 +3,9 @@
 Здесь собрано всё, что зависит от регламента ЕГЭ. Меняется регламент — правится
 только этот файл (и тесты в tests/test_scoring.py).
 """
-from core.tasks_meta import LAST_TASK, TASK_NUMBERS
+import re
+
+from core.tasks_meta import KIND_DIGITS, KIND_MATCH, KIND_OPEN, LAST_TASK, TASK_NUMBERS
 
 # ---------------------------------------------------------------------------
 # Вес заданий в первичных баллах
@@ -34,6 +36,59 @@ RAW_TO_TEST_SCORE: dict[int, int] = {}
 def evaluate(selected: list[int], correct: list[int]) -> bool:
     """Ответ верен, только если выбран весь правильный набор и ничего лишнего (ТЗ п.5)."""
     return sorted(set(selected)) == sorted(set(correct))
+
+
+def normalize_open(value: str) -> str:
+    """Приводит текстовый ответ к сравнимому виду.
+
+    Ученик пишет «Которой», «которой », «сделалаусилие» — всё это должно
+    засчитываться. Убираем регистр, пробелы, дефисы и не различаем е/ё: на бланке
+    ЕГЭ ответ пишется без пробелов, и источник сам теряет их в поле «Правильный
+    ответ», так что различать их бессмысленно.
+    """
+    value = (value or "").strip().lower().replace("ё", "е")
+    return re.sub(r"[\s\-—]+", "", value)
+
+
+def evaluate_open(typed: str, answers: list[str]) -> bool:
+    """Открытый ответ: годится любая из перечисленных источником форм."""
+    if not typed or not answers:
+        return False
+    normalized = normalize_open(typed)
+    return any(normalized == normalize_open(answer) for answer in answers)
+
+
+def evaluate_digits(typed: str, answers: list[str]) -> bool:
+    """Ввод цифр: порядок не важен, как и на настоящем экзамене.
+
+    Источник иногда перечисляет перестановки («135|351|531»), а иногда даёт одну
+    запись («1234»), хотя принимаются любые порядки. Поэтому сравниваем наборы
+    цифр, а не строки.
+    """
+    if not typed or not answers:
+        return False
+    digits = set(re.findall(r"\d", typed))
+    if not digits:
+        return False
+    return any(digits == set(re.findall(r"\d", answer)) for answer in answers)
+
+
+def evaluate_match(selected: list[int], correct: list[int]) -> bool:
+    """Соответствие: порядок обязателен — каждой позиции слева своя позиция справа."""
+    if not correct or len(selected) != len(correct):
+        return False
+    return list(selected) == list(correct)
+
+
+def check_answer(kind: str, response, task_correct: list[int], task_answers: list[str] | None) -> bool:
+    """Единая точка проверки: выбирает способ сверки по виду задания."""
+    if kind == KIND_OPEN:
+        return evaluate_open(str(response or ""), task_answers or [])
+    if kind == KIND_DIGITS:
+        return evaluate_digits(str(response or ""), task_answers or [])
+    if kind == KIND_MATCH:
+        return evaluate_match(list(response or []), task_correct)
+    return evaluate(list(response or []), task_correct)
 
 
 def award_points(number: int, selected: list[int], correct: list[int]) -> int:
