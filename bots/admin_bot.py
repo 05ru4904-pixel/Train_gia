@@ -28,10 +28,20 @@ from core.parser import (
     parse_task,
     parse_task_batch,
     parse_variant,
+    to_template,
 )
 from core.raw_variant import parse as parse_raw_variant
 from core.raw_variant import render_preview
-from core.tasks_meta import LAST_TASK, TASK_NUMBERS, letter, title
+from core.tasks_meta import (
+    KIND_CHOICE,
+    KIND_DIGITS,
+    KIND_MATCH,
+    KIND_OPEN,
+    LAST_TASK,
+    TASK_NUMBERS,
+    letter,
+    title,
+)
 from core.variant_import import import_tasks, load_payload, next_free_variant_number
 from db.crud import (
     create_task,
@@ -55,19 +65,61 @@ from db.database import SessionMaker
 log = logging.getLogger(__name__)
 router = Router(name="admin")
 
-TEMPLATE = (
-    "Задание №4\n"
-    "В каком слове правильно поставлено ударение?\n"
-    "А) звонИт\n"
-    "Б) звОнит\n"
-    "В) позвонИт\n"
-    "Г) позвОнит\n"
-    "Ответ: А"
-)
+# Шаблоны всех четырёх видов заданий. Вид определяется по форме сообщения, поэтому
+# отдельно его указывать не нужно — разбор живёт в core/parser.py.
+TEMPLATES = {
+    KIND_CHOICE: (
+        "Задание №4\n"
+        "В каком слове правильно поставлено ударение?\n"
+        "А) звонИт\n"
+        "Б) звОнит\n"
+        "В) позвонИт\n"
+        "Г) позвОнит\n"
+        "Ответ: А"
+    ),
+    KIND_OPEN: (
+        "Задание №5\n"
+        "Отредактируйте предложение: исправьте лексическую ошибку, "
+        "исключив лишнее слово. Выпишите это слово.\n"
+        "Ответ: заклятым, заклятый\n"
+        "Текст: Он всегда был моим заклятым врагом."
+    ),
+    KIND_DIGITS: (
+        "Задание №15\n"
+        "Укажите все цифры, на месте которых пишется НН.\n"
+        "Ответ: 134\n"
+        "Текст: Дли(1)ая мощё(2)ая дорога вела к стари(3)ому дому."
+    ),
+    KIND_MATCH: (
+        "Задание №8\n"
+        "Установите соответствие между грамматическими ошибками и предложениями.\n"
+        "А) нарушение в построении предложения с деепричастным оборотом\n"
+        "Б) ошибка в употреблении падежной формы\n"
+        "1) Приехав в город, мне сразу понравились улицы.\n"
+        "2) Все, кто читал повесть, помнят её финал.\n"
+        "3) Согласно расписания поезд уходит в семь.\n"
+        "Ответ: А-1, Б-3"
+    ),
+}
+
+# Шаблон по умолчанию: с него начинали, на него ссылаются старые инструкции.
+TEMPLATE = TEMPLATES[KIND_CHOICE]
+
+KIND_NAMES = {
+    KIND_CHOICE: "выбор варианта",
+    KIND_OPEN: "вписать слово",
+    KIND_DIGITS: "вписать цифры",
+    KIND_MATCH: "соответствие",
+}
+
+# Материал задания бывает на целый экзаменационный текст, а в сообщение Telegram
+# влезает 4096 символов — в карточке показываем начало.
+PASSAGE_PREVIEW = 600
 
 MENU = (
     "<b>Админ-панель тренажёра ЕГЭ</b>\n\n"
     "/add — добавить задание\n"
+    "/templates — шаблоны всех видов заданий\n"
     "/upload — залить вариант файлом, скопированным с РЕШУ ЕГЭ\n"
     "/batch — добавить сразу несколько заданий (целый вариант)\n"
     "/find — найти задание по ID\n"
@@ -116,18 +168,70 @@ def is_admin(user_id: int | None) -> bool:
 
 
 def task_card(task) -> str:
+    """Карточка задания для админа — по своим правилам для каждого вида.
+
+    Раньше карточка печатала любое задание как выбор варианта. У заданий с
+    вписыванием ответа она выходила пустой, а у соответствия — уверенно неверной:
+    правый столбец шёл как варианты, а correct у соответствия считается с единицы,
+    и галочка вставала не на том. Проверить по такой карточке было нечего.
+    """
+    kind = getattr(task, "kind", None) or KIND_CHOICE
+    correct = list(task.correct or [])
+    options = list(task.options or [])
+    answers = list(getattr(task, "answers", None) or [])
+    match_left = list(getattr(task, "match_left", None) or [])
+
     lines = [
         f"<b>№{task.number} · {html.escape(title(task.number))}</b>",
-        f"ID: <code>{task.id}</code>",
+        f"ID: <code>{task.id}</code> · {KIND_NAMES.get(kind, kind)}",
         "",
         html.escape(task.text),
         "",
     ]
-    for i, option in enumerate(task.options or []):
-        mark = " ✅" if i in (task.correct or []) else ""
-        lines.append(f"{letter(i)}) {html.escape(str(option))}{mark}")
-    lines.append("")
-    lines.append("Ответ: " + ", ".join(letter(i) for i in (task.correct or [])))
+
+    if kind == KIND_MATCH:
+        for i, item in enumerate(match_left):
+            value = correct[i] if i < len(correct) else None
+            target = options[value - 1] if value and 1 <= value <= len(options) else None
+            arrow = f" → {value}" if value else " → ?"
+            lines.append(f"{letter(i)}) {html.escape(str(item))}{arrow}")
+            if target:
+                lines.append(f"    <i>{html.escape(str(target))}</i>")
+        lines.append("")
+        for i, option in enumerate(options):
+            lines.append(f"{i + 1}) {html.escape(str(option))}")
+        lines.append("")
+        lines.append("Ответ: " + ", ".join(
+            f"{letter(i)}-{value}" for i, value in enumerate(correct)
+        ))
+        if len(correct) != len(match_left):
+            lines.append(
+                f"⚠️ слева позиций {len(match_left)}, а в ответе {len(correct)} — "
+                "задание заполнено не до конца"
+            )
+    elif kind in (KIND_OPEN, KIND_DIGITS):
+        if answers:
+            lines.append("Ответ: " + ", ".join(html.escape(str(a)) for a in answers))
+            if len(answers) > 1:
+                lines.append("<i>засчитывается любая из форм</i>")
+        else:
+            lines.append("⚠️ Ответ не заполнен — задание не будет засчитано ученику")
+    else:
+        for i, option in enumerate(options):
+            mark = " ✅" if i in correct else ""
+            lines.append(f"{letter(i)}) {html.escape(str(option))}{mark}")
+        lines.append("")
+        if correct:
+            lines.append("Ответ: " + ", ".join(letter(i) for i in correct))
+        else:
+            lines.append("⚠️ Правильный ответ не указан")
+
+    passage = getattr(task, "passage", None)
+    if passage:
+        shown = passage[:PASSAGE_PREVIEW]
+        lines += ["", "<b>Текст задания</b>", html.escape(shown)]
+        if len(passage) > PASSAGE_PREVIEW:
+            lines.append(f"<i>… ещё {len(passage) - PASSAGE_PREVIEW} символов</i>")
     return "\n".join(lines)
 
 
@@ -181,6 +285,21 @@ async def stats(message: Message) -> None:
 # --------------------------------------------------------------------------- #
 # Добавление задания
 # --------------------------------------------------------------------------- #
+@router.message(Command("templates"))
+async def templates(message: Message) -> None:
+    """Шаблоны всех видов. Вид бот определяет сам по форме сообщения."""
+    blocks = [
+        f"<b>{KIND_NAMES[kind]}</b>\n<pre>{html.escape(TEMPLATES[kind])}</pre>"
+        for kind in (KIND_CHOICE, KIND_OPEN, KIND_DIGITS, KIND_MATCH)
+    ]
+    await message.answer(
+        "Вид задания определяется по форме сообщения — указывать его не нужно.\n\n"
+        + "\n".join(blocks)
+        + "\n<b>Строка «Текст:»</b> необязательна: всё после неё — материал задания "
+        "(отрывок, предложения), он показывается ученику отдельно от условия."
+    )
+
+
 @router.message(Command("add"))
 async def add_prompt(message: Message, state: FSMContext) -> None:
     await state.set_state(Add.waiting)
@@ -189,6 +308,7 @@ async def add_prompt(message: Message, state: FSMContext) -> None:
         f"<pre>{html.escape(TEMPLATE)}</pre>\n"
         "Вариантов может быть сколько угодно. Для нескольких правильных ответов: "
         "<code>Ответ: А, В, Д</code>\n\n"
+        "Задания с вписыванием ответа и на соответствие — /templates\n\n"
         "ID присвоится сам. /cancel — отмена."
     )
 
@@ -203,10 +323,13 @@ async def add_save(message: Message, state: FSMContext) -> None:
 
     async with SessionMaker() as db:
         task = await create_task(db, parsed)
+        card = task_card(task)
 
     await state.clear()
+    # Карточкой показываем, каким бот понял задание: вид определяется по форме
+    # сообщения, и админ должен увидеть, что бот понял его так же, как он задумал.
     await message.answer(
-        f"✅ Задание добавлено\n\n№{task.number}\nID: <code>{task.id}</code>",
+        f"✅ Задание добавлено\n\n№{task.number}\nID: <code>{task.id}</code>\n\n" + card,
         reply_markup=task_keyboard(task.id),
     )
 
@@ -509,11 +632,23 @@ async def show_list(message: Message, number: int) -> None:
 
 @router.callback_query(F.data.startswith("edit:"))
 async def edit_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    """Отдаёт задание готовым шаблоном: скопировать, поправить строку, прислать назад.
+
+    Так правится любое поле, включая ответ у заданий с вписыванием, — набирать
+    шаблон с нуля и гадать, какой он для этого вида, не нужно.
+    """
     task_id = callback.data.split(":", 1)[1]
+    async with SessionMaker() as db:
+        task = await get_task(db, task_id)
+    if task is None:
+        await callback.answer("Задание уже удалено", show_alert=True)
+        return
+
     await state.set_state(Edit.waiting)
     await state.update_data(task_id=task_id)
     await callback.message.answer(
-        f"Пришлите новую версию задания <code>{task_id}</code> целиком, по тому же шаблону.\n"
+        f"Задание <code>{task_id}</code> целиком. Скопируйте, поправьте нужное "
+        f"и пришлите обратно:\n\n<pre>{html.escape(to_template(task))}</pre>\n"
         "ID сохранится. /cancel — отмена."
     )
     await callback.answer()

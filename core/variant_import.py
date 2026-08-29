@@ -192,13 +192,18 @@ def validate(kind, options, match_left, correct, answers) -> str | None:
 def to_parsed(task: ImportTask) -> ParsedTask:
     """Приводит к структуре, которую понимает слой БД.
 
-    В базе индексы вариантов нумеруются с нуля, а источник — с единицы.
+    В базе индексы вариантов нумеруются с нуля, а источник — с единицы. У задания на
+    соответствие correct — это позиции правого столбца, они остаются с единицы.
     """
     return ParsedTask(
         number=task.number,
         text=task.text,
         options=task.options,
         correct=[c - 1 for c in task.correct] if task.kind == KIND_CHOICE else list(task.correct),
+        kind=task.kind,
+        answers=list(task.answers),
+        match_left=list(task.match_left),
+        passage=task.passage,
     )
 
 
@@ -255,12 +260,6 @@ async def import_tasks(tasks: list[ImportTask], variant_number: int | None = Non
                 for_variant.append((task.number, known[key]))
                 continue
             saved = await crud.create_task(db, to_parsed(task))
-            # Поля, которых нет в шаблоне админ-бота, проставляем отдельно.
-            saved.kind = task.kind
-            saved.passage = task.passage
-            saved.match_left = task.match_left or None
-            saved.answers = task.answers or None
-            await db.commit()
             known[key] = saved.id
             report.created.append((task.number, saved.id))
             for_variant.append((task.number, saved.id))

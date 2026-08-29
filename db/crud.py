@@ -77,14 +77,22 @@ async def get_or_create_user(db, user_id: int, first_name=None, last_name=None, 
 # Задания
 # --------------------------------------------------------------------------- #
 async def create_task(db, parsed: ParsedTask) -> Task:
-    """Сохраняет задание, подбирая свободный ID (ТЗ п.15)."""
+    """Сохраняет задание, подбирая свободный ID (ТЗ п.15).
+
+    Пишутся все поля разбора, включая вид: задание с вписыванием ответа, попавшее
+    в базу как choice, ученик увидел бы как вопрос без единого варианта.
+    """
     for _ in range(10):
         task = Task(
             id=generate_task_id(),
             number=parsed.number,
+            kind=parsed.kind,
             text=parsed.text,
+            passage=parsed.passage,
             options=list(parsed.options),
+            match_left=list(parsed.match_left) or None,
             correct=list(parsed.correct),
+            answers=list(parsed.answers) or None,
         )
         db.add(task)
         try:
@@ -101,10 +109,20 @@ async def get_task(db, task_id: str) -> Task | None:
 
 
 async def update_task(db, task: Task, parsed: ParsedTask) -> Task:
+    """Перезаписывает задание целиком.
+
+    Именно целиком: если обновлять только текст и варианты, у задания с вписыванием
+    ответа останется старый answers, и после правки условия оно будет ждать ответ от
+    прошлой версии. Поэтому админ-бот и отдаёт на правку задание целиком (to_template).
+    """
     task.number = parsed.number
+    task.kind = parsed.kind
     task.text = parsed.text
+    task.passage = parsed.passage
     task.options = list(parsed.options)
+    task.match_left = list(parsed.match_left) or None
     task.correct = list(parsed.correct)
+    task.answers = list(parsed.answers) or None
     await db.commit()
     await db.refresh(task)
     return task

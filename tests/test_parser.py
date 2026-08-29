@@ -6,12 +6,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.parser import (  # noqa: E402
     ID_LENGTH,
+    ParsedTask,
     ParseError,
     generate_task_id,
     normalize_task_id,
     parse_task,
     parse_task_batch,
     parse_variant,
+    to_template,
+)
+from core.tasks_meta import (  # noqa: E402
+    KIND_CHOICE,
+    KIND_DIGITS,
+    KIND_MATCH,
+    KIND_OPEN,
 )
 
 SIMPLE = """Задание №4
@@ -115,6 +123,135 @@ def test_errors_are_readable():
     _expect_error("Задание №4\nВопрос?\nА) а\nБ) б\nОтвет: Ж", "такого варианта нет")
     _expect_error("Задание №4\nВопрос?\nА) а\nБ) б\nОтвет: А, А", "дважды")
     _expect_error("Задание №4\nА) а\nБ) б\nОтвет: А", "текст задания")
+
+
+# --------------------------------------------------------------------------- #
+# Задания с вписыванием ответа
+# --------------------------------------------------------------------------- #
+def test_open_task():
+    task = parse_task(
+        "Задание №5\n"
+        "Отредактируйте предложение: исправьте лексическую ошибку.\n"
+        "Ответ: заклятым, заклятый"
+    )
+    assert task.kind == KIND_OPEN
+    assert task.answers == ["заклятым", "заклятый"]
+    assert task.options == [] and task.correct == []
+
+
+def test_open_answer_with_spaces_is_not_split():
+    """«не столько планы, сколько нас» — одна форма, а не две."""
+    task = parse_task("Задание №25\nНайдите предложение.\nОтвет: не столько планы, сколько нас")
+    assert task.answers == ["не столько планы, сколько нас"]
+
+
+def test_digits_task():
+    task = parse_task(
+        "Задание №15\nУкажите все цифры, на месте которых пишется НН.\nОтвет: 134"
+    )
+    assert task.kind == KIND_DIGITS
+    assert task.answers == ["134"]
+
+
+def test_kind_comes_from_number_not_from_answer():
+    """У №25 ответ — номер предложения, но сверяется он как слово (так же, как при
+    заливке варианта). Иначе «34» и «43» стали бы одинаковыми."""
+    task = parse_task("Задание №25\nНайдите предложение.\nОтвет: 34")
+    assert task.kind == KIND_OPEN
+
+
+def test_passage_tail():
+    task = parse_task(
+        "Задание №15\nУкажите все цифры.\nОтвет: 12\n"
+        "Текст: Дли(1)ая дорога.\nВторая строка текста."
+    )
+    assert task.passage == "Дли(1)ая дорога.\nВторая строка текста."
+    assert task.text == "Укажите все цифры."
+
+
+def test_single_letter_line_stays_in_open_task():
+    """«А. Пушкин» в условии не должно превратить задание с вписыванием в выбор."""
+    task = parse_task("Задание №5\nКого имел в виду А. Пушкин?\nОтвет: заклятым")
+    assert task.kind == KIND_OPEN
+    assert task.text == "Кого имел в виду А. Пушкин?"
+
+
+# --------------------------------------------------------------------------- #
+# Задания на соответствие
+# --------------------------------------------------------------------------- #
+MATCH = """Задание №8
+Установите соответствие между ошибками и предложениями.
+А) нарушение с деепричастным оборотом
+Б) ошибка в падежной форме
+1) Приехав в город, мне понравились улицы.
+2) Все, кто читал, помнят финал.
+3) Согласно расписания поезд уходит в семь.
+Ответ: А-1, Б-3"""
+
+
+def test_match_task():
+    task = parse_task(MATCH)
+    assert task.kind == KIND_MATCH
+    assert task.match_left == [
+        "нарушение с деепричастным оборотом",
+        "ошибка в падежной форме",
+    ]
+    assert len(task.options) == 3
+    assert task.correct == [1, 3]
+
+
+def test_match_answer_order_does_not_matter():
+    """Порядок пар в ответе — дело админа, порядок в базе задаётся буквами."""
+    assert parse_task(MATCH.replace("Ответ: А-1, Б-3", "Ответ: Б-3, А-1")).correct == [1, 3]
+
+
+def test_match_accepts_plain_digits():
+    """На бланке ЕГЭ ответ пишут одной строкой цифр — принимаем и так."""
+    assert parse_task(MATCH.replace("Ответ: А-1, Б-3", "Ответ: 13")).correct == [1, 3]
+
+
+def test_match_errors():
+    _expect_error(MATCH.replace("Ответ: А-1, Б-3", "Ответ: А-1"), "не хватает позиций")
+    _expect_error(MATCH.replace("Ответ: А-1, Б-3", "Ответ: А-1, Б-9"), "справа всего 3")
+    _expect_error(MATCH.replace("Ответ: А-1, Б-3", "Ответ: А-1, Д-2"), "слева всего 2")
+    _expect_error(MATCH.replace("Ответ: А-1, Б-3", "Ответ: А-1, А-3"), "дважды")
+
+
+# --------------------------------------------------------------------------- #
+# Обратная сборка: задание -> шаблон -> задание
+# --------------------------------------------------------------------------- #
+ROUND_TRIP = [
+    ParsedTask(
+        number=4, text="В каком слове ударение?",
+        options=["звонИт", "звОнит"], correct=[0], kind=KIND_CHOICE,
+    ),
+    ParsedTask(
+        number=5, text="Исправьте лексическую ошибку.", options=[], correct=[],
+        kind=KIND_OPEN, answers=["заклятым", "заклятый"],
+        passage="Он всегда был моим заклятым врагом.",
+    ),
+    ParsedTask(
+        number=25, text="Найдите предложение.", options=[], correct=[],
+        kind=KIND_OPEN, answers=["не столько планы, сколько нас"],
+    ),
+    ParsedTask(
+        number=15, text="Укажите все цифры.", options=[], correct=[],
+        kind=KIND_DIGITS, answers=["134"], passage="Дли(1)ая мощё(2)ая дорога.",
+    ),
+    ParsedTask(
+        number=8, text="Установите соответствие.",
+        options=["первое", "второе", "третье"], correct=[3, 1],
+        kind=KIND_MATCH, match_left=["нарушение", "ошибка"],
+    ),
+]
+
+
+def test_round_trip_keeps_every_field():
+    """Правка через админ-бота — это шаблон -> разбор. Потеря любого поля здесь
+    означает, что после правки задание в базе станет неполным."""
+    for original in ROUND_TRIP:
+        again = parse_task(to_template(original))
+        assert again == original, f"№{original.number} ({original.kind}): {again} != {original}"
 
 
 def test_generated_id_format():

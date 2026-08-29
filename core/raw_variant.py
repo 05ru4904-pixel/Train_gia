@@ -18,7 +18,7 @@
 import re
 from dataclasses import dataclass, field
 
-from core.parser import _HOMOGLYPHS
+from core.parser import _HOMOGLYPHS, split_answer_forms
 from core.tasks_meta import (
     KIND_CHOICE,
     KIND_DIGITS,
@@ -334,40 +334,6 @@ def take_answer(explanation: str) -> tuple[str, bool]:
     if found:
         return found.group(1).strip(), True
     raise ValueError("не нашёл ни «Ответ:», ни «Правильный ответ:»")
-
-
-def split_answer_forms(raw: str) -> list[str]:
-    """Строка ответа -> список равнозначных форм.
-
-    Источник разделяет их четырьмя способами: «вследствие ИЛИ ввиду», «12|21»,
-    «в конце концов; может быть», «135, 351».
-
-    С запятой осторожно: она делит формы только когда части — отдельные слова
-    или цифры. У развёрнутого ответа («не столько планы, сколько нас») запятая
-    принадлежит самой фразе, и разрезать по ней значит забраковать ученика,
-    который написал верно целиком.
-    """
-    raw = raw.strip().rstrip(".")
-    parts = [p.strip(" .") for p in re.split(r"\s+ИЛИ\s+|\s*\|\s*|\s*;\s*", raw)]
-
-    forms: list[str] = []
-    for part in parts:
-        if not part:
-            continue
-        pieces = [piece.strip() for piece in part.split(",")]
-        if len(pieces) > 1 and all(pieces) and not any(" " in piece for piece in pieces):
-            forms.extend(pieces)
-        else:
-            forms.append(part)
-
-    seen: set[str] = set()
-    unique: list[str] = []
-    for form in forms:
-        key = form.lower()
-        if key not in seen:
-            seen.add(key)
-            unique.append(form)
-    return unique
 
 
 def digits_of(value: str) -> list[int]:
