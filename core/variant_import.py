@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from core.parser import ParsedTask
+from core.parser import ParsedTask, split_digit_forms
 from core.tasks_meta import (
     KIND_CHOICE,
     KIND_DIGITS,
@@ -132,6 +132,11 @@ def load_payload(data, where: str = "вариант") -> Loaded:
         match_left = [_as_text(o) for o in _as_list(raw.get("match_left"))]
         correct = [c for c in _as_list(raw.get("correct")) if isinstance(c, int)]
         answers = [_as_text(a) for a in _as_list(raw.get("answers")) if _as_text(a)]
+        if kind == KIND_DIGITS:
+            # Файл мог быть разобран прошлой версией или поправлен руками — ответ
+            # приводим к цифрам и здесь, чтобы проверка ниже не спотыкалась о
+            # приписки источника вроде «порядок не важен».
+            answers = split_digit_forms("; ".join(answers))
 
         # Исходный текст: либо общий по ссылке, либо свой у задания.
         ref = raw.get("text_ref")

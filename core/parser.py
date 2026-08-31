@@ -137,6 +137,57 @@ def normalize_task_id(raw: str) -> str:
     return raw.strip().upper().translate(_HOMOGLYPHS_ID)
 
 
+# Разделители равнозначных форм ответа. Их источник ставит осознанно, в отличие
+# от запятой, которая бывает и частью самого ответа.
+_RE_FORM_SPLIT = re.compile(r"\s+ИЛИ\s+|\s*\|\s*|\s*;\s*")
+
+# То же для ответов из цифр, но «или» здесь считается разделителем в любом регистре:
+# внутри цифрового ответа это слово ничем другим быть не может, а у словесного —
+# может («так или иначе»).
+_RE_DIGIT_SPLIT = re.compile(r"\s+или\s+|\s*\|\s*|\s*;\s*", re.I)
+
+
+def split_digit_forms(raw: str) -> list[str]:
+    """Строка ответа задания с цифрами -> формы, в которых остались только цифры.
+
+    У таких заданий ответ — набор цифр, и всё, что источник дописал рядом, к
+    ответу не относится: «25; порядок не важен», «34 ИЛИ 43 в любом порядке»,
+    «1234 (в любой последовательности)». Раньше кусок без единой цифры считался
+    отдельной формой ответа, и на нём отклонялся весь вариант.
+
+    Запятая внутри формы разделителем НЕ считается — она перечисляет цифры одного
+    ответа. Отсюда два случая, и различаются они набором цифр:
+      * «145, 541» — части составлены из одних и тех же цифр, это перестановки
+        одного ответа, хватит первой;
+      * «3, 5» — наборы разные, значит перечислены цифры одного ответа, склеиваем
+        в «35». Иначе ученик, записавший «35», получил бы «неверно», а написавший
+        «3» — «верно», то есть ровно наоборот.
+
+    Порядок цифр внутри формы сохраняем как есть: сверяет ответы `core/scoring.py`,
+    и там порядок не важен, но в карточке админ должен видеть запись источника.
+    """
+    forms: list[str] = []
+    seen: set[tuple] = set()
+
+    for part in _RE_DIGIT_SPLIT.split(raw or ""):
+        pieces = [re.sub(r"\D", "", piece) for piece in part.split(",")]
+        pieces = [piece for piece in pieces if piece]
+        if not pieces:
+            continue   # кусок без цифр — приписка источника, не форма ответа
+
+        first = sorted(pieces[0])
+        if all(sorted(piece) == first for piece in pieces[1:]):
+            value = pieces[0]
+        else:
+            value = "".join(pieces)
+
+        key = tuple(sorted(value))
+        if key not in seen:
+            seen.add(key)
+            forms.append(value)
+    return forms
+
+
 def split_answer_forms(raw: str) -> list[str]:
     """Строка ответа -> список равнозначных форм.
 
@@ -147,9 +198,11 @@ def split_answer_forms(raw: str) -> list[str]:
     или цифры. У развёрнутого ответа («не столько планы, сколько нас») запятая
     принадлежит самой фразе, и разрезать по ней значит забраковать ученика,
     который написал верно целиком.
+
+    Для заданий с цифрами есть свой разбор — `split_digit_forms`.
     """
     raw = raw.strip().rstrip(".")
-    parts = [p.strip(" .") for p in re.split(r"\s+ИЛИ\s+|\s*\|\s*|\s*;\s*", raw)]
+    parts = [p.strip(" .") for p in _RE_FORM_SPLIT.split(raw)]
 
     forms: list[str] = []
     for part in parts:
@@ -392,10 +445,14 @@ def _parse_typed(number, body: list[str], answer_at, answer_raw, passage) -> Par
     kind = kind_of(number)
     if kind not in (KIND_OPEN, KIND_DIGITS):
         kind = KIND_DIGITS if all(a.isdigit() for a in answers) else KIND_OPEN
-    if kind == KIND_DIGITS and not all(any(ch.isdigit() for ch in a) for a in answers):
-        raise ParseError(
-            f"У задания №{number} ответ — цифры, а в строке «Ответ:» их нет: {answer_raw}"
-        )
+    if kind == KIND_DIGITS:
+        # Из ответа берём только цифры: приписки вроде «порядок не важен» к нему
+        # не относятся и раньше валили разбор.
+        answers = split_digit_forms(answer_raw)
+        if not answers:
+            raise ParseError(
+                f"У задания №{number} ответ — цифры, а в строке «Ответ:» их нет: {answer_raw}"
+            )
 
     return ParsedTask(
         number=number,

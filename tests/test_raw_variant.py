@@ -136,6 +136,48 @@ def test_choice_answer_outside_options():
     raw = "Задание 4\nУкажите слово.\n1) а\n2) б\nОтвет: 5"
     assert "а вариантов всего 2" in problems_of(raw)
 
+# ---------------------------------------------------------------------------
+# Ответ задания с цифрами: берём из строки только цифры
+# ---------------------------------------------------------------------------
+def digits_answer(answer: str) -> list[str]:
+    raw = f"Задание 15\nУкажите цифры, на месте которых пишется НН.\nОтвет: {answer}"
+    return only_task(raw)["answers"]
+
+
+def test_plain_sequence():
+    assert digits_answer("32465") == ["32465"]
+
+
+def test_source_notes_are_dropped():
+    """Приписка источника без цифр — не форма ответа, и вариант из-за неё не падает."""
+    assert digits_answer("25; порядок не важен") == ["25"]
+    assert digits_answer("34 ИЛИ 43 в любом порядке") == ["34"]
+    assert digits_answer("1234 (цифры в любой последовательности)") == ["1234"]
+    assert digits_answer("2 и 4") == ["24"]
+
+
+def test_permutations_collapse():
+    """Перестановки одного набора — одна форма: порядок всё равно не проверяется."""
+    assert digits_answer("145, 541") == ["145"]
+    assert digits_answer("35 или 53") == ["35"]
+    assert digits_answer("34|43") == ["34"]
+
+
+def test_comma_lists_digits_of_one_answer():
+    """«3, 5» — это один ответ «35», а не «верно 3 или верно 5»."""
+    assert digits_answer("3, 5") == ["35"]
+
+
+def test_real_alternatives_are_kept():
+    """Разные наборы через ИЛИ — действительно разные допустимые ответы."""
+    assert digits_answer("12 ИЛИ 34") == ["12", "34"]
+
+
+def test_answer_without_digits_is_refused():
+    assert "цифр в ответе нет" in problems_of(
+        "Задание 15\nУкажите цифры, на месте которых пишется НН.\nОтвет: порядок любой"
+    )
+
 
 if __name__ == "__main__":
     failed = 0

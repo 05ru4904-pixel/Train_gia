@@ -18,7 +18,7 @@
 import re
 from dataclasses import dataclass, field
 
-from core.parser import _HOMOGLYPHS, split_answer_forms
+from core.parser import _HOMOGLYPHS, split_answer_forms, split_digit_forms
 from core.tasks_meta import (
     KIND_CHOICE,
     KIND_DIGITS,
@@ -452,12 +452,18 @@ def _build_task(number: int, source_id: int | None, block: str, result: Result):
 
     else:  # open, digits
         task["material"] = rest.strip() or None
-        task["answers"] = forms
-        if kind == KIND_DIGITS and not all(any(ch.isdigit() for ch in f) for f in forms):
-            result.problems.append(
-                Problem(number, f"вид digits, но в ответе нет цифр: {forms}")
-            )
-            return None
+        if kind == KIND_DIGITS:
+            # Ответ — набор цифр, и только он. Приписки источника («порядок не
+            # важен», «в любой последовательности») к ответу не относятся: раньше
+            # такой кусок считался отдельной формой без цифр и валил весь вариант.
+            task["answers"] = split_digit_forms(answer_raw)
+            if not task["answers"]:
+                result.problems.append(
+                    Problem(number, f"вид digits, но цифр в ответе нет: {answer_raw!r}")
+                )
+                return None
+        else:
+            task["answers"] = forms
     return task, passage
 
 
