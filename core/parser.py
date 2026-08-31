@@ -112,6 +112,10 @@ class ParsedTask:
     answers: list[str] = field(default_factory=list)
     match_left: list[str] = field(default_factory=list)
     passage: str | None = None
+    # Номер задания на сайте-источнике («Задание 8 № 10262 тип 8»). Постоянный: не
+    # меняется от правки текста, поэтому по нему и опознаётся уже залитое задание.
+    # У заданий, набранных админом через /add, его нет — там остаётся None.
+    source_id: int | None = None
 
     @property
     def correct_letters(self) -> str:

@@ -104,6 +104,10 @@ class Task(Base):
     # Допустимые текстовые ответы для open и digits: источник перечисляет все формы
     # («заклятым», «заклятый», «злейшим»), любая из них засчитывается.
     answers: Mapped[list | None] = mapped_column(JSONColumn)
+    # Номер задания в базе сайта-источника. Хранится рядом со своим id, а не вместо
+    # него: наш id — адрес задания во всём приложении, source_id нужен только при
+    # заливке, чтобы узнать уже залитое задание, как бы ни правили его текст.
+    source_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -112,6 +116,7 @@ class Task(Base):
     __table_args__ = (
         Index("ix_tasks_number", "number"),
         Index("ix_tasks_number_kind", "number", "kind"),
+        Index("ix_tasks_source", "number", "source_id"),
     )
 
 

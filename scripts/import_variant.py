@@ -81,6 +81,10 @@ async def main() -> None:
     finally:
         await dispose_db()
 
+    if report.is_duplicate:
+        print(f"\nТакой вариант уже есть в базе — №{report.duplicate_of}. Ничего не залито.")
+        return
+
     for warning in report.warnings:
         print(f"Внимание: {warning}")
     if report.variant_status:

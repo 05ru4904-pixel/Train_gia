@@ -55,6 +55,9 @@ _MIGRATIONS = (
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS kind VARCHAR(16) NOT NULL DEFAULT 'choice'",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS match_left JSONB",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS answers JSONB",
+    # ID задания на сайте-источнике. Nullable: у всего, что залито до этой колонки,
+    # и у заданий из /add его нет — такие ищутся по отпечатку содержимого.
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source_id INTEGER",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS skipped_count INTEGER",
     "ALTER TABLE session_items ADD COLUMN IF NOT EXISTS points INTEGER",
     "ALTER TABLE session_items ADD COLUMN IF NOT EXISTS typed TEXT",
@@ -65,6 +68,7 @@ _MIGRATIONS = (
 _INDEXES = (
     "CREATE INDEX IF NOT EXISTS ix_tasks_number ON tasks (number)",
     "CREATE INDEX IF NOT EXISTS ix_tasks_number_kind ON tasks (number, kind)",
+    "CREATE INDEX IF NOT EXISTS ix_tasks_source ON tasks (number, source_id)",
     "CREATE INDEX IF NOT EXISTS ix_sessions_user_status ON sessions (user_id, status)",
     "CREATE INDEX IF NOT EXISTS ix_sessions_user_finished ON sessions (user_id, status, finished_at)",
     "CREATE INDEX IF NOT EXISTS ix_session_items_session ON session_items (session_id)",

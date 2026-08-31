@@ -550,6 +550,15 @@ async def upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     report = await import_tasks(loaded.tasks, number)
     await state.clear()
 
+    # Вариант опознаётся по №26: совпал — значит этот же вариант уже заливали.
+    if report.is_duplicate:
+        await callback.message.answer(
+            f"⛔️ Такой вариант уже есть в базе — <b>№{report.duplicate_of}</b>.\n"
+            f"Его №{LAST_TASK} совпадает по ID источника.\n\n"
+            "Ничего не залито."
+        )
+        return
+
     lines = [f"✅ Добавлено заданий: {len(report.created)}"]
     if report.duplicates:
         lines.append(f"Пропущено как уже залитые: {report.duplicates}")

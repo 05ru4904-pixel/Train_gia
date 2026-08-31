@@ -397,6 +397,9 @@ def parse(raw: str) -> Result:
 
         task: dict = {
             "number": number,
+            # Постоянный номер задания у источника — «Задание 8 № 10262 тип 8».
+            # По нему при заливке опознаётся уже залитое задание и повторный вариант.
+            "source_id": int(header.group(2)),
             "kind": kind,
             "text": condition,
             "text_ref": None,
@@ -593,9 +596,13 @@ def render_preview(payload: dict, notes: list[str] | None = None) -> str:
         correct = task.get("correct") or []
         answers = task.get("answers") or []
 
+        source = task.get("source_id")
+        head = f"ЗАДАНИЕ {number}   ·   {KIND_NAMES.get(kind, kind)}"
+        if source:
+            head += f"   ·   источник № {source}"
         lines += [
             RULE,
-            f"ЗАДАНИЕ {number}   ·   {KIND_NAMES.get(kind, kind)}",
+            head,
             RULE,
             "",
             "УСЛОВИЕ",

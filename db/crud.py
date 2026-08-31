@@ -93,6 +93,7 @@ async def create_task(db, parsed: ParsedTask) -> Task:
             match_left=list(parsed.match_left) or None,
             correct=list(parsed.correct),
             answers=list(parsed.answers) or None,
+            source_id=parsed.source_id,
         )
         db.add(task)
         try:
@@ -123,6 +124,9 @@ async def update_task(db, task: Task, parsed: ParsedTask) -> Task:
     task.match_left = list(parsed.match_left) or None
     task.correct = list(parsed.correct)
     task.answers = list(parsed.answers) or None
+    # Шаблон правки ID источника не содержит: раз админ его не менял, оставляем свой.
+    if parsed.source_id is not None:
+        task.source_id = parsed.source_id
     await db.commit()
     await db.refresh(task)
     return task
@@ -153,6 +157,52 @@ async def list_tasks(db, number: int, limit: int = 20, offset: int = 0) -> list[
         .limit(limit).offset(offset)
     )
     return list(rows.scalars())
+
+
+async def find_tasks_by_source(db, pairs: list[tuple[int, int]]) -> dict[tuple[int, int], str]:
+    """(номер задания, ID источника) -> ID уже залитого задания.
+
+    По этой паре при заливке варианта решается, создавать задание или переиспользовать
+    существующее. Номер в ключе обязателен: нумерация у источника своя на каждый номер
+    задания, и один и тот же ID встречается у разных номеров.
+    """
+    if not pairs:
+        return {}
+    rows = await db.execute(
+        select(Task.number, Task.source_id, Task.id)
+        .where(
+            Task.number.in_({n for n, _ in pairs}),
+            Task.source_id.in_({s for _, s in pairs}),
+        )
+        .order_by(Task.created_at)
+    )
+    wanted = set(pairs)
+    found: dict[tuple[int, int], str] = {}
+    for number, source_id, task_id in rows.all():
+        key = (number, source_id)
+        # Первым идёт самое старое: если в базе уже лежат две копии (залиты до
+        # появления source_id), переиспользуем ту, что появилась раньше.
+        if key in wanted and key not in found:
+            found[key] = task_id
+    return found
+
+
+async def find_variant_by_slot_source(db, slot: int, source_id: int) -> Variant | None:
+    """Вариант, у которого на позиции slot стоит задание с этим ID источника.
+
+    Так вариант проверяется на дубль целиком: совпал последний номер — значит этот
+    вариант уже заливали. Совпадение остальных заданий ничего не значит, одно и то же
+    задание источник ставит в разные варианты.
+    """
+    rows = await db.execute(
+        select(Variant)
+        .join(VariantItem, VariantItem.variant_id == Variant.id)
+        .join(Task, Task.id == VariantItem.task_id)
+        .where(VariantItem.number == slot, Task.source_id == source_id)
+        .order_by(Variant.number)
+        .limit(1)
+    )
+    return rows.scalar_one_or_none()
 
 
 async def pick_random_tasks(

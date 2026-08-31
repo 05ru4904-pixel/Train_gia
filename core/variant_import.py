@@ -37,6 +37,9 @@ class ImportTask:
     match_left: list[str]
     correct: list[int]
     answers: list[str]
+    # Постоянный номер задания у источника. Есть у всего, что пришло через /upload;
+    # у заданий из ручного шаблона его нет.
+    source_id: int | None = None
 
 
 @dataclass
@@ -56,7 +59,14 @@ class ImportReport:
     total_in_db: int = 0
     variant_number: int | None = None
     variant_status: str | None = None   # «собран», «обновлён» или None
+    # Номер варианта, который уже собран из этого же №26. Заполнен — значит заливка
+    # не состоялась: такой вариант в базе уже есть.
+    duplicate_of: int | None = None
     warnings: list[str] = field(default_factory=list)
+
+    @property
+    def is_duplicate(self) -> bool:
+        return self.duplicate_of is not None
 
 
 def _as_list(value) -> list:
@@ -109,6 +119,11 @@ def load_payload(data, where: str = "вариант") -> Loaded:
             result.errors.append(f"{place}: пустое условие")
             continue
 
+        source_id = raw.get("source_id")
+        if source_id is not None and not isinstance(source_id, int):
+            result.errors.append(f"{place}: source_id={source_id!r}, ожидалось целое число")
+            continue
+
         options = [_as_text(o) for o in _as_list(raw.get("options"))]
         match_left = [_as_text(o) for o in _as_list(raw.get("match_left"))]
         correct = [c for c in _as_list(raw.get("correct")) if isinstance(c, int)]
@@ -135,6 +150,7 @@ def load_payload(data, where: str = "вариант") -> Loaded:
         result.tasks.append(
             ImportTask(
                 number=number,
+                source_id=source_id,
                 kind=kind,
                 text=text,
                 passage=passage,
@@ -204,6 +220,7 @@ def to_parsed(task: ImportTask) -> ParsedTask:
         answers=list(task.answers),
         match_left=list(task.match_left),
         passage=task.passage,
+        source_id=task.source_id,
     )
 
 
@@ -234,36 +251,79 @@ def fingerprint(task: ImportTask) -> str:
 
 
 async def import_tasks(tasks: list[ImportTask], variant_number: int | None = None) -> ImportReport:
-    """Заливает задания и, если попросили, собирает из них вариант."""
+    """Заливает задания и, если попросили, собирает из них вариант.
+
+    Дубли ищутся по ID источника — постоянному номеру задания на сайте. Он не
+    меняется от правки текста, поэтому надёжнее отпечатка содержимого. Проверок
+    две, и они про разное:
+
+      * **вариант целиком** опознаётся по последнему заданию (№26). Совпало с №26
+        одного из уже собранных вариантов — значит этот вариант заливали, стоп,
+        не создаётся ничего. Совпадение заданий №1-25 заливке не мешает: источник
+        ставит одно и то же задание в разные варианты, это норма;
+      * **каждое задание** ищется по своей паре (номер, ID источника). Нашлось —
+        переиспользуем с прежним id, не нашлось — создаём новое.
+
+    Задания без ID источника (набранные через /add, залитые до появления колонки)
+    ищутся по отпечатку содержимого, как раньше.
+    """
     report = ImportReport(variant_number=variant_number)
 
     async with SessionMaker() as db:
-        # Отпечатки уже залитых заданий тех же номеров.
-        known: dict[str, str] = {}
-        for number in sorted({t.number for t in tasks}):
+        # 1. Вариант уже заливали?
+        if variant_number is not None:
+            final = next((t for t in tasks if t.number == LAST_TASK), None)
+            if final is None or final.source_id is None:
+                report.warnings.append(
+                    f"у №{LAST_TASK} нет ID источника — проверить вариант на дубль нечем"
+                )
+            else:
+                twin = await crud.find_variant_by_slot_source(db, LAST_TASK, final.source_id)
+                if twin is not None:
+                    report.duplicate_of = twin.number
+                    report.total_in_db = await crud.total_tasks_count(db)
+                    return report
+
+        # 2. Что из заданий уже лежит в базе.
+        by_source = await crud.find_tasks_by_source(
+            db, [(t.number, t.source_id) for t in tasks if t.source_id is not None]
+        )
+
+        known_fp: dict[str, str] = {}
+        without_source = sorted({t.number for t in tasks if t.source_id is None})
+        for number in without_source:
             for existing in await crud.list_tasks(db, number, limit=100_000):
                 key = make_fingerprint(
                     existing.number, existing.kind, existing.text, existing.passage,
                     existing.options, existing.match_left, existing.answers,
                 )
-                known[key] = existing.id
+                known_fp[key] = existing.id
 
-        # Для сборки варианта нужны все задания файла, а не только новые: при
-        # повторном запуске часть уже лежит в базе, и их id берём из отпечатков.
-        # Иначе сборка работает лишь с первого раза и молча пропускается.
+        # Для сборки варианта нужны все задания файла, а не только новые: часть уже
+        # лежит в базе, и их id берём оттуда. Иначе вариант собирался бы лишь с
+        # первого раза, а повторный прогон молча его пропускал.
         for_variant: list[tuple[int, str]] = []
 
         for task in tasks:
-            key = fingerprint(task)
-            if key in known:
+            if task.source_id is not None:
+                found = by_source.get((task.number, task.source_id))
+            else:
+                found = known_fp.get(fingerprint(task))
+
+            if found:
                 report.duplicates += 1
-                for_variant.append((task.number, known[key]))
+                for_variant.append((task.number, found))
                 continue
+
             saved = await crud.create_task(db, to_parsed(task))
-            known[key] = saved.id
+            if task.source_id is not None:
+                by_source[(task.number, task.source_id)] = saved.id
+            else:
+                known_fp[fingerprint(task)] = saved.id
             report.created.append((task.number, saved.id))
             for_variant.append((task.number, saved.id))
 
+        # 3. Сборка варианта из смеси старых и новых заданий.
         if variant_number is not None:
             slots = {number: task_id for number, task_id in for_variant}
             if len(slots) < len(for_variant):
