@@ -5,6 +5,7 @@
 """
 import html
 import logging
+from types import SimpleNamespace
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
@@ -26,12 +27,11 @@ from core.parser import (
     ParseError,
     normalize_task_id,
     parse_task,
-    parse_task_batch,
     parse_variant,
     to_template,
 )
 from core.raw_variant import parse as parse_raw_variant
-from core.raw_variant import render_preview
+from core.raw_variant import parse_one, render_preview
 from core.tasks_meta import (
     KIND_CHOICE,
     KIND_DIGITS,
@@ -42,9 +42,13 @@ from core.tasks_meta import (
     letter,
     title,
 )
-from core.variant_import import import_tasks, load_payload, next_free_variant_number
+from core.variant_import import (
+    import_tasks,
+    load_payload,
+    next_free_variant_number,
+    to_parsed,
+)
 from db.crud import (
-    create_task,
     create_variant,
     delete_task,
     delete_variant,
@@ -65,41 +69,38 @@ from db.database import SessionMaker
 log = logging.getLogger(__name__)
 router = Router(name="admin")
 
-# Шаблоны всех четырёх видов заданий. Вид определяется по форме сообщения, поэтому
-# отдельно его указывать не нужно — разбор живёт в core/parser.py.
+# Шаблоны ручного набора. Разбор у них общий с вариантом (core/raw_variant.py):
+# вид берётся из номера задания, а не из формы сообщения. Поэтому варианты ответа
+# подписываются цифрами — как в условиях ЕГЭ и как их печатает источник.
 TEMPLATES = {
-    KIND_CHOICE: (
-        "Задание №4\n"
-        "В каком слове правильно поставлено ударение?\n"
-        "А) звонИт\n"
-        "Б) звОнит\n"
-        "В) позвонИт\n"
-        "Г) позвОнит\n"
-        "Ответ: А"
-    ),
-    KIND_OPEN: (
-        "Задание №5\n"
-        "Отредактируйте предложение: исправьте лексическую ошибку, "
-        "исключив лишнее слово. Выпишите это слово.\n"
-        "Ответ: заклятым, заклятый\n"
-        "Текст: Он всегда был моим заклятым врагом."
-    ),
-    KIND_DIGITS: (
-        "Задание №15\n"
-        "Укажите все цифры, на месте которых пишется НН.\n"
-        "Ответ: 134\n"
-        "Текст: Дли(1)ая мощё(2)ая дорога вела к стари(3)ому дому."
-    ),
-    KIND_MATCH: (
-        "Задание №8\n"
-        "Установите соответствие между грамматическими ошибками и предложениями.\n"
-        "А) нарушение в построении предложения с деепричастным оборотом\n"
-        "Б) ошибка в употреблении падежной формы\n"
-        "1) Приехав в город, мне сразу понравились улицы.\n"
-        "2) Все, кто читал повесть, помнят её финал.\n"
-        "3) Согласно расписания поезд уходит в семь.\n"
-        "Ответ: А-1, Б-3"
-    ),
+    KIND_CHOICE: """Задание 4
+В каком слове правильно поставлено ударение? Выпишите это слово.
+1) звонИт
+2) звОнит
+3) позвОнит
+Ответ: 1""",
+    KIND_OPEN: """Задание 5
+Отредактируйте предложение: исправьте лексическую ошибку, исключив лишнее слово.
+Выпишите это слово.
+Ответ: заклятым, заклятый
+Текст: Он всегда был моим заклятым врагом.""",
+    KIND_DIGITS: """Задание 15
+Укажите цифру(-ы), на месте которой(-ых) пишется НН.
+Ответ: 134
+Текст: Дли(1)ая мощё(2)ая дорога вела к стари(3)ому дому.""",
+    KIND_MATCH: """Задание 8
+Установите соответствие между грамматическими ошибками и предложениями.
+А) нарушение в построении предложения с деепричастным оборотом
+Б) ошибка в употреблении падежной формы
+В) нарушение связи между подлежащим и сказуемым
+Г) неверное построение предложения с косвенной речью
+Д) ошибка в построении предложения с причастным оборотом
+1) Приехав в город, мне сразу понравились улицы.
+2) Согласно расписания поезд уходит в семь.
+3) Все, кто читал повесть, помнят её финал.
+4) Он сказал, что я приду завтра.
+5) Книга, лежащая на столе, моя.
+Ответ: 12345""",
 }
 
 # Шаблон по умолчанию: с него начинали, на него ссылаются старые инструкции.
@@ -118,10 +119,9 @@ PASSAGE_PREVIEW = 600
 
 MENU = (
     "<b>Админ-панель тренажёра ЕГЭ</b>\n\n"
-    "/add — добавить задание\n"
+    "/add — добавить одно задание текстом\n"
     "/templates — шаблоны всех видов заданий\n"
     "/upload — залить вариант файлом, скопированным с РЕШУ ЕГЭ\n"
-    "/batch — добавить сразу несколько заданий (целый вариант)\n"
     "/find — найти задание по ID\n"
     "/list — задания по номеру\n"
     "/variant — собрать вариант из существующих ID\n"
@@ -132,10 +132,6 @@ MENU = (
 
 
 class Add(StatesGroup):
-    waiting = State()
-
-
-class Batch(StatesGroup):
     waiting = State()
 
 
@@ -217,12 +213,14 @@ def task_card(task) -> str:
         else:
             lines.append("⚠️ Ответ не заполнен — задание не будет засчитано ученику")
     else:
+        # Цифрами, а не буквами: так вариант напечатан в источнике и так его видит
+        # ученик. Карточка на то и нужна, чтобы сверить её с исходником построчно.
         for i, option in enumerate(options):
             mark = " ✅" if i in correct else ""
-            lines.append(f"{letter(i)}) {html.escape(str(option))}{mark}")
+            lines.append(f"{i + 1}) {html.escape(str(option))}{mark}")
         lines.append("")
         if correct:
-            lines.append("Ответ: " + ", ".join(letter(i) for i in correct))
+            lines.append("Ответ: " + ", ".join(str(i + 1) for i in correct))
         else:
             lines.append("⚠️ Правильный ответ не указан")
 
@@ -287,16 +285,22 @@ async def stats(message: Message) -> None:
 # --------------------------------------------------------------------------- #
 @router.message(Command("templates"))
 async def templates(message: Message) -> None:
-    """Шаблоны всех видов. Вид бот определяет сам по форме сообщения."""
+    """Шаблоны всех видов. Вид бот берёт из номера задания, а не из формы сообщения."""
     blocks = [
-        f"<b>{KIND_NAMES[kind]}</b>\n<pre>{html.escape(TEMPLATES[kind])}</pre>"
+        f"<b>№ вида «{KIND_NAMES[kind]}»</b>\n<pre>{html.escape(TEMPLATES[kind])}</pre>"
         for kind in (KIND_CHOICE, KIND_OPEN, KIND_DIGITS, KIND_MATCH)
     ]
     await message.answer(
-        "Вид задания определяется по форме сообщения — указывать его не нужно.\n\n"
+        "<b>Вид задания определяется его номером</b>, указывать его не нужно: "
+        "№4 — это всегда выбор варианта, №15 — всегда цифры, №8 — всегда соответствие.\n\n"
+        "Проще всего скопировать задание с РЕШУ ЕГЭ целиком, вместе с шапкой и "
+        "«Пояснением» — тогда у него будет ID источника, и второй раз оно в базу "
+        "не попадёт. Ручные шаблоны на случай, когда задание своё:\n\n"
         + "\n".join(blocks)
         + "\n<b>Строка «Текст:»</b> необязательна: всё после неё — материал задания "
-        "(отрывок, предложения), он показывается ученику отдельно от условия."
+        "(отрывок, предложения), он показывается ученику отдельно от условия.\n"
+        "<b>Варианты ответа нумеруются цифрами</b> — как в бланке ЕГЭ.\n"
+        "Несколько верных: <code>Ответ: 24</code>. Синонимы: <code>Ответ: вследствие, ввиду</code>."
     )
 
 
@@ -304,112 +308,126 @@ async def templates(message: Message) -> None:
 async def add_prompt(message: Message, state: FSMContext) -> None:
     await state.set_state(Add.waiting)
     await message.answer(
-        "Пришлите задание по шаблону:\n\n"
+        "Пришлите <b>одно задание текстом</b> — скопированное с РЕШУ ЕГЭ как есть, "
+        "вместе с шапкой «Задание 8 № 10262 тип 8» и «Пояснением». Разбирается тем же "
+        "кодом, что и целый вариант, и ID источника сохранится: повторно то же задание "
+        "в базу не попадёт.\n\n"
+        "Своё задание — по шаблону, шапки хватит короткой:\n\n"
         f"<pre>{html.escape(TEMPLATE)}</pre>\n"
-        "Вариантов может быть сколько угодно. Для нескольких правильных ответов: "
-        "<code>Ответ: А, В, Д</code>\n\n"
-        "Задания с вписыванием ответа и на соответствие — /templates\n\n"
-        "ID присвоится сам. /cancel — отмена."
+        "Другие виды — /templates. ID присвоится сам. /cancel — отмена."
     )
+
+
+def draft_card(payload: dict) -> str:
+    """Карточка ещё не залитого задания — в том же виде, в каком оно потом ляжет в базу.
+
+    Показывать именно её важно: correct у выбора вариантов в разборе считается с
+    единицы, а в базе с нуля, и сдвиг видно только на готовой карточке.
+    """
+    loaded = load_payload(payload, where="задание")
+    if loaded.errors:
+        return "❌ " + "\n".join(loaded.errors)
+    parsed = to_parsed(loaded.tasks[0])
+    draft = SimpleNamespace(
+        id="будет присвоен",
+        number=parsed.number,
+        kind=parsed.kind,
+        text=parsed.text,
+        passage=parsed.passage,
+        options=parsed.options,
+        match_left=parsed.match_left,
+        correct=parsed.correct,
+        answers=parsed.answers,
+    )
+    return task_card(draft)
 
 
 @router.message(Add.waiting, F.text)
-async def add_save(message: Message, state: FSMContext) -> None:
-    try:
-        parsed = parse_task(message.text)
-    except ParseError as exc:
-        await message.answer(f"❌ {exc}")
+async def add_receive(message: Message, state: FSMContext) -> None:
+    """Разбирает задание и показывает карточку. В базу — только по кнопке."""
+    result = parse_one(message.text)
+
+    if result.problems:
+        # Состояние не сбрасываем: обычно достаточно поправить строку и прислать снова.
+        lines = ["❌ Не разобрал, в базу ничего не пошло.", ""]
+        lines += [html.escape(str(p)) for p in result.problems]
+        lines += ["", "Поправьте и пришлите снова. Шаблоны — /templates, отмена — /cancel."]
+        await message.answer(clip("\n".join(lines)))
         return
 
-    async with SessionMaker() as db:
-        task = await create_task(db, parsed)
-        card = task_card(task)
+    payload = result.payload()
+    await state.update_data(payload=payload)
 
-    await state.clear()
-    # Карточкой показываем, каким бот понял задание: вид определяется по форме
-    # сообщения, и админ должен увидеть, что бот понял его так же, как он задумал.
-    await message.answer(
-        f"✅ Задание добавлено\n\n№{task.number}\nID: <code>{task.id}</code>\n\n" + card,
-        reply_markup=task_keyboard(task.id),
-    )
-
-
-# --------------------------------------------------------------------------- #
-# Пакетное добавление (целый вариант, ТЗ п.18)
-# --------------------------------------------------------------------------- #
-@router.message(Command("batch"))
-async def batch_prompt(message: Message, state: FSMContext) -> None:
-    await state.set_state(Batch.waiting)
-    await message.answer(
-        "Пришлите несколько заданий одним сообщением — подряд, каждое начинается со "
-        "строки <b>Задание №N</b>.\n\n"
-        "Каждое сохранится отдельно и получит свой ID. Если пришлёте все 26 номеров, "
-        "предложу сразу собрать из них вариант.\n\n/cancel — отмена."
-    )
-
-
-@router.message(Batch.waiting, F.text)
-async def batch_save(message: Message, state: FSMContext) -> None:
-    try:
-        parsed_tasks = parse_task_batch(message.text)
-    except ParseError as exc:
-        await message.answer(f"❌ {exc}")
-        return
-
-    async with SessionMaker() as db:
-        created = [await create_task(db, parsed) for parsed in parsed_tasks]
-
-    lines = [f"✅ Добавлено заданий: {len(created)}", ""]
-    lines += [f"№{t.number} — <code>{t.id}</code>" for t in created]
-
-    by_number = {}
-    for task in created:
-        by_number.setdefault(task.number, task.id)
-    complete = all(n in by_number for n in TASK_NUMBERS)
-
-    if complete:
-        await state.update_data(variant_ids={str(n): by_number[n] for n in TASK_NUMBERS})
-        lines += ["", "Пришли все 26 номеров — собрать из них вариант?"]
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="Собрать вариант", callback_data="mkvariant"),
-            InlineKeyboardButton(text="Не нужно", callback_data="novariant"),
-        ]])
-        await message.answer("\n".join(lines), reply_markup=keyboard)
+    task = result.tasks[0]
+    lines = [draft_card(payload)]
+    if task.get("source_id"):
+        lines.append(f"\nID источника: <code>{task['source_id']}</code>")
     else:
-        await state.clear()
-        missing = [n for n in TASK_NUMBERS if n not in by_number]
-        if missing:
-            lines += ["", "Не хватает для полного варианта: " + ", ".join(f"№{n}" for n in missing)]
-        await message.answer("\n".join(lines))
+        lines.append(
+            "\n⚠️ В шапке нет номера источника — дубли такого задания ищутся "
+            "по совпадению текста."
+        )
+    for note in result.notes:
+        lines.append(f"\n⚠️ {html.escape(note)}")
+    lines.append("\nДобавляем?")
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Добавить", callback_data="add:yes"),
+        InlineKeyboardButton(text="Отмена", callback_data="add:no"),
+    ]])
+    await message.answer(clip("\n".join(lines)), reply_markup=keyboard)
 
 
-@router.callback_query(F.data == "novariant")
-async def batch_no_variant(callback: CallbackQuery, state: FSMContext) -> None:
+@router.callback_query(F.data == "add:no")
+async def add_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.answer("Задания сохранены")
+    await callback.answer("Отменено, база не тронута")
 
 
-@router.callback_query(F.data == "mkvariant")
-async def batch_make_variant(callback: CallbackQuery, state: FSMContext) -> None:
+@router.callback_query(F.data == "add:yes")
+async def add_save(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    raw_ids = data.get("variant_ids") or {}
-    if not raw_ids:
-        await callback.answer("Список заданий потерялся, соберите вариант через /variant", show_alert=True)
+    payload = data.get("payload")
+    if not payload:
+        await callback.answer("Разобранное задание потерялось, пришлите заново", show_alert=True)
         return
 
-    task_ids = {int(k): v for k, v in raw_ids.items()}
-    async with SessionMaker() as db:
-        existing = {v.number for v in await list_variants(db, limit=1000)}
-        number = next(n for n in range(1, 10_000) if n not in existing)
-        variant = await create_variant(db, number, task_ids)
+    # Проверка перед базой и дедуп — те же, что у заливки варианта.
+    loaded = load_payload(payload, where="задание")
+    if loaded.errors:
+        await state.clear()
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(
+            "❌ Проверка перед заливкой не прошла:\n\n"
+            + "\n".join(html.escape(e) for e in loaded.errors)
+        )
+        return
 
+    report = await import_tasks(loaded.tasks)
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer(
-        f"✅ Вариант №{variant.number} собран из {len(task_ids)} заданий."
-    )
     await callback.answer()
+
+    if report.reused:
+        number, task_id = report.reused[0]
+        async with SessionMaker() as db:
+            task = await get_task(db, task_id)
+        await callback.message.answer(
+            f"ℹ️ Это задание уже есть в базе — <code>{task_id}</code>. Ничего не добавлено.\n\n"
+            + (task_card(task) if task else ""),
+            reply_markup=task_keyboard(task_id),
+        )
+        return
+
+    number, task_id = report.created[0]
+    async with SessionMaker() as db:
+        task = await get_task(db, task_id)
+    await callback.message.answer(
+        f"✅ Задание добавлено\n\n№{number}\nID: <code>{task_id}</code>\n\n"
+        + (task_card(task) if task else ""),
+        reply_markup=task_keyboard(task_id),
+    )
 
 
 # --------------------------------------------------------------------------- #

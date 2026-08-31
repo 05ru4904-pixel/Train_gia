@@ -560,31 +560,3 @@ def parse_variant(raw: str) -> ParsedVariant:
     if not variant.task_ids:
         raise ParseError("В варианте нет ни одного задания.")
     return variant
-
-
-def parse_task_batch(raw: str) -> list[ParsedTask]:
-    """Разбирает несколько заданий из одного сообщения (ТЗ п.18 — добавление целого
-    варианта). Новый блок начинается со строки «Задание №N»."""
-    chunks: list[list[str]] = []
-    current: list[str] = []
-    for line in raw.strip().splitlines():
-        if _RE_NUMBER.match(line) and current:
-            chunks.append(current)
-            current = [line]
-        else:
-            current.append(line)
-    if current:
-        chunks.append(current)
-
-    tasks: list[ParsedTask] = []
-    for i, chunk in enumerate(chunks, 1):
-        text = "\n".join(chunk).strip()
-        if not text:
-            continue
-        try:
-            tasks.append(parse_task(text))
-        except ParseError as exc:
-            raise ParseError(f"Блок №{i}: {exc}") from exc
-    if not tasks:
-        raise ParseError("Не нашёл ни одного задания.")
-    return tasks

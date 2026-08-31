@@ -40,10 +40,11 @@ class FakeTask:
 
 
 def test_choice_card():
+    """Варианты подписаны цифрами — как в источнике и как их видит ученик."""
     card = task_card(FakeTask(options=["звонИт", "звОнит"], correct=[1]))
-    assert "Б) звОнит ✅" in card
-    assert "А) звонИт ✅" not in card
-    assert "Ответ: Б" in card
+    assert "2) звОнит ✅" in card
+    assert "1) звонИт ✅" not in card
+    assert "Ответ: 2" in card
 
 
 def test_open_card_shows_answers():

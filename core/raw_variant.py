@@ -51,6 +51,16 @@ RE_HEADER = re.compile(
     r"^[\s#>*\-–—↑•]{0,8}[Зз]?адание\s+(\d+)\s+№\s*(\d+)\s+тип\s+(\d+).*$", re.M
 )
 
+# Короткая шапка для задания, набранного руками: «Задание 8» или «Задание №8».
+# Номера источника в ней нет, поэтому дубли такого задания ищутся по отпечатку.
+# Буква «З» здесь обязательна: строка короткая, и без неё под шаблон попадёт
+# слишком многое.
+RE_HEADER_SHORT = re.compile(r"^[\s#>*\-–—↑•]{0,8}[Зз]адание\s*№?\s*(\d+)\s*[.:)]?\s*$", re.M)
+
+# Материал в ручном наборе подписывают «Текст:» — на сайте вместо этого отдельная
+# строка-маркер. Приводим одно к другому, чтобы дальше работал общий разбор.
+RE_MANUAL_PASSAGE = re.compile(r"^[\s#>*\-]{0,8}(?:Текст|Материал)\s*[:\-—]\s*", re.M)
+
 # Границы внутри блока. Ведущие значки допускаются по той же причине.
 RE_EXPLANATION = re.compile(r"^[\s#>*\-]{0,8}Пояснение\.\s*$", re.M)
 RE_PASSAGE = re.compile(
@@ -343,6 +353,114 @@ def digits_of(value: str) -> list[int]:
 # ---------------------------------------------------------------------------
 # Сборка
 # ---------------------------------------------------------------------------
+def _build_task(number: int, source_id: int | None, block: str, result: Result):
+    """Блок текста одного задания -> (задание, текст-источник) или None.
+
+    None значит «не собралось»: причина уже лежит в result.problems, и вызывающая
+    сторона обязана ничего не сохранять. Отсюда её зовут двое — разбор целого
+    варианта и разбор одного задания, присланного в админ-бота текстом, — и
+    правила у них общие: вид по номеру, ответ из пояснения, при неоднозначности
+    отказ.
+    """
+    kind = kind_of(number)
+    body, passage, explanation = split_block(block)
+
+    try:
+        condition, rest = take_condition(body, kind)
+        answer_raw, fallback = take_answer(explanation)
+    except ValueError as exc:
+        result.problems.append(Problem(number, str(exc)))
+        return None
+
+    if fallback:
+        result.notes.append(
+            f"№{number}: строки «Ответ:» нет, взят «Правильный ответ:» — "
+            "там только одна форма, проверьте синонимы вручную"
+        )
+
+    task: dict = {
+        "number": number,
+        # Постоянный номер задания у источника — «Задание 8 № 10262 тип 8».
+        # По нему при заливке опознаётся уже залитое задание и повторный вариант.
+        "source_id": source_id,
+        "kind": kind,
+        "text": condition,
+        "text_ref": None,
+        "material": None,
+        "options": [],
+        "match_left": [],
+        "correct": [],
+        "answers": [],
+    }
+
+    forms = split_answer_forms(answer_raw)
+    if not forms:
+        result.problems.append(Problem(number, f"пустой ответ: {answer_raw!r}"))
+        return None
+
+    if kind == KIND_CHOICE:
+        options, numbers, before, after = take_options(rest)
+        if len(options) < 2:
+            result.problems.append(
+                Problem(number, f"вид choice, но вариантов найдено {len(options)}")
+            )
+            return None
+        if numbers != list(range(1, len(numbers) + 1)):
+            result.problems.append(
+                Problem(number, f"нумерация вариантов идёт не подряд: {numbers}")
+            )
+            return None
+        correct = digits_of(forms[0])
+        outside = [c for c in correct if not 1 <= c <= len(options)]
+        if outside:
+            result.problems.append(
+                Problem(number, f"в ответе есть {outside}, а вариантов всего {len(options)}")
+            )
+            return None
+        task["options"] = options
+        task["correct"] = sorted(set(correct))
+        task["material"] = "\n\n".join(p for p in (before, after) if p) or None
+
+    elif kind == KIND_MATCH:
+        left, right, letters = take_match(rest)
+        if list(letters) != list(MATCH_LETTERS):
+            result.problems.append(
+                Problem(number, f"левый столбец {letters}, ожидался {list(MATCH_LETTERS)}")
+            )
+            return None
+        if len(right) < 2:
+            result.problems.append(
+                Problem(number, f"правый столбец пуст или короткий: {len(right)} позиций")
+            )
+            return None
+        # Порядок здесь обязателен: каждой букве своя цифра.
+        correct = digits_of(forms[0])
+        if len(correct) != len(left):
+            result.problems.append(
+                Problem(number, f"в ответе {len(correct)} цифр, а слева {len(left)} позиций")
+            )
+            return None
+        outside = [c for c in correct if not 1 <= c <= len(right)]
+        if outside:
+            result.problems.append(
+                Problem(number, f"в ответе есть {outside}, а справа всего {len(right)} позиций")
+            )
+            return None
+        task["match_left"] = left
+        task["options"] = right
+        task["correct"] = correct
+
+    else:  # open, digits
+        task["material"] = rest.strip() or None
+        task["answers"] = forms
+        if kind == KIND_DIGITS and not all(any(ch.isdigit() for ch in f) for f in forms):
+            result.problems.append(
+                Problem(number, f"вид digits, но в ответе нет цифр: {forms}")
+            )
+            return None
+    return task, passage
+
+
 def parse(raw: str) -> Result:
     """Сырой текст варианта -> задания, тексты, проблемы."""
     text = normalize(raw)
@@ -379,102 +497,10 @@ def parse(raw: str) -> Result:
             )
             continue
 
-        kind = kind_of(number)
-        body, passage, explanation = split_block(block)
-
-        try:
-            condition, rest = take_condition(body, kind)
-            answer_raw, fallback = take_answer(explanation)
-        except ValueError as exc:
-            result.problems.append(Problem(number, str(exc)))
+        built = _build_task(number, int(header.group(2)), block, result)
+        if built is None:
             continue
-
-        if fallback:
-            result.notes.append(
-                f"№{number}: строки «Ответ:» нет, взят «Правильный ответ:» — "
-                "там только одна форма, проверьте синонимы вручную"
-            )
-
-        task: dict = {
-            "number": number,
-            # Постоянный номер задания у источника — «Задание 8 № 10262 тип 8».
-            # По нему при заливке опознаётся уже залитое задание и повторный вариант.
-            "source_id": int(header.group(2)),
-            "kind": kind,
-            "text": condition,
-            "text_ref": None,
-            "material": None,
-            "options": [],
-            "match_left": [],
-            "correct": [],
-            "answers": [],
-        }
-
-        forms = split_answer_forms(answer_raw)
-        if not forms:
-            result.problems.append(Problem(number, f"пустой ответ: {answer_raw!r}"))
-            continue
-
-        if kind == KIND_CHOICE:
-            options, numbers, before, after = take_options(rest)
-            if len(options) < 2:
-                result.problems.append(
-                    Problem(number, f"вид choice, но вариантов найдено {len(options)}")
-                )
-                continue
-            if numbers != list(range(1, len(numbers) + 1)):
-                result.problems.append(
-                    Problem(number, f"нумерация вариантов идёт не подряд: {numbers}")
-                )
-                continue
-            correct = digits_of(forms[0])
-            outside = [c for c in correct if not 1 <= c <= len(options)]
-            if outside:
-                result.problems.append(
-                    Problem(number, f"в ответе есть {outside}, а вариантов всего {len(options)}")
-                )
-                continue
-            task["options"] = options
-            task["correct"] = sorted(set(correct))
-            task["material"] = "\n\n".join(p for p in (before, after) if p) or None
-
-        elif kind == KIND_MATCH:
-            left, right, letters = take_match(rest)
-            if list(letters) != list(MATCH_LETTERS):
-                result.problems.append(
-                    Problem(number, f"левый столбец {letters}, ожидался {list(MATCH_LETTERS)}")
-                )
-                continue
-            if len(right) < 2:
-                result.problems.append(
-                    Problem(number, f"правый столбец пуст или короткий: {len(right)} позиций")
-                )
-                continue
-            # Порядок здесь обязателен: каждой букве своя цифра.
-            correct = digits_of(forms[0])
-            if len(correct) != len(left):
-                result.problems.append(
-                    Problem(number, f"в ответе {len(correct)} цифр, а слева {len(left)} позиций")
-                )
-                continue
-            outside = [c for c in correct if not 1 <= c <= len(right)]
-            if outside:
-                result.problems.append(
-                    Problem(number, f"в ответе есть {outside}, а справа всего {len(right)} позиций")
-                )
-                continue
-            task["match_left"] = left
-            task["options"] = right
-            task["correct"] = correct
-
-        else:  # open, digits
-            task["material"] = rest.strip() or None
-            task["answers"] = forms
-            if kind == KIND_DIGITS and not all(any(ch.isdigit() for ch in f) for f in forms):
-                result.problems.append(
-                    Problem(number, f"вид digits, но в ответе нет цифр: {forms}")
-                )
-                continue
+        task, passage = built
 
         # Тексты повторяются после каждого задания, которое к ним относится:
         # храним по одному экземпляру, заданию ставим ссылку.
@@ -524,6 +550,111 @@ def parse(raw: str) -> Result:
         result.problems.append(Problem(None, f"в файле нет заданий: {missing}"))
 
     result.tasks.sort(key=lambda t: t["number"])
+    return result
+
+
+PASSAGE_MARK = "Прочитайте текст и выполните задание."
+
+
+def _prepare_single(text: str) -> str:
+    """Дотягивает ручной набор до вида, в котором задание печатает сайт.
+
+    Разметку только добавляем, ничего не выбрасывая:
+      * «Текст: …» и всё до конца сообщения — материал задания, он получает такой
+        же маркер, как на сайте;
+      * если «Пояснение.» не написали, оно подставляется перед строкой «Ответ:».
+
+    Порядок на выходе жёсткий: условие, варианты, материал, пояснение с ответом.
+    В ручном шаблоне «Текст:» пишут последним, после ответа, и без перестановки
+    материал уехал бы в пояснение, а задание осталось бы без него.
+
+    Скопированное с сайта сюда не попадает — там своя разметка, и трогать её
+    нечем и незачем.
+    """
+    if RE_HEADER.search(text):
+        return text
+
+    passage = ""
+    found = RE_MANUAL_PASSAGE.search(text)
+    if found and not RE_PASSAGE.search(text):
+        passage = text[found.end():].strip()
+        text = text[:found.start()].rstrip()
+
+    explanation = ""
+    if not RE_EXPLANATION.search(text):
+        answer = RE_ANSWER_PLAIN.search(text)
+        if answer:
+            explanation = "Пояснение.\n" + text[answer.start():].strip()
+            text = text[:answer.start()].rstrip()
+
+    parts = [text]
+    if passage:
+        parts.append(f"{PASSAGE_MARK}\n{passage}")
+    if explanation:
+        parts.append(explanation)
+    return "\n\n".join(parts)
+
+
+def parse_one(raw: str) -> Result:
+    """Разбор одного задания, присланного в админ-бота текстом.
+
+    Правила те же, что у целого варианта, и код тот же: вид берётся из номера, а не
+    из формы сообщения; ответ читается из пояснения; при любой неоднозначности
+    задание не собирается. Отличий два:
+
+      * не требуется весь набор №1-26 — задание пришло одно;
+      * шапка может быть короткой, «Задание 8» вместо «Задание 8 № 10262 тип 8».
+        Тогда ID источника пустой, и дубли такого задания ищутся по отпечатку
+        содержимого, как у всего, что набрано руками.
+    """
+    text = _prepare_single(normalize(raw))
+    result = Result()
+
+    header = RE_HEADER.search(text)
+    if header:
+        number = int(header.group(1))
+        source_id = int(header.group(2))
+        declared = int(header.group(3))
+        rest = text[header.end():]
+    else:
+        short = RE_HEADER_SHORT.search(text)
+        if short is None:
+            result.problems.append(Problem(None, (
+                "первая строка должна быть шапкой задания: «Задание 8 № 10262 тип 8» — "
+                "так его печатает сайт. Если набираете руками, довольно «Задание 8»"
+            )))
+            return result
+        number = declared = int(short.group(1))
+        source_id = None
+        rest = text[short.end():]
+
+    if not 1 <= number <= LAST_TASK:
+        result.problems.append(Problem(number, f"номер вне диапазона 1-{LAST_TASK}"))
+        return result
+    # Источник печатает номер дважды — бесплатная проверка разбора шапки.
+    if declared != number:
+        result.problems.append(
+            Problem(number, f"в шапке «тип {declared}» не совпал с номером задания")
+        )
+        return result
+    # Несколько заданий одним сообщением не берём: у каждого свой ID и своя
+    # карточка на вычитку, и вперемешку их не проверить.
+    if RE_HEADER.search(rest) or RE_HEADER_SHORT.search(rest):
+        result.problems.append(Problem(number, (
+            "в сообщении больше одного задания. Пришлите по одному, "
+            "а целый вариант — через /upload файлом"
+        )))
+        return result
+
+    built = _build_task(number, source_id, strip_service(rest), result)
+    if built is None:
+        return result
+
+    task, passage = built
+    if passage:
+        result.texts["t1"] = passage
+        task["text_ref"] = "t1"
+    result.tasks.append(task)
     return result
 
 

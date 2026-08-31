@@ -55,6 +55,10 @@ class Loaded:
 @dataclass
 class ImportReport:
     created: list[tuple[int, str]] = field(default_factory=list)
+    # Задания, которые уже лежали в базе: (номер, ID существующего). Заливка
+    # переиспользует их, а админ-бот показывает по ID карточку — чтобы было видно,
+    # с чем именно совпало.
+    reused: list[tuple[int, str]] = field(default_factory=list)
     duplicates: int = 0
     total_in_db: int = 0
     variant_number: int | None = None
@@ -312,6 +316,7 @@ async def import_tasks(tasks: list[ImportTask], variant_number: int | None = Non
 
             if found:
                 report.duplicates += 1
+                report.reused.append((task.number, found))
                 for_variant.append((task.number, found))
                 continue
 

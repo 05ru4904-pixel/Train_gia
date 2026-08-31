@@ -11,7 +11,6 @@ from core.parser import (  # noqa: E402
     generate_task_id,
     normalize_task_id,
     parse_task,
-    parse_task_batch,
     parse_variant,
     to_template,
 )
@@ -290,24 +289,6 @@ def test_variant_errors():
             assert fragment in str(exc), f"ожидал «{fragment}», получил «{exc}»"
         else:
             raise AssertionError(f"ожидалась ParseError для: {raw!r}")
-
-
-def test_parse_batch():
-    tasks = parse_task_batch(
-        "Задание №1\nВопрос 1?\nА) а\nБ) б\nОтвет: А\n\n"
-        "Задание №2\nВопрос 2?\nА) а\nБ) б\nВ) в\nОтвет: В"
-    )
-    assert [t.number for t in tasks] == [1, 2]
-    assert tasks[1].correct == [2]
-
-
-def test_batch_error_points_to_block():
-    try:
-        parse_task_batch("Задание №1\nВопрос?\nА) а\nБ) б\nОтвет: А\n\nЗадание №2\nВопрос?\nА) а\nОтвет: А")
-    except ParseError as exc:
-        assert "Блок №2" in str(exc)
-    else:
-        raise AssertionError("ожидалась ParseError")
 
 
 if __name__ == "__main__":

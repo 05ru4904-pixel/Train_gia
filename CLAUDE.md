@@ -8,7 +8,7 @@
   пользователь один — он остался. Чистили `scripts/purge_db.py --yes`.
 - Тренировки по номеру заработают сами, когда наберётся 6 вариантов: минимум в
   `TRAINING_COUNTS` — 6, а `pick_random_tasks` берёт задания одного номера.
-- 60 тестов, все зелёные.
+- 69 тестов, все зелёные.
 - 6200 строк Python, 8500 строк фронта.
 
 ## Стек и архитектура
@@ -32,7 +32,7 @@ db/crud.py                запросы
 db/database.py            пул соединений, init_db с ретраями, ALTER-миграции
 api/serializers.py        сборка JSON для Mini App
 api/routers/              training, profile, auth
-bots/admin_bot.py         /upload /add /batch /find /list /variant /variants /templates /stats
+bots/admin_bot.py         /upload /add /find /list /variant /variants /templates /stats
 bots/user_bot.py          100 строк, открывает Mini App
 static/app.js             всё приложение, 1655 строк
 scripts/parse_raw.py      тот же разбор из терминала
@@ -42,7 +42,7 @@ scripts/purge_db.py       очистка базы: задания, вариан�
 
 ## Команды
 ```
-python -m pytest -q                                       60 тестов
+python -m pytest -q                                       69 тестов
 python scripts/parse_raw.py Задания/2 --report            разбор, ничего не пишет
 python scripts/import_variant.py Задания/2.json --dry-run проверка без базы
 python scripts/import_variant.py Задания/2.json --variant 2
@@ -77,6 +77,12 @@ python scripts/purge_db.py --yes                          удалить
 Пользователь копирует вариант с РЕШУ ЕГЭ **как есть**, сохраняет файлом (UTF-8), шлёт
 в админ-бота командой `/upload`. Бот присылает разбор файлом на вычитку и ждёт
 подтверждения кнопкой. Папка `Задания/` в `.gitignore`.
+
+Одно задание — `/add`, текстом в сообщении. Разбор тот же (`parse_one` в
+`core/raw_variant.py`): вид из номера, ответ из пояснения, ID источника, дедуп,
+карточка на вычитку и кнопка. Шапку можно короткую — «Задание 8» — тогда задание
+считается ручным: `source_id` пустой, дубли по отпечатку. `/batch` удалён: он
+разбирал задания старым шаблонным парсером и определял вид по форме сообщения.
 
 **Главное правило парсера: при любой неоднозначности задание не собирается**, а попадает
 в `problems`, и файл не пишется. Прошлый парсер разбирал текст эвристиками, на №13 молча
