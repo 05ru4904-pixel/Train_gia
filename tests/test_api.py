@@ -36,10 +36,10 @@ from httpx import ASGITransport, AsyncClient  # noqa: E402
 from api.main import app  # noqa: E402
 from core import scoring  # noqa: E402
 from core.parser import ParsedTask  # noqa: E402
-from core.tasks_meta import TASK_NUMBERS  # noqa: E402
+from core.tasks_meta import TASK_NUMBERS, title  # noqa: E402
 from db import crud  # noqa: E402
 from db.database import SessionMaker, engine, init_db  # noqa: E402
-from db.models import Task  # noqa: E402
+from db.models import SessionItem, Task  # noqa: E402
 from db.models import Base  # noqa: E402
 
 USER = {"id": 4242, "first_name": "Заур", "username": "zaur"}
@@ -152,7 +152,7 @@ async def scenario_state_and_auth(client, http):
     tasks = await client.get("/api/tasks")
     assert len(tasks["tasks"]) == 26
     assert tasks["tasks"][3]["number"] == 4
-    assert tasks["tasks"][3]["title"] == "Орфоэпические нормы"
+    assert tasks["tasks"][3]["title"] == title(4), "тема берётся из официальной таблицы"
     print("  ok  состояние, авторизация и список заданий")
 
 
@@ -404,7 +404,37 @@ async def scenario_match(client):
         lambda q: {"position": q["position"], "selected": [1, 3, 4]},
         expect_correct=False,
     )
-    print("  ok  задания на соответствие")
+
+    # Частичный балл: ошибка на двух позициях — ответ неверный, но 1 балл из 2.
+    await answer_one_task_of_kind(
+        client, 8, "match",
+        lambda q: {"position": q["position"], "selected": [3, 4, 1]},
+        expect_correct=False,
+    )
+    async with SessionMaker() as db:
+        rows = await db.execute(
+            select(SessionItem)
+            .where(SessionItem.task_number == 8, SessionItem.answered_at.is_not(None))
+            .order_by(SessionItem.id.desc()).limit(1)
+        )
+        item = rows.scalar_one()
+    assert item.points == 1, f"за две ошибки из трёх ожидали 1 балл, получили {item.points}"
+
+    # Три ошибки подряд — ноль.
+    await answer_one_task_of_kind(
+        client, 8, "match",
+        lambda q: {"position": q["position"], "selected": [1, 4, 3]},
+        expect_correct=False,
+    )
+    async with SessionMaker() as db:
+        rows = await db.execute(
+            select(SessionItem)
+            .where(SessionItem.task_number == 8, SessionItem.answered_at.is_not(None))
+            .order_by(SessionItem.id.desc()).limit(1)
+        )
+        item = rows.scalar_one()
+    assert item.points == 0, f"за три ошибки ожидали 0 баллов, получили {item.points}"
+    print("  ok  задания на соответствие, включая частичный балл")
 
 
 async def scenario_answer_validation(client):
@@ -436,7 +466,7 @@ async def scenario_stats(client, variant_result):
 
     by_number = {row["number"]: row for row in stats["tasks"]}
     assert len(by_number) == 26
-    assert by_number[4]["title"] == "Орфоэпические нормы"
+    assert by_number[4]["title"] == title(4)
     assert by_number[4]["total"] >= 12
 
     assert len(stats["variants"]) == 1

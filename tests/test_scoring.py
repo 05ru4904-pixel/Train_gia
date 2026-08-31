@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core import scoring  # noqa: E402
-from core.tasks_meta import TASK_NUMBERS  # noqa: E402
+from core.tasks_meta import KIND_DIGITS, KIND_MATCH, TASK_NUMBERS  # noqa: E402
 
 
 def test_single_answer():
@@ -28,23 +28,54 @@ def test_duplicates_ignored():
 
 
 def test_task_weights():
+    """Официальная таблица: по 1 баллу везде, кроме соответствий №8 и №22."""
     assert scoring.max_points(1) == 1
-    assert scoring.max_points(8) == 5
-    assert scoring.max_points(16) == 2
-    assert scoring.max_points(26) == 4
+    assert scoring.max_points(8) == 2
+    assert scoring.max_points(22) == 2
+    assert scoring.max_points(16) == 1
+    assert scoring.max_points(26) == 1
+    assert scoring.MAX_RAW_SCORE == 28
     assert scoring.MAX_RAW_SCORE == sum(scoring.max_points(n) for n in TASK_NUMBERS)
 
 
-def test_award_is_all_or_nothing():
-    assert scoring.award_points(8, True) == 5
-    assert scoring.award_points(8, False) == 0, "частичное начисление пока не введено"
+def test_award_is_all_or_nothing_for_ordinary_tasks():
     assert scoring.award_points(3, True) == 1
     assert scoring.award_points(3, False) == 0
+    # Частичный балл — только у соответствий, у остальных ошибка стоит всего балла.
+    assert scoring.award_points(15, False, mistakes=1) == 0
+
+
+def test_partial_points_for_match_tasks():
+    """№8 и №22: одна-две ошибки из пяти — 1 балл, три и больше — ноль."""
+    for number in (8, 22):
+        assert scoring.award_points(number, True) == 2
+        assert scoring.award_points(number, False, mistakes=1) == 1
+        assert scoring.award_points(number, False, mistakes=2) == 1
+        assert scoring.award_points(number, False, mistakes=3) == 0
+        assert scoring.award_points(number, False, mistakes=5) == 0
+
+
+def test_match_mistakes_counts_positions():
+    correct = [3, 1, 4, 2, 5]
+    assert scoring.match_mistakes(correct, correct) == 0
+    assert scoring.match_mistakes([3, 1, 4, 5, 2], correct) == 2
+    assert scoring.match_mistakes([1, 3, 2, 4, 5], correct) == 4
+    assert scoring.match_mistakes([], correct) == 5, "пустой ответ — все позиции неверны"
+    assert scoring.match_mistakes([3, 1, 4], correct) == 2, "незаполненные позиции — ошибки"
+
+
+def test_score_answer_pairs_check_and_points():
+    correct = [3, 1, 4, 2, 5]
+    assert scoring.score_answer(8, KIND_MATCH, correct, correct, None) == (True, 2)
+    # Частично верный ответ остаётся неверным, но балл приносит.
+    assert scoring.score_answer(8, KIND_MATCH, [3, 1, 4, 5, 2], correct, None) == (False, 1)
+    assert scoring.score_answer(8, KIND_MATCH, [1, 3, 2, 4, 5], correct, None) == (False, 0)
+    assert scoring.score_answer(15, KIND_DIGITS, "134", [], ["134"]) == (True, 1)
 
 
 def test_raw_score():
-    results = {1: True, 8: True, 16: False, 26: True}   # 1 + 5 + 0 + 4
-    assert scoring.raw_score(results) == 10
+    results = {1: True, 8: True, 16: False, 22: True}   # 1 + 2 + 0 + 2
+    assert scoring.raw_score(results) == 5
     assert scoring.raw_score({}) == 0
 
 

@@ -507,8 +507,11 @@ async def answer_item(
         item.typed = None
         response = item.selected
 
-    item.is_correct = scoring.check_answer(kind, response, correct, answers)
-    item.points = scoring.award_points(item.task_number, item.is_correct)
+    # Проверка и балл считаются вместе: у №8 и №22 балл даётся и за частично
+    # верный ответ, и по одному только is_correct его не восстановить.
+    item.is_correct, item.points = scoring.score_answer(
+        item.task_number, kind, response, correct, answers
+    )
     item.answered_at = utcnow()
     await db.commit()
     return item

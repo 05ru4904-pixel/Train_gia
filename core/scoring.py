@@ -10,15 +10,19 @@ from core.tasks_meta import KIND_DIGITS, KIND_MATCH, KIND_OPEN, LAST_TASK, TASK_
 # ---------------------------------------------------------------------------
 # Вес заданий в первичных баллах
 # ---------------------------------------------------------------------------
-# СВЕРИТЬ С АКТУАЛЬНОЙ СПЕЦИФИКАЦИЕЙ ФИПИ перед запуском на реальных учениках.
-# Значения ниже соответствуют схеме «повышенный вес у №8, №16, №26».
+# Официальная таблица заказчика (state.md): все задания по 1 баллу, кроме заданий
+# на соответствие — №8 и №22, за них по 2. Максимум за тестовую часть — 28.
 TASK_MAX_POINTS: dict[int, int] = {n: 1 for n in TASK_NUMBERS}
-TASK_MAX_POINTS[8] = 5
-TASK_MAX_POINTS[16] = 2
-TASK_MAX_POINTS[26] = 4
+TASK_MAX_POINTS[8] = 2
+TASK_MAX_POINTS[22] = 2
 
 # Максимум первичных баллов за тестовую часть (№1-26, без сочинения №27).
 MAX_RAW_SCORE = sum(TASK_MAX_POINTS.values())
+
+# Задания на соответствие, где балл даётся и за частично верный ответ: ошибка на
+# одной или двух позициях из пяти — 1 балл, больше двух — 0.
+PARTIAL_TASKS = (8, 22)
+MAX_PARTIAL_MISTAKES = 2
 
 # ---------------------------------------------------------------------------
 # Перевод первичного балла в тестовый (100-балльную шкалу)
@@ -91,15 +95,58 @@ def check_answer(kind: str, response, task_correct: list[int], task_answers: lis
     return evaluate(list(response or []), task_correct)
 
 
-def award_points(number: int, is_correct: bool) -> int:
+def match_mistakes(selected: list[int], correct: list[int]) -> int:
+    """Сколько позиций левого столбца заполнено неверно.
+
+    Незаполненная позиция считается ошибкой наравне с неверной: пустое место в
+    ответе — это не выполненная часть задания.
+    """
+    if not correct:
+        return 0
+    selected = list(selected or [])
+    mistakes = sum(
+        1 for index, value in enumerate(correct)
+        if index >= len(selected) or selected[index] != value
+    )
+    # Лишние позиции сверх правого столбца — тоже ошибки.
+    return mistakes + max(0, len(selected) - len(correct))
+
+
+def award_points(number: int, is_correct: bool, mistakes: int | None = None) -> int:
     """Первичные баллы за одно задание.
 
-    Действует принцип «всё или ничего»: полный вес при полностью верном ответе,
-    иначе ноль. Частичное начисление (в реальном ЕГЭ у №8 и №26 балл даётся за
-    каждое верное соответствие) добавляется здесь — это единственное место,
-    которое придётся тронуть.
+    Обычные задания — «всё или ничего»: полный вес за верный ответ, иначе ноль.
+    У заданий на соответствие (№8, №22) есть промежуточная ступень: ошибка на
+    одной или двух позициях из пяти стоит 1 балла из 2, три и больше — ноль.
+    `mistakes` считает `match_mistakes`; None значит «считать нечего».
     """
-    return TASK_MAX_POINTS.get(number, 1) if is_correct else 0
+    maximum = TASK_MAX_POINTS.get(number, 1)
+    if is_correct:
+        return maximum
+    if (
+        number in PARTIAL_TASKS
+        and mistakes is not None
+        and 1 <= mistakes <= MAX_PARTIAL_MISTAKES
+    ):
+        return 1
+    return 0
+
+
+def score_answer(number: int, kind: str, response, task_correct, task_answers) -> tuple[bool, int]:
+    """Ответ -> (верен ли целиком, первичные баллы).
+
+    Единая точка для слоя БД: проверка и начисление всегда идут парой, и частичный
+    балл за соответствие иначе легко потерять.
+
+    Частично верный ответ остаётся НЕверным: в статистике «правильных» он не
+    считается, иначе процент точности начнёт врать. Балл при этом начисляется.
+    """
+    is_correct = check_answer(kind, response, task_correct, task_answers)
+    mistakes = (
+        match_mistakes(list(response or []), list(task_correct or []))
+        if kind == KIND_MATCH else None
+    )
+    return is_correct, award_points(number, is_correct, mistakes)
 
 
 def max_points(number: int) -> int:
