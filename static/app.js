@@ -194,6 +194,8 @@
     stats: null,
     profile: null,
     onb: null,          // анкета ученика, пока её заполняют
+    sheets: null,       // список шпаргалок по заданиям
+    sheet: null,        // открытая шпаргалка
     dateFrom: '',
     dateTo: '',
     preset: '',
@@ -226,6 +228,7 @@
     if (tab === 'trainer') S.screen = S.trainerScreen || 'home';
     if (tab === 'stats') { S.screen = 'stats'; loadStats(); }
     if (tab === 'profile') { S.screen = 'profile'; loadProfile(); }
+    if (tab === 'cheats') { S.screen = 'cheatsheets'; loadSheets(); }
     render();
   }
 
@@ -242,11 +245,16 @@
   };
 
   function canGoBack() {
+    if (S.tab === 'cheats') return S.screen === 'cheatsheet';
     return S.tab === 'trainer' && !!BACK_MAP[S.screen];
   }
 
   function goBack() {
     if (dialogs.length) { closeDialog(); return; }
+    if (S.tab === 'cheats') {
+      if (S.screen === 'cheatsheet') { S.screen = 'cheatsheets'; S.sheet = null; render(); }
+      return;
+    }
     var target = BACK_MAP[S.screen];
     if (!target) return;
     if (S.screen === 'training' || S.screen === 'variant') {
@@ -355,6 +363,26 @@
     return api('/api/profile')
       .then(function (data) { S.profile = data; render(); })
       .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function loadSheets() {
+    if (S.sheets) return Promise.resolve(S.sheets);
+    return api('/api/cheatsheets')
+      .then(function (data) { S.sheets = data; render(); return data; })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function openSheet(number) {
+    S.screen = 'cheatsheet';
+    S.sheet = null;
+    render();
+    api('/api/cheatsheets/' + number)
+      .then(function (data) { S.sheet = data; render(); })
+      .catch(function (error) {
+        S.screen = 'cheatsheets';
+        toast(errorText(error));
+        render();
+      });
   }
 
   /* ------------------------------------------------------------------ */
@@ -1445,6 +1473,140 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Шпаргалки                                                          */
+  /* ------------------------------------------------------------------ */
+  /**
+   * Разбирает подмножество markdown, в котором написаны шпаргалки.
+   * Своё, а не библиотека: нужны пять правил, а сторонние скрипты в Mini App
+   * тянуть неоткуда — внешние CDN в Telegram блокируются.
+   */
+  function renderMarkdown(text) {
+    var blocks = [];
+    var lines = (text || '').split('\n');
+    var list = null;      // накопитель пунктов текущего списка
+    var listOrdered = false;
+    var para = [];        // накопитель строк абзаца
+
+    function flushList() {
+      if (!list) return;
+      blocks.push(h(listOrdered ? 'ol' : 'ul', { class: 'md-list' }, list.map(function (item) {
+        return h('li', { class: 'md-list__item' }, inline(item));
+      })));
+      list = null;
+    }
+
+    function flushPara() {
+      if (!para.length) return;
+      blocks.push(h('p', { class: 'md-p' }, inline(para.join(' '))));
+      para = [];
+    }
+
+    /** Жирный текст внутри строки. Остальное показываем как есть. */
+    function inline(raw) {
+      var nodes = [];
+      var rest = String(raw);
+      var at;
+      while ((at = rest.indexOf('**')) >= 0) {
+        var close = rest.indexOf('**', at + 2);
+        if (close < 0) break;
+        if (at > 0) nodes.push(document.createTextNode(rest.slice(0, at)));
+        nodes.push(h('b', { text: rest.slice(at + 2, close) }));
+        rest = rest.slice(close + 2);
+      }
+      if (rest) nodes.push(document.createTextNode(rest));
+      return nodes;
+    }
+
+    lines.forEach(function (raw) {
+      var line = raw.replace(/\s+$/, '');
+      var trimmed = line.trim();
+
+      if (!trimmed) { flushList(); flushPara(); return; }
+
+      var heading = /^(#{2,3})\s+(.*)$/.exec(trimmed);
+      if (heading) {
+        flushList(); flushPara();
+        blocks.push(h('div', {
+          class: heading[1].length === 2 ? 'md-h2' : 'md-h3'
+        }, inline(heading[2])));
+        return;
+      }
+
+      var note = /^>\s?(.*)$/.exec(trimmed);
+      if (note) {
+        flushList(); flushPara();
+        blocks.push(h('div', { class: 'md-note' }, inline(note[1])));
+        return;
+      }
+
+      var bullet = /^[-*]\s+(.*)$/.exec(trimmed);
+      var numbered = /^\d+[.)]\s+(.*)$/.exec(trimmed);
+      if (bullet || numbered) {
+        flushPara();
+        var ordered = !!numbered;
+        if (list && listOrdered !== ordered) flushList();
+        if (!list) { list = []; listOrdered = ordered; }
+        list.push((bullet || numbered)[1]);
+        return;
+      }
+
+      // Продолжение пункта списка, перенесённое на новую строку.
+      if (list) { list[list.length - 1] += ' ' + trimmed; return; }
+      para.push(trimmed);
+    });
+
+    flushList();
+    flushPara();
+    return blocks;
+  }
+
+  function screenCheatsheets() {
+    var data = S.sheets;
+    if (!data) return screenLoading();
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'h2', text: 'Чек-листы по заданиям' }),
+      h('div', {
+        class: 'sub',
+        text: 'Как решать, что помнить и где обычно теряют балл. Готово ' +
+              data.ready + ' из ' + data.total
+      }),
+      h('div', { class: 'stack mt-24' }, data.items.map(function (item) {
+        return h('button', {
+          class: 'sheet-row' + (item.ready ? '' : ' is-empty'), type: 'button',
+          onClick: function () { openSheet(item.number); }
+        }, [
+          h('div', { class: 'sheet-row__num', text: '№' + item.number }),
+          h('div', { class: 'sheet-row__body' }, [
+            h('div', { class: 'sheet-row__title', text: item.title }),
+            h('div', { class: 'sheet-row__sub', text: item.subtitle })
+          ]),
+          h('div', {
+            class: 'sheet-row__mark', text: item.ready ? '›' : 'скоро'
+          })
+        ]);
+      }))
+    ]);
+  }
+
+  function screenCheatsheet() {
+    var sheet = S.sheet;
+    if (!sheet) return screenLoading();
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'eyebrow', style: 'color:var(--accent)', text: '№' + sheet.number }),
+      h('div', { class: 'h2', style: 'margin-top:6px', text: sheet.title }),
+      h('div', { class: 'sub', text: sheet.subtitle }),
+      sheet.body
+        ? h('div', { class: 'md mt-24' }, renderMarkdown(sheet.body))
+        : h('div', { class: 'banner banner--amber', style: 'margin-top:24px' },
+            'Чек-лист по этому заданию ещё пишется. Загляните позже.'),
+      h('button', {
+        class: 'btn btn--ghost mt-24', type: 'button',
+        onClick: function () { S.screen = 'cheatsheets'; S.sheet = null; render(); }
+      }, 'К списку заданий')
+    ]);
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Анкета ученика                                                     */
   /* ------------------------------------------------------------------ */
   var ONB_STEPS = ['класс', 'математика', 'предметы', 'цель'];
@@ -1760,7 +1922,9 @@
     variantReview: ['Разбор варианта', 'задания 1–26'],
     stats: ['Статистика', 'ваш прогресс'],
     profile: ['Профиль', 'аккаунт и подписка'],
-    onboarding: ['Знакомство', 'четыре быстрых вопроса']
+    onboarding: ['Знакомство', 'четыре быстрых вопроса'],
+    cheatsheets: ['Шпаргалки', 'чек-листы по заданиям'],
+    cheatsheet: ['Шпаргалка', 'как решать это задание']
   };
 
   var lastViewKey = null;
@@ -1783,6 +1947,9 @@
     var title = TITLES[S.screen] || TITLES.home;
     if (S.screen === 'training' && S.session) {
       title = ['Тренировка · №' + S.session.task_number, 'ответ нельзя изменить'];
+    }
+    if (S.screen === 'cheatsheet' && S.sheet) {
+      title = ['Шпаргалка · №' + S.sheet.number, S.sheet.title];
     }
     dom.title.textContent = title[0];
     dom.sub.textContent = title[1];
@@ -1812,6 +1979,9 @@
     else if (S.screen === 'onboarding') node = screenOnboarding();
     else if (S.tab === 'stats') node = screenStats();
     else if (S.tab === 'profile') node = screenProfile();
+    else if (S.tab === 'cheats') {
+      node = S.screen === 'cheatsheet' ? screenCheatsheet() : screenCheatsheets();
+    }
     else {
       var screens = {
         home: screenHome,

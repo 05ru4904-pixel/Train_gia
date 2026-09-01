@@ -10,7 +10,7 @@
   пользователь один — он остался. Чистили `scripts/purge_db.py --yes`.
 - Тренировки по номеру заработают сами, когда наберётся 6 вариантов: минимум в
   `TRAINING_COUNTS` — 6, а `pick_random_tasks` берёт задания одного номера.
-- 84 теста, все зелёные.
+- 88 тестов, все зелёные.
 - 6200 строк Python, 8500 строк фронта.
 
 ## Стек и архитектура
@@ -30,11 +30,12 @@ core/variant_import.py    проверка разобранного и зали�
 core/scoring.py           проверка ответов и баллы — весь регламент ЕГЭ здесь
 core/tasks_meta.py        номер -> вид, номер -> тема, буквы вариантов
 core/profile_meta.py      анкета ученика: классы, предметы ЕГЭ, цель по баллам
+core/cheatsheets.py       чтение чек-листов из content/cheatsheets/NN.md
 db/models.py              6 таблиц: users, tasks, variants, variant_items, sessions, session_items
 db/crud.py                запросы
 db/database.py            пул соединений, init_db с ретраями, ALTER-миграции
 api/serializers.py        сборка JSON для Mini App
-api/routers/              training, variant, stats, profile, onboarding
+api/routers/              training, variant, stats, profile, onboarding, cheatsheets
 bots/admin_bot.py         /upload /add /find /list /variant /variants /templates /stats
 bots/user_bot.py          100 строк, открывает Mini App
 static/app.js             всё приложение, 1655 строк
@@ -45,7 +46,7 @@ scripts/purge_db.py       очистка базы: задания, вариан�
 
 ## Команды
 ```
-python -m pytest -q                                       84 теста
+python -m pytest -q                                       88 тестов
 python scripts/parse_raw.py Задания/2 --report            разбор, ничего не пишет
 python scripts/import_variant.py Задания/2.json --dry-run проверка без базы
 python scripts/import_variant.py Задания/2.json --variant 2
@@ -193,6 +194,22 @@ python scripts/purge_db.py --yes                          удалить
 В базе у пользователя: `grade`, `math_level`, `subjects` (только предметы по выбору),
 `target_score`, `onboarded_at`. Смена уровня математики выбранное не сбрасывает — лимиты
 пересекаются; обрезается только то, что не влезает в новый максимум.
+
+## Шпаргалки (чек-листы по заданиям)
+Четвёртая вкладка приложения. Список всех 26 номеров с темами, внутри — чек-лист:
+«Как решать», «Что помнить», «Ловушки», «Пример». Ненаписанные показываются с
+пометкой «скоро» — ученик видит карту раздела целиком.
+
+Тексты лежат файлами: `content/cheatsheets/NN.md`, по одному на номер. Не в базе:
+их 26, меняются редко, git даёт версии и откат бесплатно, админка не нужна. Правка —
+через git push, деплой автоматический. Понадобится правка из бота — переедут в
+таблицу, API менять не придётся.
+
+Формат — подмножество markdown: `##`/`###`, списки `-` и `1.`, `> заметка`,
+`**жирный**`. Рисует его свой рендерер в `static/app.js` (`renderMarkdown`, ~70 строк):
+сторонние библиотеки тянуть неоткуда, внешние CDN в Telegram блокируются.
+
+Готовы №4 и №15 — образцы формата. Остальные 24 ещё не написаны.
 
 ## Чего намеренно не делаем
 - Проверка сочинения №27 — отдельный проект, нужна модель и критерии.

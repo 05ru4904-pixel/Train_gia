@@ -689,6 +689,71 @@ button {
 .row__value { color: var(--ink); font-weight: 700; }
 .row__divider { height: 1px; background: oklch(0.95 0.004 250); }
 
+/* --- шпаргалки ---------------------------------------------------------- */
+.tab__icon--book { flex-direction: column; justify-content: center; gap: 3px; }
+.tab__icon--book i { height: 3px; border-radius: 2px; }
+.tab__icon--book i:nth-child(1) { width: 100%; }
+.tab__icon--book i:nth-child(2) { width: 75%; opacity: 0.6; }
+.tab__icon--book i:nth-child(3) { width: 90%; opacity: 0.8; }
+
+.sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  text-align: left;
+}
+.sheet-row.is-empty { opacity: 0.6; }
+.sheet-row__num { flex: none; font-size: 13px; font-weight: 800; color: var(--accent); min-width: 32px; }
+.sheet-row__body { flex: 1; min-width: 0; }
+.sheet-row__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sheet-row__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sheet-row__mark { flex: none; font-size: 12px; font-weight: 700; color: var(--muted-2); }
+
+/* Разметка самой шпаргалки: заголовки, списки, заметки. */
+.md { font-size: 14.5px; line-height: 1.6; color: var(--ink-dim); }
+.md-h2 {
+  margin-top: 22px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink-strong);
+}
+.md-h2:first-child { margin-top: 0; }
+.md-h3 { margin-top: 16px; font-size: 14.5px; font-weight: 700; color: var(--ink-soft); }
+.md-p { margin-top: 10px; }
+.md-list { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.md-list__item { padding-left: 2px; }
+.md-list__item::marker { color: var(--muted-2); font-weight: 700; }
+.md b { color: var(--ink-strong); font-weight: 800; }
+.md-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-3);
+  font-size: 14px;
+}
+
 /* --- анкета ученика ----------------------------------------------------- */
 .onb-steps { display: flex; gap: 6px; }
 .onb-step {

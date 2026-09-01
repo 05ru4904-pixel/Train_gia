@@ -579,6 +579,27 @@ async def scenario_onboarding(http):
     print("  ok  анкета ученика: класс, предметы, цель")
 
 
+async def scenario_cheatsheets(client):
+    """Раздел «Шпаргалки»: список всех заданий и текст одного чек-листа."""
+    data = await client.get("/api/cheatsheets")
+    assert data["total"] == 26
+    assert [item["number"] for item in data["items"]] == list(TASK_NUMBERS)
+    assert data["ready"] >= 1, "хотя бы одна шпаргалка должна быть написана"
+
+    written = next(item for item in data["items"] if item["ready"])
+    sheet = await client.get("/api/cheatsheets/" + str(written["number"]))
+    assert sheet["title"] == title(written["number"])
+    assert "## Как решать" in sheet["body"]
+
+    empty = next((item for item in data["items"] if not item["ready"]), None)
+    if empty:
+        blank = await client.get("/api/cheatsheets/" + str(empty["number"]))
+        assert blank["body"] is None, "ненаписанная шпаргалка — не ошибка, а пустое тело"
+
+    await client.get("/api/cheatsheets/99", expect=404)
+    print("  ok  шпаргалки: список и чек-лист задания")
+
+
 async def scenario_isolation(http):
     """Второй пользователь не видит чужих данных."""
     other = Client(http, user={"id": 9999, "first_name": "Гость"})
@@ -624,6 +645,7 @@ async def main() -> int:
             await scenario_answer_validation(client)
             await scenario_profile(client)
             await scenario_onboarding(http)
+            await scenario_cheatsheets(client)
             await scenario_isolation(http)
             await scenario_mini_app_page(http)
         except AssertionError as exc:
