@@ -2,7 +2,7 @@
 from fastapi import APIRouter
 
 from api.deps import CurrentUser, DbSession
-from api.serializers import unfinished_payload
+from api.serializers import onboarding_payload, unfinished_payload
 from core import scoring
 from core.tasks_meta import RENDERABLE_KINDS, TASK_NUMBERS, subtitle, title
 from db import crud
@@ -34,6 +34,8 @@ async def state(user: CurrentUser, db: DbSession) -> dict:
             "plan": user.plan,
             "is_pro": user.plan == PLAN_PRO,
         },
+        # Пока анкета не заполнена, приложение показывает её вместо главного экрана.
+        "needs_onboarding": user.onboarded_at is None,
         "unfinished": unfinished_payload(active, list(active.items) if active else []),
         "counts": {str(n): counts.get(n, 0) for n in TASK_NUMBERS},
         "variants_available": await crud.variants_count(db) > 0,
@@ -74,4 +76,5 @@ async def profile(user: CurrentUser, db: DbSession) -> dict:
         "registered_at": user.created_at.isoformat() if user.created_at else None,
         "solved_total": overall["total"],
         "accuracy": overall["accuracy"],
+        "onboarding": onboarding_payload(user),
     }

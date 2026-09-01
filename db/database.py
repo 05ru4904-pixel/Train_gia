@@ -49,6 +49,12 @@ _MIGRATIONS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(16) NOT NULL DEFAULT 'free'",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_until TIMESTAMPTZ",
+    # Анкета ученика: класс, уровень математики, предметы по выбору, цель по баллам.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS grade INTEGER",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS math_level VARCHAR(16)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS subjects JSONB",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS target_score VARCHAR(16)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS passage TEXT",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ",
     # Виды заданий: всё, что было в базе до появления колонки, — это choice.

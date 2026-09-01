@@ -193,6 +193,7 @@
     reviewPosition: null,
     stats: null,
     profile: null,
+    onb: null,          // анкета ученика, пока её заполняют
     dateFrom: '',
     dateTo: '',
     preset: '',
@@ -305,6 +306,9 @@
     return api('/api/state').then(function (data) {
       S.boot = data;
       S.status = 'ready';
+      // Анкета обязательна: пока она не заполнена, тренажёр не показываем —
+      // иначе первый вход уводит мимо неё и данные о ученике не собрать.
+      if (data.needs_onboarding) startOnboarding(false);
       if (data.user && data.user.id) {
         storageKey = 'train_gia_' + data.user.id;
         var prefs = loadPrefs();
@@ -1440,6 +1444,217 @@
     }).catch(function (error) { toast(errorText(error)); });
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Анкета ученика                                                     */
+  /* ------------------------------------------------------------------ */
+  var ONB_STEPS = ['класс', 'математика', 'предметы', 'цель'];
+
+  /** Сколько предметов по выбору требует выбранный уровень математики. */
+  function extraRequired() {
+    var levels = (S.onb.options && S.onb.options.math_levels) || [];
+    for (var i = 0; i < levels.length; i++) {
+      if (levels[i].key === S.onb.math) return levels[i].extra_required;
+    }
+    return 0;
+  }
+
+  function onbStepReady() {
+    if (S.onb.step === 0) return !!S.onb.grade;
+    if (S.onb.step === 1) return !!S.onb.math;
+    if (S.onb.step === 2) return S.onb.subjects.length === extraRequired();
+    return !!S.onb.target;
+  }
+
+  function startOnboarding(editing) {
+    S.onb = {
+      step: 0, grade: null, math: null, subjects: [], target: null,
+      options: S.onb ? S.onb.options : null, editing: !!editing, saving: false
+    };
+    // При правке подставляем то, что уже выбрано: анкета короткая, но переписывать
+    // её целиком ради смены одного пункта — раздражает.
+    var current = editing && S.profile ? S.profile.onboarding : null;
+    if (current) {
+      S.onb.grade = current.grade;
+      S.onb.math = current.math_level;
+      S.onb.subjects = (current.subjects || []).slice();
+      S.onb.target = current.target_score;
+    }
+    S.screen = 'onboarding';
+    render();
+    if (!S.onb.options) {
+      api('/api/onboarding/options')
+        .then(function (data) { S.onb.options = data; render(); })
+        .catch(function (error) { toast(errorText(error)); });
+    }
+  }
+
+  function toggleSubject(key) {
+    var limit = extraRequired();
+    var at = S.onb.subjects.indexOf(key);
+    if (at >= 0) {
+      S.onb.subjects.splice(at, 1);
+    } else if (S.onb.subjects.length >= limit) {
+      toast('Нужно выбрать ровно ' + limit + ' ' + plural(limit, 'предмет', 'предмета', 'предметов') +
+            '. Снимите лишний, чтобы выбрать другой.');
+      return;
+    } else {
+      S.onb.subjects.push(key);
+    }
+    render();
+  }
+
+  function pickMath(key) {
+    if (S.onb.math === key) return;
+    S.onb.math = key;
+    // Лимит у уровней разный: выбранное сверх нового лимита пришлось бы отклонять
+    // при сохранении, поэтому обрезаем сразу и говорим об этом на экране.
+    S.onb.subjects = [];
+    render();
+  }
+
+  function saveOnboarding() {
+    if (S.onb.saving) return;
+    S.onb.saving = true;
+    render();
+    api('/api/onboarding', {
+      method: 'POST',
+      body: {
+        grade: S.onb.grade,
+        math_level: S.onb.math,
+        subjects: S.onb.subjects,
+        target_score: S.onb.target
+      }
+    }).then(function () {
+      var editing = S.onb.editing;
+      S.onb.saving = false;
+      if (editing) {
+        S.tab = 'profile';
+        S.screen = 'profile';
+        loadProfile();
+        toast('Анкета обновлена');
+      } else {
+        S.screen = 'home';
+        S.trainerScreen = 'home';
+        refreshBoot().then(function () { render(); });
+      }
+      render();
+    }).catch(function (error) {
+      S.onb.saving = false;
+      toast(errorText(error));
+      render();
+    });
+  }
+
+  function pickCard(active, label, onClick, value) {
+    return h('button', {
+      class: 'pick' + (active ? ' is-active' : ''), type: 'button', onClick: onClick
+    }, value === undefined ? [h('div', { class: 'pick__label', text: label })] : [
+      h('div', { class: 'pick__value', text: value }),
+      h('div', { class: 'pick__label', text: label })
+    ]);
+  }
+
+  function pickItem(active, title, note, onClick) {
+    return h('button', {
+      class: 'pick-item' + (active ? ' is-active' : ''), type: 'button', onClick: onClick
+    }, [
+      h('div', { class: 'pick-item__mark', text: active ? '✓' : '' }),
+      h('div', { class: 'pick-item__body' }, [
+        h('div', { class: 'pick-item__title', text: title }),
+        note ? h('div', { class: 'pick-item__note', text: note }) : null
+      ])
+    ]);
+  }
+
+  function screenOnboarding() {
+    var options = S.onb.options;
+    if (!options) return screenLoading();
+
+    var body;
+    if (S.onb.step === 0) {
+      body = [
+        h('div', { class: 'h2', text: 'В каком ты классе?' }),
+        h('div', { class: 'sub', text: 'Подберём нагрузку под твой год подготовки' }),
+        h('div', { class: 'pick-grid' }, options.grades.map(function (grade) {
+          return pickCard(S.onb.grade === grade, 'класс', function () {
+            S.onb.grade = grade; render();
+          }, grade);
+        }))
+      ];
+    } else if (S.onb.step === 1) {
+      body = [
+        h('div', { class: 'h2', text: 'Какую математику сдаёшь?' }),
+        h('div', { class: 'sub', text: 'Русский язык сдают все — он уже в списке' }),
+        h('div', { class: 'pick-list' }, options.math_levels.map(function (level) {
+          return pickItem(
+            S.onb.math === level.key, level.title,
+            'плюс ' + level.extra_required + ' ' +
+            plural(level.extra_required, 'предмет', 'предмета', 'предметов') + ' по выбору',
+            function () { pickMath(level.key); }
+          );
+        }))
+      ];
+    } else if (S.onb.step === 2) {
+      var limit = extraRequired();
+      body = [
+        h('div', { class: 'h2', text: 'Что сдаёшь ещё?' }),
+        h('div', {
+          class: 'sub',
+          text: 'Выбрано ' + S.onb.subjects.length + ' из ' + limit
+        }),
+        h('div', { class: 'pick-list' }, options.subjects.map(function (subject) {
+          return pickItem(
+            S.onb.subjects.indexOf(subject.key) >= 0, subject.title, '',
+            function () { toggleSubject(subject.key); }
+          );
+        }))
+      ];
+    } else {
+      body = [
+        h('div', { class: 'h2', text: 'Какой результат нужен?' }),
+        h('div', { class: 'sub', text: 'Сумма баллов за все экзамены' }),
+        h('div', { class: 'pick-list' }, options.targets.map(function (target) {
+          return pickItem(S.onb.target === target.key, target.title, '', function () {
+            S.onb.target = target.key; render();
+          });
+        }))
+      ];
+    }
+
+    var last = S.onb.step === ONB_STEPS.length - 1;
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'onb-steps' }, ONB_STEPS.map(function (name, index) {
+        return h('div', {
+          class: 'onb-step' + (index === S.onb.step ? ' is-active' : '') +
+                 (index < S.onb.step ? ' is-done' : ''),
+          text: name
+        });
+      })),
+      h('div', { class: 'onb-body' }, body),
+      h('div', { class: 'stack mt-24' }, [
+        h('button', {
+          class: 'btn btn--primary', type: 'button',
+          disabled: !onbStepReady() || S.onb.saving,
+          onClick: function () {
+            if (last) { saveOnboarding(); return; }
+            S.onb.step += 1;
+            render();
+          }
+        }, last ? (S.onb.saving ? 'Сохраняю…' : 'Готово') : 'Далее'),
+        S.onb.step > 0 || S.onb.editing
+          ? h('button', {
+              class: 'btn btn--ghost', type: 'button',
+              onClick: function () {
+                if (S.onb.step > 0) { S.onb.step -= 1; render(); return; }
+                S.screen = 'profile';
+                render();
+              }
+            }, S.onb.step > 0 ? 'Назад' : 'Отмена')
+          : null
+      ])
+    ]);
+  }
+
   function screenProfile() {
     var profile = S.profile;
     if (!profile) return screenLoading();
@@ -1452,6 +1667,7 @@
           profile.username ? h('div', { class: 'profile-username', text: '@' + profile.username }) : null
         ])
       ]),
+      onboardingRows(profile.onboarding),
       h('div', { class: 'rows' }, [
         row('Тариф', profile.is_pro ? 'PRO' : 'Free'),
         h('div', { class: 'row__divider' }),
@@ -1464,6 +1680,10 @@
         row('Точность', profile.accuracy + '%')
       ]),
       h('div', { class: 'stack', style: 'margin-top:16px' }, [
+        h('button', {
+          class: 'btn btn--ghost', type: 'button',
+          onClick: function () { startOnboarding(true); }
+        }, 'Изменить анкету'),
         h('button', {
           class: 'btn btn--primary', type: 'button',
           onClick: function () { toast('Подписки появятся в следующем обновлении.'); }
@@ -1480,6 +1700,24 @@
     return h('div', { class: 'row' }, [
       h('span', { class: 'row__key', text: key }),
       h('span', { class: 'row__value', text: value })
+    ]);
+  }
+
+  function onboardingRows(onb) {
+    if (!onb || !onb.completed) return null;
+    return h('div', { class: 'rows' }, [
+      row('Класс', onb.grade + '-й'),
+      h('div', { class: 'row__divider' }),
+      row('Цель', onb.target_title),
+      h('div', { class: 'row__divider' }),
+      h('div', { class: 'row row--stack' }, [
+        h('span', { class: 'row__key', text: 'Экзамены' }),
+        // Списком, а не строкой через запятую: предметов до четырёх, и на узком
+        // экране строка переносится посередине названия.
+        h('div', { class: 'exam-list' }, onb.exams.map(function (exam) {
+          return h('span', { class: 'exam', text: exam });
+        }))
+      ])
     ]);
   }
 
@@ -1510,7 +1748,8 @@
     variantResult: ['Результат варианта', 'баллы и время'],
     variantReview: ['Разбор варианта', 'задания 1–26'],
     stats: ['Статистика', 'ваш прогресс'],
-    profile: ['Профиль', 'аккаунт и подписка']
+    profile: ['Профиль', 'аккаунт и подписка'],
+    onboarding: ['Знакомство', 'четыре быстрых вопроса']
   };
 
   var lastViewKey = null;
@@ -1540,6 +1779,10 @@
     dom.back.hidden = !canGoBack();
     updateBackButton();
 
+    // Пока идёт анкета первого входа, ходить по вкладкам некуда: тренажёр ещё
+    // не открыт. При правке из профиля вкладки остаются на месте.
+    dom.tabbar.hidden = S.screen === 'onboarding' && !(S.onb && S.onb.editing);
+
     Array.prototype.forEach.call(dom.tabs, function (tab) {
       tab.classList.toggle('is-active', tab.getAttribute('data-tab') === S.tab);
     });
@@ -1555,6 +1798,7 @@
     clear(dom.screen);
     var node;
     if (S.status === 'error') node = screenError();
+    else if (S.screen === 'onboarding') node = screenOnboarding();
     else if (S.tab === 'stats') node = screenStats();
     else if (S.tab === 'profile') node = screenProfile();
     else {
@@ -1605,6 +1849,7 @@
     dom.sub = document.getElementById('header-sub');
     dom.back = document.getElementById('back');
     dom.tabs = document.querySelectorAll('.tab');
+    dom.tabbar = document.getElementById('tabbar');
     dom.dialogRoot = document.getElementById('dialog-root');
     dom.toast = document.getElementById('toast');
 

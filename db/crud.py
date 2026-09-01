@@ -73,6 +73,24 @@ async def get_or_create_user(db, user_id: int, first_name=None, last_name=None, 
     return user
 
 
+async def save_onboarding(db, user: User, grade: int, math_level: str,
+                          subjects: list[str], target_score: str) -> User:
+    """Записывает анкету ученика. Проверку делает вызывающая сторона (profile_meta).
+
+    Годится и для первого заполнения, и для правки из профиля: onboarded_at
+    ставится один раз и дальше означает «анкета пройдена», а не «когда правил».
+    """
+    user.grade = grade
+    user.math_level = math_level
+    user.subjects = list(subjects)
+    user.target_score = target_score
+    if user.onboarded_at is None:
+        user.onboarded_at = utcnow()
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 # --------------------------------------------------------------------------- #
 # Задания
 # --------------------------------------------------------------------------- #

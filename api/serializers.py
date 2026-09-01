@@ -15,8 +15,28 @@ from db.models import (
     Session,
     SessionItem,
 )
-from core import scoring
+from core import profile_meta, scoring
 from core.tasks_meta import letter, subtitle, title
+
+
+def onboarding_payload(user) -> dict:
+    """Анкета ученика в виде, готовом к показу: и ключи, и подписи.
+
+    Ключи нужны экрану правки — по ним отмечается выбранное; подписи нужны профилю,
+    чтобы не держать второй справочник на клиенте.
+    """
+    subjects = list(user.subjects or [])
+    return {
+        "completed": user.onboarded_at is not None,
+        "grade": user.grade,
+        "math_level": user.math_level,
+        "math_title": profile_meta.math_title(user.math_level),
+        "subjects": subjects,
+        "subject_titles": [profile_meta.subject_title(s) for s in subjects],
+        "exams": profile_meta.exam_list(user.math_level, subjects),
+        "target_score": user.target_score,
+        "target_title": profile_meta.target_title(user.target_score),
+    }
 
 
 def label(index: int) -> str:

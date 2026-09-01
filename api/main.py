@@ -9,7 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routers import profile, stats, training, variant
+from api.routers import onboarding, profile, stats, training, variant
 from db.crud import total_tasks_count, variants_count
 from db.database import SessionMaker
 
@@ -35,6 +35,7 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.include_router(profile.router, prefix="/api")
+app.include_router(onboarding.router, prefix="/api")
 app.include_router(training.router, prefix="/api")
 app.include_router(variant.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")

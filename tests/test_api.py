@@ -496,6 +496,73 @@ async def scenario_profile(client):
     print("  ok  профиль")
 
 
+async def scenario_onboarding(http):
+    """Анкета первого входа: класс, математика, предметы, цель по баллам."""
+    student = Client(http, user={"id": 7777, "first_name": "Новичок"})
+
+    state = await student.get("/api/state")
+    assert state["needs_onboarding"] is True, "новому ученику анкета обязательна"
+
+    options = await student.get("/api/onboarding/options")
+    assert options["grades"] == [7, 8, 9, 10, 11]
+    assert len(options["subjects"]) == 8
+
+    # Число предметов по выбору жёсткое, и проверяет его сервер.
+    bad = await student.post(
+        "/api/onboarding",
+        {"grade": 11, "math_level": "profile", "subjects": ["history", "physics"],
+         "target_score": "230_260"},
+        expect=400,
+    )
+    assert bad["detail"]["code"] == "bad_onboarding"
+    assert "ровно 1 предмет" in bad["detail"]["message"]
+
+    await student.post(
+        "/api/onboarding",
+        {"grade": 11, "math_level": "base", "subjects": ["history"], "target_score": "230_260"},
+        expect=400,
+    )
+    out_of_range = await student.post(
+        "/api/onboarding",
+        {"grade": 6, "math_level": "base", "subjects": ["history", "physics"],
+         "target_score": "230_260"},
+        expect=400,
+    )
+    assert "от 7 до 11" in out_of_range["detail"]["message"]
+    await student.post(
+        "/api/onboarding",
+        {"grade": 11, "math_level": "base", "subjects": ["history", "физика"],
+         "target_score": "230_260"},
+        expect=400,
+    )
+
+    saved = await student.post(
+        "/api/onboarding",
+        {"grade": 10, "math_level": "base", "subjects": ["history", "social"],
+         "target_score": "260_plus"},
+    )
+    assert saved["completed"] is True
+    assert saved["exams"] == ["Русский язык", "Базовая математика", "История", "Обществознание"]
+
+    state = await student.get("/api/state")
+    assert state["needs_onboarding"] is False, "заполненная анкета больше не спрашивается"
+
+    profile = await student.get("/api/profile")
+    onb = profile["onboarding"]
+    assert onb["grade"] == 10
+    assert onb["math_title"] == "Базовая математика"
+    assert onb["subject_titles"] == ["История", "Обществознание"]
+    assert onb["target_title"] == "Больше 260 баллов"
+
+    # Правка из профиля: смена математики меняет и требуемое число предметов.
+    changed = await student.post(
+        "/api/onboarding",
+        {"grade": 11, "math_level": "profile", "subjects": ["physics"], "target_score": "200_230"},
+    )
+    assert changed["exams"] == ["Русский язык", "Профильная математика", "Физика"]
+    print("  ok  анкета ученика: класс, предметы, цель")
+
+
 async def scenario_isolation(http):
     """Второй пользователь не видит чужих данных."""
     other = Client(http, user={"id": 9999, "first_name": "Гость"})
@@ -540,6 +607,7 @@ async def main() -> int:
             await scenario_match(client)
             await scenario_answer_validation(client)
             await scenario_profile(client)
+            await scenario_onboarding(http)
             await scenario_isolation(http)
             await scenario_mini_app_page(http)
         except AssertionError as exc:

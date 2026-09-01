@@ -66,6 +66,18 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(64))
     plan: Mapped[str] = mapped_column(String(16), default=PLAN_FREE, server_default=PLAN_FREE)
     plan_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Анкета, которую ученик заполняет при первом входе (core/profile_meta.py).
+    # Пока не заполнена, все четыре поля пустые — по onboarded_at и определяется,
+    # показывать анкету или нет.
+    grade: Mapped[int | None] = mapped_column(Integer)
+    math_level: Mapped[str | None] = mapped_column(String(16))
+    # Только предметы по выбору. Русский и математика не хранятся: русский сдают
+    # все, а математика лежит в math_level — дублировать их значит однажды
+    # разойтись с ними.
+    subjects: Mapped[list | None] = mapped_column(JSONColumn)
+    target_score: Mapped[str | None] = mapped_column(String(16))
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
