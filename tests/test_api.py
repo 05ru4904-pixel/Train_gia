@@ -507,15 +507,22 @@ async def scenario_onboarding(http):
     assert options["grades"] == [7, 8, 9, 10, 11]
     assert len(options["subjects"]) == 8
 
-    # Число предметов по выбору жёсткое, и проверяет его сервер.
+    # Число предметов по выбору проверяет сервер: с профильной один или два,
+    # с базовой строго два.
     bad = await student.post(
         "/api/onboarding",
-        {"grade": 11, "math_level": "profile", "subjects": ["history", "physics"],
-         "target_score": "230_260"},
+        {"grade": 11, "math_level": "profile", "subjects": [], "target_score": "230_260"},
         expect=400,
     )
     assert bad["detail"]["code"] == "bad_onboarding"
-    assert "ровно 1 предмет" in bad["detail"]["message"]
+    assert "1 или 2 предмета" in bad["detail"]["message"]
+
+    await student.post(
+        "/api/onboarding",
+        {"grade": 11, "math_level": "profile",
+         "subjects": ["history", "physics", "biology"], "target_score": "230_260"},
+        expect=400,
+    )
 
     await student.post(
         "/api/onboarding",
@@ -554,12 +561,21 @@ async def scenario_onboarding(http):
     assert onb["subject_titles"] == ["История", "Обществознание"]
     assert onb["target_title"] == "Больше 260 баллов"
 
-    # Правка из профиля: смена математики меняет и требуемое число предметов.
+    # Правка из профиля. С профильной математикой годится и один предмет, и два.
     changed = await student.post(
         "/api/onboarding",
         {"grade": 11, "math_level": "profile", "subjects": ["physics"], "target_score": "200_230"},
     )
     assert changed["exams"] == ["Русский язык", "Профильная математика", "Физика"]
+
+    two = await student.post(
+        "/api/onboarding",
+        {"grade": 11, "math_level": "profile", "subjects": ["physics", "informatics"],
+         "target_score": "200_230"},
+    )
+    assert two["exams"] == [
+        "Русский язык", "Профильная математика", "Физика", "Информатика",
+    ]
     print("  ok  анкета ученика: класс, предметы, цель")
 
 

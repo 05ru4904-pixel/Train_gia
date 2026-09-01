@@ -21,11 +21,13 @@ MATH_LEVELS: dict[str, str] = {
     MATH_BASE: "Базовая математика",
 }
 
-# Сколько предметов по выбору нужно сверх русского и математики. Число строгое:
-# и меньше, и больше — ошибка, иначе анкета не описывает реальный набор экзаменов.
-EXTRA_SUBJECTS_REQUIRED: dict[str, int] = {
-    MATH_PROFILE: 1,
-    MATH_BASE: 2,
+# Сколько предметов по выбору нужно сверх русского и математики — (минимум, максимум).
+# С профильной математикой она сама идёт как предмет по выбору, поэтому сверх неё
+# берут один или два. С базовой она в конкурсные баллы не входит, и предметов
+# ровно два — меньше не хватит на поступление, больше не сдают.
+EXTRA_SUBJECTS: dict[str, tuple[int, int]] = {
+    MATH_PROFILE: (1, 2),
+    MATH_BASE: (2, 2),
 }
 
 # --- предметы -----------------------------------------------------------------
@@ -64,8 +66,9 @@ def target_title(key: str | None) -> str:
     return TARGETS.get(key or "", "")
 
 
-def extra_required(math_level: str | None) -> int:
-    return EXTRA_SUBJECTS_REQUIRED.get(math_level or "", 0)
+def extra_range(math_level: str | None) -> tuple[int, int]:
+    """(минимум, максимум) предметов по выбору для этого уровня математики."""
+    return EXTRA_SUBJECTS.get(math_level or "", (0, 0))
 
 
 def exam_list(math_level: str | None, subjects: list[str] | None) -> list[str]:
@@ -102,12 +105,15 @@ def validate(grade, math_level, subjects, target) -> str | None:
     if len(set(subjects)) != len(subjects):
         return "предмет выбран дважды"
 
-    required = EXTRA_SUBJECTS_REQUIRED[math_level]
-    if len(subjects) != required:
-        word = "предмет" if required == 1 else "предмета"
+    low, high = EXTRA_SUBJECTS[math_level]
+    if not low <= len(subjects) <= high:
         with_what = "профильной" if math_level == MATH_PROFILE else "базовой"
+        if low == high:
+            need = f"ровно {high} {'предмет' if high == 1 else 'предмета'}"
+        else:
+            need = f"{low} или {high} предмета"
         return (
-            f"с {with_what} математикой нужно выбрать ровно {required} {word} "
+            f"с {with_what} математикой нужно выбрать {need} "
             f"по выбору, а выбрано {len(subjects)}"
         )
 
@@ -125,7 +131,8 @@ def options_payload() -> dict:
             {
                 "key": key,
                 "title": name,
-                "extra_required": EXTRA_SUBJECTS_REQUIRED[key],
+                "extra_min": EXTRA_SUBJECTS[key][0],
+                "extra_max": EXTRA_SUBJECTS[key][1],
             }
             for key, name in MATH_LEVELS.items()
         ],

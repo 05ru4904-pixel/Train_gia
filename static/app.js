@@ -1449,19 +1449,28 @@
   /* ------------------------------------------------------------------ */
   var ONB_STEPS = ['класс', 'математика', 'предметы', 'цель'];
 
-  /** Сколько предметов по выбору требует выбранный уровень математики. */
-  function extraRequired() {
+  /** Сколько предметов по выбору можно взять при выбранной математике: [мин, макс]. */
+  function extraRange() {
     var levels = (S.onb.options && S.onb.options.math_levels) || [];
     for (var i = 0; i < levels.length; i++) {
-      if (levels[i].key === S.onb.math) return levels[i].extra_required;
+      if (levels[i].key === S.onb.math) return [levels[i].extra_min, levels[i].extra_max];
     }
-    return 0;
+    return [0, 0];
+  }
+
+  /** Человеческая запись лимита: «2» или «1–2». */
+  function extraLabel() {
+    var range = extraRange();
+    return range[0] === range[1] ? String(range[1]) : range[0] + '–' + range[1];
   }
 
   function onbStepReady() {
     if (S.onb.step === 0) return !!S.onb.grade;
     if (S.onb.step === 1) return !!S.onb.math;
-    if (S.onb.step === 2) return S.onb.subjects.length === extraRequired();
+    if (S.onb.step === 2) {
+      var range = extraRange();
+      return S.onb.subjects.length >= range[0] && S.onb.subjects.length <= range[1];
+    }
     return !!S.onb.target;
   }
 
@@ -1489,13 +1498,13 @@
   }
 
   function toggleSubject(key) {
-    var limit = extraRequired();
+    var limit = extraRange()[1];
     var at = S.onb.subjects.indexOf(key);
     if (at >= 0) {
       S.onb.subjects.splice(at, 1);
     } else if (S.onb.subjects.length >= limit) {
-      toast('Нужно выбрать ровно ' + limit + ' ' + plural(limit, 'предмет', 'предмета', 'предметов') +
-            '. Снимите лишний, чтобы выбрать другой.');
+      toast('Больше ' + limit + ' ' + plural(limit, 'предмета', 'предметов', 'предметов') +
+            ' выбрать нельзя. Снимите один, чтобы выбрать другой.');
       return;
     } else {
       S.onb.subjects.push(key);
@@ -1506,9 +1515,11 @@
   function pickMath(key) {
     if (S.onb.math === key) return;
     S.onb.math = key;
-    // Лимит у уровней разный: выбранное сверх нового лимита пришлось бы отклонять
-    // при сохранении, поэтому обрезаем сразу и говорим об этом на экране.
-    S.onb.subjects = [];
+    // Выбранное не сбрасываем: лимиты у уровней пересекаются, и стирать уже
+    // отмеченные предметы из-за смены математики значит заставлять выбирать заново.
+    // Обрезаем только то, что не влезает в новый максимум.
+    var limit = extraRange()[1];
+    if (S.onb.subjects.length > limit) S.onb.subjects = S.onb.subjects.slice(0, limit);
     render();
   }
 
@@ -1586,21 +1597,21 @@
         h('div', { class: 'h2', text: 'Какую математику сдаёшь?' }),
         h('div', { class: 'sub', text: 'Русский язык сдают все — он уже в списке' }),
         h('div', { class: 'pick-list' }, options.math_levels.map(function (level) {
-          return pickItem(
-            S.onb.math === level.key, level.title,
-            'плюс ' + level.extra_required + ' ' +
-            plural(level.extra_required, 'предмет', 'предмета', 'предметов') + ' по выбору',
-            function () { pickMath(level.key); }
-          );
+          var note = level.extra_min === level.extra_max
+            ? 'плюс ' + level.extra_max + ' ' +
+              plural(level.extra_max, 'предмет', 'предмета', 'предметов') + ' по выбору'
+            : 'плюс ' + level.extra_min + ' или ' + level.extra_max + ' предмета по выбору';
+          return pickItem(S.onb.math === level.key, level.title, note, function () {
+            pickMath(level.key);
+          });
         }))
       ];
     } else if (S.onb.step === 2) {
-      var limit = extraRequired();
       body = [
         h('div', { class: 'h2', text: 'Что сдаёшь ещё?' }),
         h('div', {
           class: 'sub',
-          text: 'Выбрано ' + S.onb.subjects.length + ' из ' + limit
+          text: 'Выбрано ' + S.onb.subjects.length + ' из ' + extraLabel()
         }),
         h('div', { class: 'pick-list' }, options.subjects.map(function (subject) {
           return pickItem(
@@ -1611,7 +1622,7 @@
       ];
     } else {
       body = [
-        h('div', { class: 'h2', text: 'Какой результат нужен?' }),
+        h('div', { class: 'h2', text: 'Какой твой желаемый результат?' }),
         h('div', { class: 'sub', text: 'Сумма баллов за все экзамены' }),
         h('div', { class: 'pick-list' }, options.targets.map(function (target) {
           return pickItem(S.onb.target === target.key, target.title, '', function () {

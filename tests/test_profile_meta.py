@@ -18,15 +18,20 @@ def test_grades():
     assert pm.validate(7, pm.MATH_BASE, ["history", "physics"], "200_230") is None
 
 
-def test_profile_math_needs_exactly_one_subject():
+def test_profile_math_allows_one_or_two_subjects():
+    """Профильная сама идёт предметом по выбору, поэтому сверх неё один или два."""
     assert pm.validate(11, pm.MATH_PROFILE, ["history"], "230_260") is None
-    assert "ровно 1 предмет" in pm.validate(11, pm.MATH_PROFILE, [], "230_260")
-    assert "ровно 1 предмет" in pm.validate(11, pm.MATH_PROFILE, ["history", "physics"], "230_260")
+    assert pm.validate(11, pm.MATH_PROFILE, ["history", "physics"], "230_260") is None
+    assert "1 или 2 предмета" in pm.validate(11, pm.MATH_PROFILE, [], "230_260")
+    assert "1 или 2 предмета" in pm.validate(
+        11, pm.MATH_PROFILE, ["history", "physics", "biology"], "230_260"
+    )
 
 
 def test_base_math_needs_exactly_two_subjects():
     assert pm.validate(11, pm.MATH_BASE, ["history", "physics"], "230_260") is None
     assert "ровно 2 предмета" in pm.validate(11, pm.MATH_BASE, ["history"], "230_260")
+    assert "ровно 2 предмета" in pm.validate(11, pm.MATH_BASE, [], "230_260")
     assert "ровно 2 предмета" in pm.validate(
         11, pm.MATH_BASE, ["history", "physics", "biology"], "230_260"
     )
@@ -61,7 +66,8 @@ def test_options_payload_is_complete():
     options = pm.options_payload()
     assert options["grades"] == [7, 8, 9, 10, 11]
     assert {level["key"] for level in options["math_levels"]} == {"profile", "base"}
-    assert {level["extra_required"] for level in options["math_levels"]} == {1, 2}
+    limits = {level["key"]: (level["extra_min"], level["extra_max"]) for level in options["math_levels"]}
+    assert limits == {"profile": (1, 2), "base": (2, 2)}
     assert len(options["subjects"]) == 8
     assert [t["key"] for t in options["targets"]] == ["200_230", "230_260", "260_plus"]
     assert options["always"] == ["Русский язык"]
