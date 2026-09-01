@@ -304,14 +304,13 @@ async def scenario_variant(client):
     assert result["correct"] + result["wrong"] == 20
     assert result["skipped"] == 6
     assert result["max_raw_score"] == scoring.MAX_RAW_SCORE
-    assert result["test_score"] == scoring.test_score(result["raw_score"])
-    assert result["test_score_is_approximate"] is True
+    assert "test_score" not in result, "тестовый балл ученику не показывается"
     assert len(result["review"]) == 26
     revealed = [item for item in result["review"] if item["correct"]]
     assert len(revealed) == 26, "после завершения разбор доступен по всем заданиям"
     print(
         f"  ok  полный вариант: {result['correct']} верных, {result['skipped']} пропущено, "
-        f"первичный {result['raw_score']}/{result['max_raw_score']}, тестовый {result['test_score']}"
+        f"первичный {result['raw_score']}/{result['max_raw_score']}"
     )
     return result
 
@@ -472,7 +471,8 @@ async def scenario_stats(client, variant_result):
     assert len(stats["variants"]) == 1
     history = stats["variants"][0]
     assert history["raw_score"] == variant_result["raw_score"]
-    assert history["test_score"] == variant_result["test_score"]
+    assert history["max_raw_score"] == scoring.MAX_RAW_SCORE
+    assert "test_score" not in history
     assert history["correct"] == variant_result["correct"]
 
     empty = await client.get("/api/stats?date_from=2000-01-01&date_to=2000-12-31")

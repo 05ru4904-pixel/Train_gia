@@ -1243,12 +1243,12 @@
       ]),
       h('div', { class: 'score-grid' }, [
         h('div', { class: 'score-card score-card--accent' }, [
-          h('div', { class: 'score-card__value', text: result.test_score }),
-          h('div', { class: 'score-card__label', text: 'тестовый балл' })
-        ]),
-        h('div', { class: 'score-card' }, [
           h('div', { class: 'score-card__value', text: result.raw_score + '/' + result.max_raw_score }),
           h('div', { class: 'score-card__label', text: 'первичный балл' })
+        ]),
+        h('div', { class: 'score-card' }, [
+          h('div', { class: 'score-card__value', text: result.accuracy + '%' }),
+          h('div', { class: 'score-card__label', text: 'точность' })
         ])
       ]),
       h('div', { class: 'tiles' }, [
@@ -1256,11 +1256,6 @@
         tile(result.wrong, 'ошибок', 'tile--red'),
         tile(result.skipped, 'пропущено', '')
       ]),
-      result.test_score_is_approximate
-        ? h('div', { class: 'banner banner--amber' },
-            'Тестовый балл показан приблизительно: официальная таблица перевода ещё не '
-            + 'заполнена, а сочинение №27 в вариант не входит.')
-        : null,
       h('button', {
         class: 'btn btn--primary mt-24', type: 'button',
         onClick: function () { go('variantReview'); }
@@ -1410,13 +1405,13 @@
             }),
             h('div', {
               class: 'history-row__score',
-              text: row.test_score + ' ' + plural(row.test_score, 'балл', 'балла', 'баллов')
+              text: row.raw_score + '/' + row.max_raw_score
             })
           ]),
           h('div', { class: 'history-row__meta' }, [
             h('span', { text: formatDate(row.finished_at) }),
             h('span', { text: duration(row.time_spent) }),
-            h('span', { text: row.raw_score + '/' + row.max_raw_score + ' перв.' })
+            h('span', { text: row.correct + ' ' + plural(row.correct, 'верный', 'верных', 'верных') })
           ])
         ]);
       })));

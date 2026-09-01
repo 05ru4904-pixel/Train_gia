@@ -207,12 +207,8 @@ def result_payload(session: Session, items: list[SessionItem]) -> dict:
     if session.kind == KIND_VARIANT:
         payload["raw_score"] = session.raw_score or 0
         payload["max_raw_score"] = scoring.MAX_RAW_SCORE
-        payload["test_score"] = session.test_score or 0
         payload["time_spent"] = session.time_spent_sec or 0
         payload["time_limit"] = session.time_limit_sec
-        # Пока официальная таблица перевода не заполнена, тестовый балл считается
-        # линейным приближением — приложение обязано сказать об этом честно.
-        payload["test_score_is_approximate"] = not scoring.is_official_table_configured()
     return payload
 
 
@@ -229,7 +225,6 @@ def history_payload(sessions: list[Session]) -> list[dict]:
             "skipped": s.skipped_count or 0,
             "raw_score": s.raw_score or 0,
             "max_raw_score": scoring.MAX_RAW_SCORE,
-            "test_score": s.test_score or 0,
         }
         for s in sessions
     ]

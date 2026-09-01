@@ -543,7 +543,6 @@ async def finish_session(db, session: Session) -> Session:
             session.time_spent_sec = min(session.time_spent_sec, session.time_limit_sec)
         session.resumed_at = None
         session.raw_score = sum(i.points or 0 for i in items)
-        session.test_score = scoring.test_score(session.raw_score)
 
     await db.commit()
     return await reload_session(db, session.id)

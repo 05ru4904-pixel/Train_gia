@@ -24,17 +24,10 @@ MAX_RAW_SCORE = sum(TASK_MAX_POINTS.values())
 PARTIAL_TASKS = (8, 22)
 MAX_PARTIAL_MISTAKES = 2
 
-# ---------------------------------------------------------------------------
-# Перевод первичного балла в тестовый (100-балльную шкалу)
-# ---------------------------------------------------------------------------
-# ВНИМАНИЕ: официальной таблицы здесь НЕТ. Пока словарь пуст, используется линейная
-# шкала — это приближение, а не регламент. Чтобы включить настоящий перевод,
-# впишите сюда пары {первичный_балл: тестовый_балл} из актуального документа
-# Рособрнадзора; функция test_score() сразу начнёт брать значения отсюда.
-#
-# Отдельно учтите: без задания №27 потолок первичного балла ниже максимума за всю
-# работу, поэтому тестовый балл по официальной таблице никогда не достигнет 100.
-RAW_TO_TEST_SCORE: dict[int, int] = {}
+# Тестового балла (100-балльной шкалы) здесь намеренно нет: решением заказчика
+# ученику показывается только первичный балл — сколько набрано из 28. Перевод в
+# тестовый без задания №27 всё равно был бы приближением, а приближение в
+# результате экзамена вводит в заблуждение.
 
 
 def evaluate(selected: list[int], correct: list[int]) -> bool:
@@ -156,25 +149,6 @@ def max_points(number: int) -> int:
 def raw_score(results: dict[int, bool]) -> int:
     """Первичный балл за вариант. results: {номер задания: ответ верен}."""
     return sum(award_points(number, ok) for number, ok in results.items())
-
-
-def test_score(raw: int) -> int:
-    """Первичный балл -> тестовый (0-100)."""
-    raw = max(0, min(raw, MAX_RAW_SCORE))
-    if RAW_TO_TEST_SCORE:
-        if raw in RAW_TO_TEST_SCORE:
-            return RAW_TO_TEST_SCORE[raw]
-        # балла нет в таблице — берём ближайший меньший
-        lower = [k for k in RAW_TO_TEST_SCORE if k <= raw]
-        return RAW_TO_TEST_SCORE[max(lower)] if lower else 0
-    if MAX_RAW_SCORE == 0:
-        return 0
-    return round(raw * 100 / MAX_RAW_SCORE)
-
-
-def is_official_table_configured() -> bool:
-    """False — значит тестовый балл считается линейным приближением."""
-    return bool(RAW_TO_TEST_SCORE)
 
 
 def accuracy(correct: int, total: int) -> int:

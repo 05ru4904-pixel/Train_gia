@@ -198,7 +198,9 @@ class Session(Base):
     wrong_count: Mapped[int | None] = mapped_column(Integer)
     skipped_count: Mapped[int | None] = mapped_column(Integer)
     raw_score: Mapped[int | None] = mapped_column(Integer)
-    test_score: Mapped[int | None] = mapped_column(Integer)
+    # Тестового балла (100-балльной шкалы) в результате нет — показываем только
+    # первичный. Колонка test_score осталась в боевой базе от прошлых версий: она
+    # nullable, вставкам не мешает, и удалять её незачем.
 
     items: Mapped[list["SessionItem"]] = relationship(
         back_populates="session",

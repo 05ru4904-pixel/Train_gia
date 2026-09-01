@@ -79,33 +79,6 @@ def test_raw_score():
     assert scoring.raw_score({}) == 0
 
 
-def test_test_score_bounds_and_monotonicity():
-    assert scoring.test_score(0) == 0
-    assert scoring.test_score(-5) == 0, "отрицательный балл обрезается"
-    assert scoring.test_score(scoring.MAX_RAW_SCORE + 100) == scoring.test_score(scoring.MAX_RAW_SCORE)
-    previous = -1
-    for raw in range(scoring.MAX_RAW_SCORE + 1):
-        current = scoring.test_score(raw)
-        assert current >= previous, f"шкала не монотонна на {raw}"
-        assert 0 <= current <= 100
-        previous = current
-
-
-def test_official_table_is_used_when_filled():
-    """Как только словарь заполнят, линейная заглушка выключается."""
-    original = dict(scoring.RAW_TO_TEST_SCORE)
-    try:
-        scoring.RAW_TO_TEST_SCORE.update({0: 0, 10: 33, 20: 67, scoring.MAX_RAW_SCORE: 72})
-        assert scoring.is_official_table_configured() is True
-        assert scoring.test_score(10) == 33
-        assert scoring.test_score(15) == 33, "промежуточный балл берёт ближайший меньший"
-        assert scoring.test_score(20) == 67
-    finally:
-        scoring.RAW_TO_TEST_SCORE.clear()
-        scoring.RAW_TO_TEST_SCORE.update(original)
-    assert scoring.is_official_table_configured() is False
-
-
 def test_accuracy():
     assert scoring.accuracy(9, 12) == 75
     assert scoring.accuracy(0, 12) == 0
