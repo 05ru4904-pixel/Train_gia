@@ -199,6 +199,7 @@
     deck: null,         // состояние колоды карточек
     run: null,          // текущий подход: карточки, позиция, счёт
     learned: null,      // список выученных слов колоды
+    weak: null,         // список слабых слов: что сейчас на повторе
     dateFrom: '',
     dateTo: '',
     preset: '',
@@ -233,6 +234,7 @@
       // Уход на другую вкладку в момент загрузки списка обрывал запрос, и по
       // возвращении экран оставался скелетом навсегда. Просим заново.
       if (S.screen === 'cardsLearned' && !S.learned) openLearned();
+      if (S.screen === 'cardsWeak' && !S.weak) openWeak();
     }
     if (tab === 'stats') { S.screen = 'stats'; loadStats(); }
     if (tab === 'profile') { S.screen = 'profile'; loadProfile(); }
@@ -253,7 +255,8 @@
     deck: 'home',
     cardsRun: 'deck',
     cardsDone: 'deck',
-    cardsLearned: 'deck'
+    cardsLearned: 'deck',
+    cardsWeak: 'deck'
   };
 
   function canGoBack() {
@@ -1518,6 +1521,7 @@
     S.deck = null;
     S.run = null;
     S.learned = null;
+    S.weak = null;
     go('deck');
     loadDeck(deckId);
   }
@@ -1530,6 +1534,30 @@
     api('/api/cards/' + S.deck.id + '/learned')
       .then(function (data) { S.learned = data; render(); })
       .catch(function (error) { toast(errorText(error)); });
+  }
+
+  /** Слабые слова: что сейчас на повторе. Таймеры идут — берём свежее. */
+  function openWeak() {
+    if (!S.deck) return;
+    S.weak = null;
+    go('cardsWeak');
+    api('/api/cards/' + S.deck.id + '/weak')
+      .then(function (data) { S.weak = data; render(); })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  /** Повторение открыто не всегда, но кнопка нажимается всегда: молча
+   *  неработающая кнопка читается как поломка, а окно объясняет причину. */
+  function startRepeat() {
+    if (S.deck && !S.deck.can_repeat) {
+      showDialog({
+        title: 'Ещё рано',
+        text: REPEAT_LOCKED,
+        actions: [{ label: 'Понятно', kind: 'primary' }]
+      });
+      return;
+    }
+    startRun('repeat');
   }
 
   /** «через 3 ч 20 мин» — сколько осталось до момента из ISO-строки. */
@@ -1638,6 +1666,7 @@
               .then(function () {
                 toast('Прогресс сброшен');
                 S.learned = null;
+                S.weak = null;
                 return loadDeck(S.deck.id);
               })
               .catch(function (error) { toast(errorText(error)); });
@@ -1662,6 +1691,45 @@
   /** Слово с выделенной ударной буквой — крупно, на карточке. */
   function stressedWord(card) {
     return h('div', { class: 'card-word' }, stressedNodes(card));
+  }
+
+  /**
+   * Кольцо из трёх сегментов — путь слова: 8 часов, 24 часа, выучено.
+   * Заполненных сегментов столько, сколько этапов позади, поэтому ученик видит
+   * прогресс, не читая ни одной цифры.
+   *
+   * Рисуется conic-gradient, а не картинкой: колец на экране до двух сотен,
+   * и каждое должно быть лёгким.
+   */
+  function stageRing(filled, tone, label) {
+    var stops = [];
+    for (var index = 0; index < 3; index++) {
+      var from = index * 120;
+      var color = index < filled ? tone : 'var(--ring-track)';
+      // Сегмент 111 градусов, следом просвет: без него три части сливаются в круг.
+      stops.push(color + ' ' + from + 'deg ' + (from + 111) + 'deg');
+      stops.push('transparent ' + (from + 111) + 'deg ' + (from + 120) + 'deg');
+    }
+    return h('div', {
+      class: 'ring',
+      style: 'background:conic-gradient(' + stops.join(',') + ')'
+    }, h('div', { class: 'ring__label', text: label }));
+  }
+
+  var STAGES = {
+    wait8: { filled: 1, tone: 'var(--ring-8)', label: '8ч' },
+    wait24: { filled: 2, tone: 'var(--ring-24)', label: '24ч' }
+  };
+
+  /** Строка списка: слово с ударением слева, метка и кольцо справа. */
+  function wordRow(card, ring, badge) {
+    return h('div', { class: 'word-row' }, [
+      h('div', { class: 'word-row__body' }, [
+        h('div', { class: 'word-row__word' }, stressedNodes(card)),
+        card.hint ? h('div', { class: 'word-row__hint', text: card.hint }) : null
+      ]),
+      h('div', { class: 'word-row__side' }, [badge || null, ring])
+    ]);
   }
 
   function screenDeck() {
@@ -1693,9 +1761,12 @@
         }, deck.fresh ? 'Учить новые слова' : 'Новых слов нет'),
         h('button', {
           class: 'btn ' + (deck.fresh ? 'btn--ghost' : 'btn--primary'), type: 'button',
-          disabled: !deck.can_repeat,
-          onClick: function () { startRun('repeat'); }
+          onClick: startRepeat
         }, deck.can_repeat ? 'Повторить (' + deck.ready + ')' : 'Повторить'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button', disabled: !deck.repeat,
+          onClick: openWeak
+        }, deck.repeat ? 'Слабые слова (' + deck.repeat + ')' : 'Слабых слов пока нет'),
         h('button', {
           class: 'btn btn--ghost', type: 'button', disabled: !deck.learned,
           onClick: openLearned
@@ -1708,15 +1779,10 @@
 
       !deck.fresh ? h('div', { class: 'banner' }, NO_MORE_NEW) : null,
 
-      // Пока повторение закрыто, ученик должен понимать, чего он ждёт: иначе
-      // неработающая кнопка читается как поломка.
-      !deck.can_repeat
-        ? h('div', { class: 'banner' }, [
-            REPEAT_LOCKED,
-            deck.repeat ? h('div', { class: 'banner__note', text: waitLine }) : null
-          ])
-        : h('div', { class: 'banner' },
+      deck.can_repeat
+        ? h('div', { class: 'banner' },
             'Готово к повтору: ' + deck.ready + '. В подходе до ' + deck.size + ' слов.')
+        : (deck.repeat ? h('div', { class: 'banner' }, waitLine) : null)
     ]);
   }
 
@@ -1823,6 +1889,38 @@
     ]);
   }
 
+  /** Слабые слова: что сейчас на повторе, с этапом и готовностью. */
+  function screenCardsWeak() {
+    var data = S.weak;
+    if (!data) return screenLoading();
+
+    if (!data.cards.length) {
+      return h('div', { class: 'page' }, [
+        h('div', { class: 'empty' }, [
+          h('div', { class: 'empty__title', text: 'Слабых слов нет' }),
+          h('div', {
+            class: 'empty__note',
+            text: 'Сюда попадают слова, на которых ты нажал «Не знаю». Пока таких нет — '
+              + 'значит, всё, что видел, уже закрыто.'
+          })
+        ])
+      ]);
+    }
+
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'h2', text: 'На повторе ' + data.repeat + ' слов' }),
+      h('div', { class: 'sub', text: 'Готово к повтору: ' + data.ready }),
+      h('div', { class: 'word-list' }, data.cards.map(function (card) {
+        var stage = STAGES[card.stage] || STAGES.wait8;
+        var ring = stageRing(stage.filled, stage.tone, card.ready ? 'Го!' : stage.label);
+        var badge = card.ready
+          ? h('span', { class: 'ready-badge', text: 'Можно повторять!' })
+          : null;
+        return wordRow(card, ring, badge);
+      }))
+    ]);
+  }
+
   /** Выученные слова: список только посмотреть, вернуть слово в учёбу нельзя. */
   function screenCardsLearned() {
     var data = S.learned;
@@ -1844,11 +1942,8 @@
     return h('div', { class: 'page' }, [
       h('div', { class: 'h2', text: 'Выучено ' + data.learned + ' из ' + data.total }),
       h('div', { class: 'sub', text: 'Сверху те, что закрыты последними' }),
-      h('div', { class: 'learned-list' }, data.cards.map(function (card) {
-        return h('div', { class: 'learned-item' }, [
-          h('div', { class: 'learned-item__word' }, stressedNodes(card)),
-          card.hint ? h('div', { class: 'learned-item__hint', text: card.hint }) : null
-        ]);
+      h('div', { class: 'word-list' }, data.cards.map(function (card) {
+        return wordRow(card, stageRing(3, 'var(--ring-done)', '✓'), null);
       }))
     ]);
   }
@@ -2309,7 +2404,8 @@
     deck: ['Карточки', 'запоминаем словами'],
     cardsRun: ['Карточки', 'вспомни и проверь'],
     cardsDone: ['Карточки', 'итог подхода'],
-    cardsLearned: ['Выученные слова', 'закрытые карточки']
+    cardsLearned: ['Выученные слова', 'закрытые карточки'],
+    cardsWeak: ['Слабые слова', 'что ещё на повторе']
   };
 
   var lastViewKey = null;
@@ -2388,7 +2484,8 @@
         deck: screenDeck,
         cardsRun: screenCardsRun,
         cardsDone: screenCardsDone,
-        cardsLearned: screenCardsLearned
+        cardsLearned: screenCardsLearned,
+        cardsWeak: screenCardsWeak
       };
       node = (screens[S.screen] || screenHome)();
     }

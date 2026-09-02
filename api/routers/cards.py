@@ -129,6 +129,40 @@ async def deck_state(deck_id: str, user: CurrentUser, db: DbSession) -> dict:
     return _deck_payload(deck, progress, crud.utcnow())
 
 
+@router.get("/cards/{deck_id}/weak")
+async def weak(deck_id: str, user: CurrentUser, db: DbSession) -> dict:
+    """Слабые слова — то, что сейчас на повторе, с этапом и таймером.
+
+    Порядок — по мере попадания в список: строка заводится первым «Не знаю» и
+    больше не пересоздаётся, так что её номер и есть очерёдность.
+    """
+    deck = _deck_or_404(deck_id)
+    now = crud.utcnow()
+    progress = await crud.card_progress(db, user.id, deck.id)
+
+    rows = []
+    for card in cards_meta.cards(deck.id):
+        state = progress.get(card.key)
+        if state is not None and not state.learned:
+            rows.append((card, state))
+    rows.sort(key=lambda pair: pair[1].row_id)
+
+    return {
+        "deck": deck.id,
+        "title": deck.title,
+        "cards": [
+            dict(
+                card.payload(),
+                stage=state.status,
+                ready=state.ready(now),
+                due_at=as_utc(state.due_at).isoformat() if state.due_at else None,
+            )
+            for card, state in rows
+        ],
+        **_counts(deck.id, progress, now),
+    }
+
+
 @router.get("/cards/{deck_id}/learned")
 async def learned(deck_id: str, user: CurrentUser, db: DbSession) -> dict:
     """Выученные слова — список, который ученик открывает посмотреть.

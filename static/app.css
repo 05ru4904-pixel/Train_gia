@@ -34,6 +34,14 @@
   --amber-bg: oklch(0.97 0.03 80);
   --amber-ink: oklch(0.45 0.09 70);
 
+  /* Кольцо этапов. Оранжевый и жёлтый разведены и по тону, и по светлоте —
+     рядом на телефоне похожие оттенки сливаются. */
+  --ring-track: oklch(0.9 0.008 250);
+  --ring-8: oklch(0.66 0.17 45);
+  --ring-24: oklch(0.83 0.16 95);
+  --ring-done: oklch(0.62 0.14 150);
+  --ready-bg: oklch(0.66 0.13 245);
+
   --surface: #fff;
   --surface-2: oklch(0.97 0.004 250);
   --surface-3: oklch(0.96 0.008 250);
@@ -755,22 +763,66 @@ button {
 
 .card-actions { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-/* Список выученных слов. Ударная буква выделена тем же цветом, что и на
-   карточке: список читают как шпаргалку, а не как отчёт. */
-.learned-list { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
-.learned-item {
+/* Списки слов — слабые и выученные. Ударная буква выделена тем же цветом, что и
+   на карточке: список читают как шпаргалку, а не как отчёт. */
+.word-list { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
+.word-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 12px 14px;
   border-radius: var(--radius);
   background: var(--surface-2);
 }
-.learned-item__word {
+.word-row__body { flex: 1; min-width: 0; }
+.word-row__word {
   font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--ink-strong);
   word-break: break-word;
 }
-.learned-item__hint { margin-top: 3px; font-size: 12.5px; font-weight: 600; color: var(--muted-2); line-height: 1.45; }
+.word-row__hint { margin-top: 3px; font-size: 12.5px; font-weight: 600; color: var(--muted-2); line-height: 1.45; }
+.word-row__side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* Плашка у созревшего слова. Синяя, а не зелёная: зелёный в этом экране уже
+   занят выученными, и два зелёных смысла читались бы как один. */
+.ready-badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--ready-bg);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Кольцо из трёх сегментов: сколько этапов слово прошло. Сама заливка —
+   conic-gradient из JS, здесь только размеры и дырка посередине. */
+.ring {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+.ring::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--surface-2);
+}
+.ring__label {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
 
 .tiles--two { grid-template-columns: 1fr 1fr; }
 

@@ -690,8 +690,11 @@ class CardState:
 
     `status` — этап: ждёт 8 часов, ждёт 24 часа или выучено.
     `due_at` — когда слово можно показать снова. У выученных пусто.
+    `row_id` — номер строки. Строка заводится при первом «Не знаю» и больше не
+    пересоздаётся, поэтому по нему видно, в каком порядке слова попали в список.
     """
 
+    row_id: int
     status: str
     shows: int
     due_at: datetime | None
@@ -711,13 +714,14 @@ class CardState:
 async def card_progress(db, user_id: int, deck: str) -> dict[str, CardState]:
     """Слово -> состояние. Слов, которых ученик не видел, в словаре нет."""
     rows = await db.execute(
-        select(CardProgress.card, CardProgress.status, CardProgress.seen_count,
-               CardProgress.due_at, CardProgress.updated_at)
+        select(CardProgress.id, CardProgress.card, CardProgress.status,
+               CardProgress.seen_count, CardProgress.due_at, CardProgress.updated_at)
         .where(CardProgress.user_id == user_id, CardProgress.deck == deck)
     )
     return {
-        card: CardState(status=status, shows=seen or 0, due_at=due, updated_at=updated)
-        for card, status, seen, due, updated in rows.all()
+        card: CardState(row_id=row_id, status=status, shows=seen or 0,
+                        due_at=due, updated_at=updated)
+        for row_id, card, status, seen, due, updated in rows.all()
     }
 
 
