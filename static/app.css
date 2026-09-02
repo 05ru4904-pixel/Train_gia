@@ -483,6 +483,8 @@ button {
 }
 .banner--green { background: var(--green-bg); color: oklch(0.45 0.08 150); }
 .banner--amber { background: var(--amber-bg); color: var(--amber-ink); text-align: left; line-height: 1.45; }
+/* Вторая строка подсказки: цифры под текстом — сколько готово и сколько ждать. */
+.banner__note { margin-top: 6px; font-size: 12.5px; font-weight: 700; color: var(--muted-2); }
 
 .answer-line {
   padding: 13px 14px;
@@ -711,6 +713,14 @@ button {
 .deck-stat__label { margin-top: 2px; font-size: 11.5px; font-weight: 600; color: var(--muted-2); }
 
 .card-top { display: flex; align-items: baseline; justify-content: space-between; }
+/* Круг добивки в «Повторить»: слова, которые не дались, идут по второму разу. */
+.card-round {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--amber-ink);
+}
 .card-top__count { font-size: 13px; font-weight: 800; color: var(--accent); }
 .card-top__group { font-size: 12.5px; font-weight: 600; color: var(--muted-2); }
 

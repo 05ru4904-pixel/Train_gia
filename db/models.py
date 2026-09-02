@@ -266,19 +266,23 @@ class SessionItem(Base):
 
 
 # --- карточки ------------------------------------------------------------------
-# Статусы карточки у конкретного ученика. Строки прежние — база уже с ними живёт,
-# а смысл теперь другой, и он важнее названий:
-#   known   — слово выучено, больше не показывается; лежит в списке «Выученные»;
-#   unknown — слово в работе, ждёт своей очереди на повтор.
-# Одного «Знаю» мало: слово, однажды отложенное, закрывается только после двух
-# повторов — правило целиком лежит в `crud.mark_card`.
-CARD_KNOWN = "known"
-CARD_UNKNOWN = "unknown"
+# Путь слова: новое (строки в таблице ещё нет) -> ждёт 8 часов -> ждёт 24 часа ->
+# выучено. Двигает слово только ответ «Знаю», и только в тренажёре «Повторить».
+CARD_WAIT_8 = "wait8"
+CARD_WAIT_24 = "wait24"
+CARD_LEARNED = "learned"
 
-# Сколько раз слово должно показаться после того, как ученик отложил его в повтор.
-# Долг отрабатывается до конца, даже если внутри него ученик нажал «Знаю»:
-# вспомнил один раз — ещё не выучил.
-CARD_REPEAT_DEBT = 2
+# Пауза перед показом. Первая короткая — слово ещё держится в памяти и его надо
+# успеть поймать; вторая длинная — вспомнить через сутки уже что-то значит.
+CARD_HOURS_FIRST = 8
+CARD_HOURS_SECOND = 24
+
+# На какой этап переводит ответ «Знаю» и сколько после него ждать.
+CARD_NEXT_STAGE = {
+    None: (CARD_LEARNED, None),                    # новое слово, «Знаю» в основном
+    CARD_WAIT_8: (CARD_WAIT_24, CARD_HOURS_SECOND),
+    CARD_WAIT_24: (CARD_LEARNED, None),
+}
 
 
 class CardProgress(Base):
@@ -300,12 +304,17 @@ class CardProgress(Base):
     # Ключ карточки: слово в нижнем регистре. Правка подсказки в файле прогресс
     # не сбрасывает, правка самого слова — заводит новую карточку, и это честно.
     card: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default=CARD_UNKNOWN)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=CARD_WAIT_8)
     # Сколько раз карточка показывалась — по нему видно, что даётся тяжело.
     seen_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Когда слово можно показать снова. У выученных пусто — их не показывают
+    # вовсе. Это и есть таймер: 8 часов после первого «не знаю», 24 после повтора.
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         UniqueConstraint("user_id", "deck", "card", name="uq_card_progress"),
         Index("ix_card_progress_user_deck", "user_id", "deck"),
+        # Подход «Повторить» ищет слова с истёкшим сроком — по этому индексу.
+        Index("ix_card_progress_due", "user_id", "deck", "due_at"),
     )

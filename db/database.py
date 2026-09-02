@@ -67,6 +67,9 @@ _MIGRATIONS = (
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS skipped_count INTEGER",
     "ALTER TABLE session_items ADD COLUMN IF NOT EXISTS points INTEGER",
     "ALTER TABLE session_items ADD COLUMN IF NOT EXISTS typed TEXT",
+    # Таймер карточки: когда слово можно показать снова. Таблица создана
+    # create_all раньше этой колонки, поэтому нужен ALTER.
+    "ALTER TABLE card_progress ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ",
 )
 
 # Postgres не индексирует внешние ключи сам (playbook 3.4). Индексы описаны и в
@@ -80,6 +83,7 @@ _INDEXES = (
     "CREATE INDEX IF NOT EXISTS ix_session_items_session ON session_items (session_id)",
     "CREATE INDEX IF NOT EXISTS ix_session_items_stats ON session_items (session_id, task_number)",
     "CREATE INDEX IF NOT EXISTS ix_variant_items_variant ON variant_items (variant_id)",
+    "CREATE INDEX IF NOT EXISTS ix_card_progress_due ON card_progress (user_id, deck, due_at)",
 )
 
 

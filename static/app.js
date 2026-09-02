@@ -1503,6 +1503,11 @@
   /* ------------------------------------------------------------------ */
   var DECK_ACCENTS = 'accents';
 
+  // Формулировки согласованы с методикой — менять только вместе с ней.
+  var REPEAT_LOCKED = 'Ты сможешь повторить, когда хотя бы у 5 слов истечет таймер. '
+    + 'Это самая рабочая методика заучивания';
+  var NO_MORE_NEW = 'Ты разобрал все возможные слова';
+
   function loadDeck(deckId) {
     return api('/api/cards/' + deckId)
       .then(function (data) { S.deck = data; render(); return data; })
@@ -1527,23 +1532,40 @@
       .catch(function (error) { toast(errorText(error)); });
   }
 
+  /** «через 3 ч 20 мин» — сколько осталось до момента из ISO-строки. */
+  function untilText(iso) {
+    if (!iso) return '';
+    var left = new Date(iso).getTime() - Date.now();
+    if (!(left > 0)) return '';
+    var minutes = Math.ceil(left / 60000);
+    if (minutes < 60) return 'через ' + minutes + ' мин';
+    var hours = Math.floor(minutes / 60);
+    var rest = minutes % 60;
+    return 'через ' + hours + ' ч' + (rest ? ' ' + rest + ' мин' : '');
+  }
+
   function startRun(mode) {
     if (!S.deck) return;
     api('/api/cards/' + S.deck.id + '/session?mode=' + mode)
       .then(function (data) {
         if (!data.cards.length) {
-          toast(mode === 'repeat'
-            ? 'Повторять нечего — отложенных слов не осталось.'
-            : 'Колода пройдена: все слова выучены. Сбросьте прогресс, чтобы начать заново.');
+          toast(mode === 'repeat' ? REPEAT_LOCKED : NO_MORE_NEW);
           return;
         }
         S.run = {
           mode: mode,
-          cards: data.cards,
+          total: data.cards.length,
+          queue: data.cards.slice(),
+          again: [],          // слова, которые вернутся здесь же, в этом подходе
           at: 0,
-          shown: false,     // перевёрнута ли текущая карточка
+          round: 1,
+          shown: false,       // перевёрнута ли текущая карточка
+          shows: 0,
           known: 0,
-          repeat: 0
+          unknown: 0,
+          // Сколько было выучено до подхода: разницей считаем, сколько закрылось.
+          // Так цифра не зависит от того, успели ли долететь ответы сервера.
+          learnedBefore: S.deck.learned || 0
         };
         go('cardsRun');
       })
@@ -1552,7 +1574,7 @@
 
   function currentCard() {
     if (!S.run) return null;
-    return S.run.cards[S.run.at] || null;
+    return S.run.queue[S.run.at] || null;
   }
 
   function revealCard() {
@@ -1566,25 +1588,39 @@
     var card = currentCard();
     if (!run || !card) return;
 
-    if (known) run.known += 1; else run.repeat += 1;
+    run.shows += 1;
+    if (known) run.known += 1; else run.unknown += 1;
+
     // Отправляем и идём дальше, не дожидаясь ответа сервера: подход не должен
-    // спотыкаться о сеть. Ошибку показываем, но карточку не возвращаем — статус
-    // выставится заново, когда слово выпадет в следующий раз.
+    // спотыкаться о сеть. Ошибку показываем, но карточку не возвращаем.
     var sent = api('/api/cards/' + S.deck.id + '/answer', {
       method: 'POST',
       body: { card: card.key, known: known }
     }).catch(function (error) { toast(errorText(error)); });
 
+    // В «Повторить» слово, которое ученик не вспомнил, возвращается тут же и
+    // будет возвращаться, пока он не ответит «Знаю». В основном тренажёре
+    // проход один: там «Не знаю» просто откладывает слово на восемь часов.
+    if (!known && run.mode === 'repeat') run.again.push(card);
+
     run.at += 1;
     run.shown = false;
-    if (run.at >= run.cards.length) {
-      go('cardsDone');
-      // Счётчики колоды берём после того, как записан последний ответ. Иначе два
-      // запроса летят наперегонки, и итог подхода показывает на слово меньше.
-      sent.then(function () { return loadDeck(S.deck.id); });
+
+    if (run.at < run.queue.length) { render(); return; }
+
+    if (run.again.length) {
+      run.queue = run.again;
+      run.again = [];
+      run.at = 0;
+      run.round += 1;
+      render();
       return;
     }
-    render();
+
+    go('cardsDone');
+    // Счётчики колоды берём после того, как записан последний ответ. Иначе два
+    // запроса летят наперегонки, и итог подхода показывает на слово меньше.
+    sent.then(function () { return loadDeck(S.deck.id); });
   }
 
   function resetDeck() {
@@ -1592,8 +1628,8 @@
     showDialog({
       title: 'Сбросить всю колоду?',
       text: 'Будет стёрт весь прогресс: ' + (deck.learned || 0) + ' выученных слов и '
-        + (deck.repeat || 0) + ' отложенных. Колода начнётся с нуля, все ' + (deck.total || 0)
-        + ' слов снова станут новыми. Вернуть это будет нельзя.',
+        + (deck.repeat || 0) + ' отложенных вместе с их таймерами. Все '
+        + (deck.total || 0) + ' слов снова станут новыми. Вернуть это будет нельзя.',
       actions: [
         { label: 'Отмена', kind: 'ghost' },
         {
@@ -1632,6 +1668,11 @@
     var deck = S.deck;
     if (!deck) return screenLoading();
     var done = deck.total ? Math.round(deck.learned * 100 / deck.total) : 0;
+
+    var waitLine = 'Готово ' + deck.ready + ' из ' + deck.repeat_min;
+    var until = untilText(deck.ready_at);
+    if (until) waitLine += ', пятое — ' + until;
+
     return h('div', { class: 'page' }, [
       h('div', { class: 'h2', text: deck.title }),
       h('div', { class: 'sub', text: deck.subtitle }),
@@ -1646,19 +1687,15 @@
       ]),
 
       h('div', { class: 'stack mt-24' }, [
-        // Пока есть новые слова, главная кнопка ведёт вперёд. Когда они кончились,
-        // её место занимает повтор: две кнопки с одним действием ученику не нужны.
-        deck.fresh
-          ? h('button', {
-              class: 'btn btn--primary', type: 'button',
-              onClick: function () { startRun('new'); }
-            }, 'Учить дальше')
-          : null,
+        h('button', {
+          class: 'btn btn--primary', type: 'button', disabled: !deck.fresh,
+          onClick: function () { startRun('new'); }
+        }, deck.fresh ? 'Учить новые слова' : 'Новых слов нет'),
         h('button', {
           class: 'btn ' + (deck.fresh ? 'btn--ghost' : 'btn--primary'), type: 'button',
-          disabled: !deck.repeat,
+          disabled: !deck.can_repeat,
           onClick: function () { startRun('repeat'); }
-        }, deck.repeat ? 'Повторить отложенные (' + deck.repeat + ')' : 'Повторять нечего'),
+        }, deck.can_repeat ? 'Повторить (' + deck.ready + ')' : 'Повторить'),
         h('button', {
           class: 'btn btn--ghost', type: 'button', disabled: !deck.learned,
           onClick: openLearned
@@ -1669,10 +1706,17 @@
         }, 'Сбросить прогресс')
       ]),
 
-      h('div', { class: 'banner' },
-        'В подходе десять слов: шесть новых и четыре на повтор. «Знаю» на новом слове '
-        + 'закрывает его сразу. «Повторить» ставит слово в очередь: оно вернётся ещё '
-        + 'дважды и уйдёт в выученные, только если на последнем показе ты его вспомнишь.')
+      !deck.fresh ? h('div', { class: 'banner' }, NO_MORE_NEW) : null,
+
+      // Пока повторение закрыто, ученик должен понимать, чего он ждёт: иначе
+      // неработающая кнопка читается как поломка.
+      !deck.can_repeat
+        ? h('div', { class: 'banner' }, [
+            REPEAT_LOCKED,
+            deck.repeat ? h('div', { class: 'banner__note', text: waitLine }) : null
+          ])
+        : h('div', { class: 'banner' },
+            'Готово к повтору: ' + deck.ready + '. В подходе до ' + deck.size + ' слов.')
     ]);
   }
 
@@ -1688,11 +1732,19 @@
     var card = currentCard();
     if (!run || !card) return screenLoading();
 
+    var counter = run.round === 1
+      ? (run.at + 1) + ' / ' + run.total
+      : 'осталось ' + (run.queue.length - run.at);
+
     return h('div', { class: 'page' }, [
       h('div', { class: 'card-top' }, [
-        h('div', { class: 'card-top__count', text: (run.at + 1) + ' / ' + run.cards.length }),
+        h('div', { class: 'card-top__count', text: counter }),
         h('div', { class: 'card-top__group', text: card.group })
       ]),
+
+      run.round > 1
+        ? h('div', { class: 'card-round', text: 'Возвращаем слова, которые не дались' })
+        : null,
 
       h('div', { class: 'flashcard' + (run.shown ? ' is-open' : '') }, [
         run.shown
@@ -1711,7 +1763,7 @@
             h('button', {
               class: 'btn btn--ghost', type: 'button',
               onClick: function () { answerCard(false); }
-            }, 'Повторить'),
+            }, 'Не знаю'),
             h('button', {
               class: 'btn btn--primary', type: 'button',
               onClick: function () { answerCard(true); }
@@ -1724,32 +1776,50 @@
   }
 
   function screenCardsDone() {
-    var run = S.run || { known: 0, repeat: 0, cards: [] };
+    var run = S.run || { mode: 'new', total: 0, shows: 0, known: 0, unknown: 0, learnedBefore: 0 };
     var deck = S.deck || {};
+    var closed = Math.max(0, (deck.learned || 0) - run.learnedBefore);
+    var repeatMode = run.mode === 'repeat';
+
     return h('div', { class: 'page' }, [
       h('div', { style: 'text-align:center' }, [
         h('div', { class: 'h2', text: 'Подход пройден' }),
-        h('div', { class: 'sub', text: 'Слов в подходе: ' + run.cards.length })
+        h('div', { class: 'sub', text: 'Слов в подходе: ' + run.total })
       ]),
-      h('div', { class: 'tiles tiles--two' }, [
-        tile(run.known, 'знаю', 'tile--green'),
-        tile(run.repeat, 'на повтор', run.repeat ? 'tile--red' : '')
-      ]),
+
+      repeatMode
+        ? h('div', { class: 'tiles tiles--two' }, [
+            tile(closed, 'выучено', closed ? 'tile--green' : ''),
+            tile(run.shows, 'показов', '')
+          ])
+        : h('div', { class: 'tiles tiles--two' }, [
+            tile(run.known, 'знаю', 'tile--green'),
+            tile(run.unknown, 'не знаю', run.unknown ? 'tile--red' : '')
+          ]),
+
       h('div', { class: 'stack mt-24' }, [
-        h('button', {
-          class: 'btn btn--primary', type: 'button',
-          onClick: function () { startRun(deck.fresh ? 'new' : 'repeat'); }
-        }, deck.fresh ? 'Ещё подход' : 'Повторить отложенные'),
+        deck.fresh
+          ? h('button', {
+              class: 'btn btn--primary', type: 'button',
+              onClick: function () { startRun('new'); }
+            }, 'Ещё подход')
+          : null,
+        deck.can_repeat
+          ? h('button', {
+              class: 'btn ' + (deck.fresh ? 'btn--ghost' : 'btn--primary'), type: 'button',
+              onClick: function () { startRun('repeat'); }
+            }, 'Повторить (' + deck.ready + ')')
+          : null,
         h('button', {
           class: 'btn btn--ghost', type: 'button',
           onClick: function () { go('deck'); loadDeck(S.deck.id); }
         }, 'К колоде')
       ]),
-      deck.total
-        ? h('div', { class: 'banner' },
-            'Выучено ' + deck.learned + ' из ' + deck.total + ' слов колоды. Отложенные '
-            + 'слова вернутся в следующих подходах.')
-        : null
+
+      h('div', { class: 'banner' }, repeatMode
+        ? 'Слова, которые ты вспомнил, вернутся через сутки — а после этого уйдут '
+          + 'в выученные.'
+        : 'Слова, которые не дались, вернутся через 8 часов в разделе «Повторить».')
     ]);
   }
 
@@ -1765,7 +1835,7 @@
           h('div', {
             class: 'empty__note',
             text: 'Сюда попадают слова, которые ты закрыл: сразу — если нажал «Знаю» '
-              + 'на новом слове, или после двух повторов.'
+              + 'на новом слове, или после двух повторов по таймеру.'
           })
         ])
       ]);
@@ -2252,7 +2322,7 @@
       if (S.session.question) parts.push(S.session.question.position);
     }
     if (S.screen === 'mistake') parts.push(S.reviewPosition);
-    if (S.run) parts.push(S.run.at, S.run.shown);
+    if (S.run) parts.push(S.run.at, S.run.shown, S.run.round);
     if (S.result) parts.push(S.result.id);
     return parts.join('|');
   }
@@ -2268,7 +2338,9 @@
       title = ['Шпаргалка · №' + S.sheet.number, S.sheet.title];
     }
     if (S.screen === 'cardsRun' && S.run) {
-      title = ['Карточки · ' + (S.run.at + 1) + '/' + S.run.cards.length, 'вспомни и проверь'];
+      title = S.run.round > 1
+        ? ['Карточки · добиваем', 'пока не вспомнишь']
+        : ['Карточки · ' + (S.run.at + 1) + '/' + S.run.total, 'вспомни и проверь'];
     }
     dom.title.textContent = title[0];
     dom.sub.textContent = title[1];

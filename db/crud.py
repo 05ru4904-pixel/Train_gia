@@ -1,6 +1,6 @@
 """Операции с базой. Вся работа с сессиями SQLAlchemy собрана здесь."""
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import noload
@@ -10,9 +10,10 @@ from core import scoring
 from core.parser import ParsedTask, generate_task_id
 from core.tasks_meta import LAST_TASK, RENDERABLE_KINDS, TASK_NUMBERS
 from db.models import (
-    CARD_KNOWN,
-    CARD_REPEAT_DEBT,
-    CARD_UNKNOWN,
+    CARD_HOURS_FIRST,
+    CARD_LEARNED,
+    CARD_NEXT_STAGE,
+    CARD_WAIT_8,
     KIND_CHOICE,
     KIND_DIGITS,
     KIND_MATCH,
@@ -677,63 +678,70 @@ MAX_TASK_NUMBER = LAST_TASK
 # --------------------------------------------------------------------------- #
 # Карточки
 # --------------------------------------------------------------------------- #
+def as_utc(moment: datetime) -> datetime:
+    """Время с поясом. SQLite отдаёт без пояса, Postgres — с ним, и сравнивать
+    смешанное python не даёт."""
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
 @dataclass(frozen=True)
 class CardState:
     """Что известно про одно слово у одного ученика.
 
-    `shows` — сколько раз слово ему показывали, считая самый первый показ, когда
-    оно было новым. По нему слово попадает в свою очередь на повтор.
-    `updated_at` — когда ученик ответил в последний раз. Это ключ очерёдности:
-    кто ответил раньше, тот раньше и вернётся.
+    `status` — этап: ждёт 8 часов, ждёт 24 часа или выучено.
+    `due_at` — когда слово можно показать снова. У выученных пусто.
     """
 
     status: str
     shows: int
+    due_at: datetime | None
     updated_at: datetime | None
 
     @property
     def learned(self) -> bool:
-        return self.status == CARD_KNOWN
+        return self.status == CARD_LEARNED
+
+    def ready(self, now: datetime) -> bool:
+        """Истёк ли таймер. Слово без таймера ждать не должно — покажем сразу."""
+        if self.learned:
+            return False
+        return self.due_at is None or as_utc(self.due_at) <= now
 
 
 async def card_progress(db, user_id: int, deck: str) -> dict[str, CardState]:
     """Слово -> состояние. Слов, которых ученик не видел, в словаре нет."""
     rows = await db.execute(
         select(CardProgress.card, CardProgress.status, CardProgress.seen_count,
-               CardProgress.updated_at)
+               CardProgress.due_at, CardProgress.updated_at)
         .where(CardProgress.user_id == user_id, CardProgress.deck == deck)
     )
     return {
-        card: CardState(status=status, shows=seen or 0, updated_at=updated)
-        for card, status, seen, updated in rows.all()
+        card: CardState(status=status, shows=seen or 0, due_at=due, updated_at=updated)
+        for card, status, seen, due, updated in rows.all()
     }
 
 
-def resolve_status(known: bool, shows: int, was_new: bool) -> str:
-    """Куда слово уходит после ответа. Здесь всё правило целиком.
+def next_stage(status: str | None, now: datetime) -> tuple[str, datetime | None]:
+    """Куда «Знаю» переводит слово и до какого времени его прятать.
 
-    * новое слово и «Знаю» — сразу выучено, повторять нечего;
-    * новое слово и «Повторить» — берёт долг в два показа;
-    * слово в работе — закрывается только когда позади минимум два повтора
-      И последний ответ был «Знаю».
-
-    Отсюда и разбор случая, который иначе кажется странным: «Повторить», потом
-    «Знаю», потом снова «Повторить» — слово не выучено. Ученик вспомнил его один
-    раз из трёх, и долг он этим не закрыл.
+    Новое -> сразу выучено. Ждёт 8 часов -> ждёт 24. Ждёт 24 -> выучено.
     """
-    if was_new:
-        return CARD_KNOWN if known else CARD_UNKNOWN
-    if known and shows - 1 >= CARD_REPEAT_DEBT:
-        return CARD_KNOWN
-    return CARD_UNKNOWN
+    stage, hours = CARD_NEXT_STAGE.get(status, (CARD_LEARNED, None))
+    return stage, None if hours is None else now + timedelta(hours=hours)
 
 
-async def mark_card(db, user_id: int, deck: str, card: str, known: bool) -> None:
-    """Отмечает ответ по карточке и решает, выучено слово или ждёт повтора.
+async def mark_card(db, user_id: int, deck: str, card: str, known: bool) -> str:
+    """Записывает ответ и возвращает этап слова после него.
 
     Пишем сразу, а не в конце подхода: ученик закрывает Mini App на середине
     постоянно, и терять при этом отмеченное нельзя.
+
+    «Не знаю» по слову, которое уже в списке повтора, не меняет ни этапа, ни
+    таймера — слово вернётся в этом же подходе и будет возвращаться, пока ученик
+    его не вспомнит. Выход из приложения на середине не должен ни обнулять
+    таймер, ни двигать слово вперёд.
     """
+    now = utcnow()
     rows = await db.execute(
         select(CardProgress).where(
             CardProgress.user_id == user_id,
@@ -743,14 +751,16 @@ async def mark_card(db, user_id: int, deck: str, card: str, known: bool) -> None
     )
     row = rows.scalar_one_or_none()
     if row is None:
+        # Слово из основного тренажёра: раньше его не показывали.
+        stage, due = next_stage(None, now) if known else (CARD_WAIT_8,
+                                                          now + timedelta(hours=CARD_HOURS_FIRST))
         db.add(CardProgress(
             user_id=user_id, deck=deck, card=card,
-            status=resolve_status(known, shows=1, was_new=True),
-            seen_count=1, updated_at=utcnow(),
+            status=stage, seen_count=1, due_at=due, updated_at=now,
         ))
         try:
             await db.commit()
-            return
+            return stage
         except IntegrityError:
             # Параллельный ответ с двух устройств — строка уже есть, обновляем её.
             await db.rollback()
@@ -763,13 +773,14 @@ async def mark_card(db, user_id: int, deck: str, card: str, known: bool) -> None
             )
             row = rows.scalar_one_or_none()
             if row is None:
-                return
+                return stage
 
-    shows = (row.seen_count or 0) + 1
-    row.status = resolve_status(known, shows=shows, was_new=False)
-    row.seen_count = shows
-    row.updated_at = utcnow()
+    row.seen_count = (row.seen_count or 0) + 1
+    row.updated_at = now
+    if known:
+        row.status, row.due_at = next_stage(row.status, now)
     await db.commit()
+    return row.status
 
 
 async def reset_cards(db, user_id: int, deck: str) -> int:
