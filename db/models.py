@@ -318,3 +318,52 @@ class CardProgress(Base):
         # Подход «Повторить» ищет слова с истёкшим сроком — по этому индексу.
         Index("ix_card_progress_due", "user_id", "deck", "due_at"),
     )
+
+
+# --- паронимы ------------------------------------------------------------------
+# Задание №5 живёт отдельно от карточек ударений: своя таблица, свои этапы, свои
+# часы. Разное задание — разный код, правка одного не должна доставать до другого.
+PARONYM_WAIT_8 = "wait8"
+PARONYM_WAIT_24 = "wait24"
+PARONYM_LEARNED = "learned"
+
+PARONYM_HOURS_FIRST = 8
+PARONYM_HOURS_SECOND = 24
+
+# На какой этап переводит ответ «Знаю» и сколько после него ждать.
+PARONYM_NEXT_STAGE = {
+    None: (PARONYM_LEARNED, None),                       # новая группа, «Знаю» сразу
+    PARONYM_WAIT_8: (PARONYM_WAIT_24, PARONYM_HOURS_SECOND),
+    PARONYM_WAIT_24: (PARONYM_LEARNED, None),
+}
+
+
+class ParonymProgress(Base):
+    """Что ученик уже знает в словнике паронимов.
+
+    Одна строка на пару «ученик — группа паронимов». Единица прогресса — вся
+    группа целиком: ответил верно про «эффектный / эффективный» — закрылись оба
+    слова сразу. Колонки `deck` здесь нет: словник один.
+    """
+
+    __tablename__ = "paronym_progress"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # Ключ группы: первое слово в нижнем регистре. Правка значения прогресс не
+    # сбрасывает, правка самого слова — заводит новую группу, и это честно.
+    card: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=PARONYM_WAIT_8)
+    # Сколько раз группа показывалась — по нему видно, что даётся тяжело.
+    seen_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Когда группу можно показать снова. У выученных пусто.
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "card", name="uq_paronym_progress"),
+        # Подход «Повторить» ищет группы с истёкшим сроком — по этому индексу.
+        Index("ix_paronym_progress_due", "user_id", "due_at"),
+    )

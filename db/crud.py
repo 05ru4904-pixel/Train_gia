@@ -20,11 +20,16 @@ from db.models import (
     KIND_OPEN,
     KIND_TRAINING,
     KIND_VARIANT,
+    PARONYM_HOURS_FIRST,
+    PARONYM_LEARNED,
+    PARONYM_NEXT_STAGE,
+    PARONYM_WAIT_8,
     PLAN_FREE,
     STATUS_ABANDONED,
     STATUS_ACTIVE,
     STATUS_FINISHED,
     CardProgress,
+    ParonymProgress,
     Session,
     SessionItem,
     Task,
@@ -799,5 +804,114 @@ async def reset_cards(db, user_id: int, deck: str) -> int:
             CardProgress.user_id == user_id, CardProgress.deck == deck
         )
     )
+    await db.commit()
+    return total
+
+
+# --------------------------------------------------------------------------- #
+# Паронимы (задание №5)
+# --------------------------------------------------------------------------- #
+# Отдельно от карточек ударений: своя таблица, свои этапы, свои часы. Механика
+# та же по замыслу, но кода общего нет — правка здесь не достаёт до задания №4.
+@dataclass(frozen=True)
+class ParonymState:
+    """Что известно про одну группу паронимов у одного ученика.
+
+    `row_id` — номер строки. Строка заводится при первом «Не знаю» и больше не
+    пересоздаётся, поэтому по нему видно, в каком порядке группы попали в список.
+    """
+
+    row_id: int
+    status: str
+    shows: int
+    due_at: datetime | None
+    updated_at: datetime | None
+
+    @property
+    def learned(self) -> bool:
+        return self.status == PARONYM_LEARNED
+
+    def ready(self, now: datetime) -> bool:
+        """Истёк ли таймер. Группа без таймера ждать не должна — покажем сразу."""
+        if self.learned:
+            return False
+        return self.due_at is None or as_utc(self.due_at) <= now
+
+
+async def paronym_progress(db, user_id: int) -> dict[str, ParonymState]:
+    """Группа -> состояние. Групп, которых ученик не видел, в словаре нет."""
+    rows = await db.execute(
+        select(ParonymProgress.id, ParonymProgress.card, ParonymProgress.status,
+               ParonymProgress.seen_count, ParonymProgress.due_at, ParonymProgress.updated_at)
+        .where(ParonymProgress.user_id == user_id)
+    )
+    return {
+        card: ParonymState(row_id=row_id, status=status, shows=seen or 0,
+                           due_at=due, updated_at=updated)
+        for row_id, card, status, seen, due, updated in rows.all()
+    }
+
+
+def paronym_next_stage(status: str | None, now: datetime) -> tuple[str, datetime | None]:
+    """Куда «Знаю» переводит группу и до какого времени её прятать."""
+    stage, hours = PARONYM_NEXT_STAGE.get(status, (PARONYM_LEARNED, None))
+    return stage, None if hours is None else now + timedelta(hours=hours)
+
+
+async def mark_paronym(db, user_id: int, card: str, known: bool) -> str:
+    """Записывает ответ по группе и возвращает её этап после него.
+
+    «Не знаю» по группе, которая уже в списке повтора, не меняет ни этапа, ни
+    таймера: она вернётся в этом же подходе и будет возвращаться, пока ученик её
+    не вспомнит. Выход из приложения на середине ничего не обнуляет.
+    """
+    now = utcnow()
+    rows = await db.execute(
+        select(ParonymProgress).where(
+            ParonymProgress.user_id == user_id,
+            ParonymProgress.card == card,
+        )
+    )
+    row = rows.scalar_one_or_none()
+    if row is None:
+        # Группа из основного тренажёра: раньше её не показывали.
+        stage, due = (paronym_next_stage(None, now) if known
+                      else (PARONYM_WAIT_8, now + timedelta(hours=PARONYM_HOURS_FIRST)))
+        db.add(ParonymProgress(
+            user_id=user_id, card=card,
+            status=stage, seen_count=1, due_at=due, updated_at=now,
+        ))
+        try:
+            await db.commit()
+            return stage
+        except IntegrityError:
+            # Параллельный ответ с двух устройств — строка уже есть, обновляем её.
+            await db.rollback()
+            rows = await db.execute(
+                select(ParonymProgress).where(
+                    ParonymProgress.user_id == user_id,
+                    ParonymProgress.card == card,
+                )
+            )
+            row = rows.scalar_one_or_none()
+            if row is None:
+                return stage
+
+    row.seen_count = (row.seen_count or 0) + 1
+    row.updated_at = now
+    if known:
+        row.status, row.due_at = paronym_next_stage(row.status, now)
+    await db.commit()
+    return row.status
+
+
+async def reset_paronyms(db, user_id: int) -> int:
+    """Сбрасывает словник целиком. Возвращает, сколько групп забыто."""
+    rows = await db.execute(
+        select(func.count()).select_from(ParonymProgress)
+        .where(ParonymProgress.user_id == user_id)
+    )
+    total = rows.scalar() or 0
+    await db.execute(delete(ParonymProgress).where(ParonymProgress.user_id == user_id))
     await db.commit()
     return total

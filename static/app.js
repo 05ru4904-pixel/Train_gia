@@ -200,6 +200,11 @@
     run: null,          // текущий подход: карточки, позиция, счёт
     learned: null,      // список выученных слов колоды
     weak: null,         // список слабых слов: что сейчас на повторе
+    menu: null,         // меню карточек: обе колоды с прогрессом
+    par: null,          // словник паронимов, задание №5
+    parRun: null,       // текущий подход по паронимам
+    parWeak: null,      // слабые паронимы
+    parLearned: null,   // выученные паронимы
     dateFrom: '',
     dateTo: '',
     preset: '',
@@ -235,6 +240,9 @@
       // возвращении экран оставался скелетом навсегда. Просим заново.
       if (S.screen === 'cardsLearned' && !S.learned) openLearned();
       if (S.screen === 'cardsWeak' && !S.weak) openWeak();
+      if (S.screen === 'cardsMenu' && !S.menu) openCardsMenu();
+      if (S.screen === 'parWeak' && !S.parWeak) openParWeak();
+      if (S.screen === 'parLearned' && !S.parLearned) openParLearned();
     }
     if (tab === 'stats') { S.screen = 'stats'; loadStats(); }
     if (tab === 'profile') { S.screen = 'profile'; loadProfile(); }
@@ -252,7 +260,13 @@
     variant: 'home',
     variantResult: 'home',
     variantReview: 'variantResult',
-    deck: 'home',
+    cardsMenu: 'home',
+    deck: 'cardsMenu',
+    par: 'cardsMenu',
+    parRun: 'par',
+    parDone: 'par',
+    parWeak: 'par',
+    parLearned: 'par',
     cardsRun: 'deck',
     cardsDone: 'deck',
     cardsLearned: 'deck',
@@ -278,8 +292,10 @@
     }
     if (S.screen === 'result' || S.screen === 'variantResult') refreshBoot();
     go(target);
-    // Счётчики колоды меняются каждым ответом: возвращаясь к ней, берём свежие.
+    // Счётчики меняются каждым ответом: возвращаясь, берём свежие.
     if (target === 'deck' && S.deck) loadDeck(S.deck.id);
+    if (target === 'par') loadPar();
+    if (target === 'cardsMenu') openCardsMenu();
   }
 
   /* ------------------------------------------------------------------ */
@@ -835,12 +851,12 @@
 
     page.appendChild(h('button', {
       class: 'card mt-10', type: 'button',
-      onClick: function () { openDeck(DECK_ACCENTS); }
+      onClick: openCardsMenu
     }, [
       h('div', { class: 'card__icon card__icon--cards' }, [h('i'), h('i')]),
       h('div', { class: 'card__body' }, [
-        h('div', { class: 'card__title', text: 'Карточки: ударения' }),
-        h('div', { class: 'card__note', text: 'Задание №4, по 10 слов за подход' })
+        h('div', { class: 'card__title', text: 'Карточки' }),
+        h('div', { class: 'card__note', text: 'Ударения и паронимы, задания №4 и №5' })
       ]),
       h('div', { class: 'card__chevron', text: '›' })
     ]));
@@ -1949,6 +1965,439 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Меню карточек                                                      */
+  /* ------------------------------------------------------------------ */
+  function openCardsMenu() {
+    S.menu = null;
+    go('cardsMenu');
+    // Колоды независимы, поэтому и запроса два: у каждой свой прогресс.
+    Promise.all([api('/api/cards/' + DECK_ACCENTS), api('/api/paronyms')])
+      .then(function (both) {
+        S.menu = { accents: both[0], paronyms: both[1] };
+        render();
+      })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function deckRow(deck, tag, onClick) {
+    var done = deck.total ? Math.round(deck.learned * 100 / deck.total) : 0;
+    var note = tag + ' · выучено ' + deck.learned + ' из ' + deck.total;
+    if (deck.ready) note += ' · готово к повтору ' + deck.ready;
+    return h('button', { class: 'card mt-10', type: 'button', onClick: onClick }, [
+      h('div', { class: 'card__body' }, [
+        h('div', { class: 'card__title', text: deck.title }),
+        h('div', { class: 'card__note', text: note }),
+        h('div', { class: 'deck-bar deck-bar--slim' }, [
+          h('div', { class: 'deck-bar__fill', style: 'width:' + done + '%' })
+        ])
+      ]),
+      h('div', { class: 'card__chevron', text: '›' })
+    ]);
+  }
+
+  function screenCardsMenu() {
+    var menu = S.menu;
+    if (!menu) return screenLoading();
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'h2', text: 'Карточки' }),
+      h('div', { class: 'sub', text: 'Две колоды, у каждой свой прогресс и свои таймеры' }),
+      deckRow(menu.accents, 'Задание №4', function () { openDeck(DECK_ACCENTS); }),
+      deckRow(menu.paronyms, 'Задание №5', openPar)
+    ]);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Паронимы, задание №5                                               */
+  /* ------------------------------------------------------------------ */
+  /* Свой раздел целиком: свои экраны, свои запросы, своя таблица в базе.
+     С карточками ударений не пересекается — задания разные, и правка здесь
+     не должна доставать до задания №4. */
+
+  var PAR_LOCKED = 'Ты сможешь повторить, когда хотя бы у 5 слов истечет таймер. '
+    + 'Это самая рабочая методика заучивания';
+  var PAR_NO_MORE_NEW = 'Ты разобрал все возможные слова';
+
+  var PAR_STAGES = {
+    wait8: { filled: 1, tone: 'var(--ring-8)', label: '8ч' },
+    wait24: { filled: 2, tone: 'var(--ring-24)', label: '24ч' }
+  };
+
+  function loadPar() {
+    return api('/api/paronyms')
+      .then(function (data) { S.par = data; render(); return data; })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function openPar() {
+    S.par = null;
+    S.parRun = null;
+    S.parWeak = null;
+    S.parLearned = null;
+    go('par');
+    loadPar();
+  }
+
+  function openParWeak() {
+    S.parWeak = null;
+    go('parWeak');
+    api('/api/paronyms/weak')
+      .then(function (data) { S.parWeak = data; render(); })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function openParLearned() {
+    S.parLearned = null;
+    go('parLearned');
+    api('/api/paronyms/learned')
+      .then(function (data) { S.parLearned = data; render(); })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  /** Кнопка повтора нажимается всегда: серая кнопка без объяснения читается
+   *  как поломка, а окно называет причину. */
+  function startParRepeat() {
+    if (S.par && !S.par.can_repeat) {
+      showDialog({
+        title: 'Ещё рано',
+        text: PAR_LOCKED,
+        actions: [{ label: 'Понятно', kind: 'primary' }]
+      });
+      return;
+    }
+    startParRun('repeat');
+  }
+
+  function startParRun(mode) {
+    api('/api/paronyms/session?mode=' + mode)
+      .then(function (data) {
+        if (!data.cards.length) {
+          toast(mode === 'repeat' ? PAR_LOCKED : PAR_NO_MORE_NEW);
+          return;
+        }
+        S.parRun = {
+          mode: mode,
+          prompt: data.prompt,
+          total: data.cards.length,
+          queue: data.cards.slice(),
+          again: [],          // группы, которые вернутся здесь же, в этом подходе
+          at: 0,
+          round: 1,
+          shown: false,
+          shows: 0,
+          known: 0,
+          unknown: 0,
+          learnedBefore: (S.par && S.par.learned) || 0
+        };
+        go('parRun');
+      })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function currentPar() {
+    if (!S.parRun) return null;
+    return S.parRun.queue[S.parRun.at] || null;
+  }
+
+  function revealPar() {
+    if (!S.parRun || S.parRun.shown) return;
+    S.parRun.shown = true;
+    render();
+  }
+
+  function answerPar(known) {
+    var run = S.parRun;
+    var card = currentPar();
+    if (!run || !card) return;
+
+    run.shows += 1;
+    if (known) run.known += 1; else run.unknown += 1;
+
+    var sent = api('/api/paronyms/answer', {
+      method: 'POST',
+      body: { card: card.key, known: known }
+    }).catch(function (error) { toast(errorText(error)); });
+
+    // В повторе группа, которую ученик не вспомнил, возвращается тут же и будет
+    // возвращаться, пока он не ответит «Знаю». В основном тренажёре проход один.
+    if (!known && run.mode === 'repeat') run.again.push(card);
+
+    run.at += 1;
+    run.shown = false;
+
+    if (run.at < run.queue.length) { render(); return; }
+
+    if (run.again.length) {
+      run.queue = run.again;
+      run.again = [];
+      run.at = 0;
+      run.round += 1;
+      render();
+      return;
+    }
+
+    go('parDone');
+    // Счётчики берём после того, как записан последний ответ, иначе итог подхода
+    // показывает на группу меньше.
+    sent.then(function () { return loadPar(); });
+  }
+
+  function resetPar() {
+    var par = S.par || {};
+    showDialog({
+      title: 'Сбросить весь словник?',
+      text: 'Будет стёрт весь прогресс: ' + (par.learned || 0) + ' выученных групп и '
+        + (par.repeat || 0) + ' слабых вместе с их таймерами. Все '
+        + (par.total || 0) + ' групп снова станут новыми. Вернуть это будет нельзя.',
+      actions: [
+        { label: 'Отмена', kind: 'ghost' },
+        {
+          label: 'Стереть всё', kind: 'danger', onClick: function () {
+            api('/api/paronyms/reset', { method: 'POST' })
+              .then(function () {
+                toast('Прогресс сброшен');
+                S.parWeak = null;
+                S.parLearned = null;
+                return loadPar();
+              })
+              .catch(function (error) { toast(errorText(error)); });
+          }
+        }
+      ]
+    });
+  }
+
+  /** Кольцо этапов словника. Своё, а не общее с ударениями: разделы независимы. */
+  function parRing(filled, tone, label) {
+    var stops = [];
+    for (var index = 0; index < 3; index++) {
+      var from = index * 120;
+      var color = index < filled ? tone : 'var(--ring-track)';
+      stops.push(color + ' ' + from + 'deg ' + (from + 111) + 'deg');
+      stops.push('transparent ' + (from + 111) + 'deg ' + (from + 120) + 'deg');
+    }
+    return h('div', {
+      class: 'ring',
+      style: 'background:conic-gradient(' + stops.join(',') + ')'
+    }, h('div', { class: 'ring__label', text: label }));
+  }
+
+  function parRow(card, ring, badge) {
+    return h('div', { class: 'word-row' }, [
+      h('div', { class: 'word-row__body' }, [
+        h('div', { class: 'word-row__word', text: card.title }),
+        h('div', { class: 'word-row__hint', text: card.meanings.join('; ') })
+      ]),
+      h('div', { class: 'word-row__side' }, [badge || null, ring])
+    ]);
+  }
+
+  function screenPar() {
+    var par = S.par;
+    if (!par) return screenLoading();
+    var done = par.total ? Math.round(par.learned * 100 / par.total) : 0;
+
+    var waitLine = 'Готово ' + par.ready + ' из ' + par.repeat_min;
+    var until = untilText(par.ready_at);
+    if (until) waitLine += ', пятое — ' + until;
+
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'h2', text: par.title }),
+      h('div', { class: 'sub', text: par.subtitle }),
+
+      h('div', { class: 'deck-bar' }, [
+        h('div', { class: 'deck-bar__fill', style: 'width:' + done + '%' })
+      ]),
+      h('div', { class: 'deck-stats' }, [
+        deckStat(par.learned, 'выучено'),
+        deckStat(par.repeat, 'на повторе'),
+        deckStat(par.fresh, 'новых')
+      ]),
+
+      h('div', { class: 'stack mt-24' }, [
+        h('button', {
+          class: 'btn btn--primary', type: 'button', disabled: !par.fresh,
+          onClick: function () { startParRun('new'); }
+        }, par.fresh ? 'Учить новые слова' : 'Новых слов нет'),
+        h('button', {
+          class: 'btn ' + (par.fresh ? 'btn--ghost' : 'btn--primary'), type: 'button',
+          onClick: startParRepeat
+        }, par.can_repeat ? 'Повторить (' + par.ready + ')' : 'Повторить'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button', disabled: !par.repeat,
+          onClick: openParWeak
+        }, par.repeat ? 'Слабые паронимы (' + par.repeat + ')' : 'Слабых паронимов пока нет'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button', disabled: !par.learned,
+          onClick: openParLearned
+        }, par.learned ? 'Выученные паронимы (' + par.learned + ')' : 'Выученных пока нет'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button', disabled: !par.learned && !par.repeat,
+          onClick: resetPar
+        }, 'Сбросить прогресс')
+      ]),
+
+      !par.fresh ? h('div', { class: 'banner' }, PAR_NO_MORE_NEW) : null,
+      par.can_repeat
+        ? h('div', { class: 'banner' },
+            'Готово к повтору: ' + par.ready + '. В подходе до ' + par.size + ' групп.')
+        : (par.repeat ? h('div', { class: 'banner' }, waitLine) : null)
+    ]);
+  }
+
+  function screenParRun() {
+    var run = S.parRun;
+    var card = currentPar();
+    if (!run || !card) return screenLoading();
+
+    var counter = run.round === 1
+      ? (run.at + 1) + ' / ' + run.total
+      : 'осталось ' + (run.queue.length - run.at);
+
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'card-top' }, [
+        h('div', { class: 'card-top__count', text: counter }),
+        h('div', { class: 'card-top__group', text: card.section })
+      ]),
+
+      run.round > 1
+        ? h('div', { class: 'card-round', text: 'Возвращаем то, что не далось' })
+        : null,
+
+      h('div', { class: 'flashcard' + (run.shown ? ' is-open' : '') }, [
+        h('div', { class: 'par-words', text: card.title }),
+        !run.shown ? h('div', { class: 'card-tip', text: run.prompt }) : null,
+        run.shown
+          ? h('div', { class: 'par-meanings' }, card.words.map(function (word, index) {
+              return h('div', { class: 'par-meaning' }, [
+                h('span', { class: 'par-meaning__word', text: word }),
+                document.createTextNode(' — ' + card.meanings[index])
+              ]);
+            }))
+          : null
+      ]),
+
+      run.shown
+        ? h('div', { class: 'card-actions' }, [
+            h('button', {
+              class: 'btn btn--ghost', type: 'button',
+              onClick: function () { answerPar(false); }
+            }, 'Не знаю'),
+            h('button', {
+              class: 'btn btn--primary', type: 'button',
+              onClick: function () { answerPar(true); }
+            }, 'Знаю')
+          ])
+        : h('button', {
+            class: 'btn btn--primary mt-24', type: 'button', onClick: revealPar
+          }, 'Показать')
+    ]);
+  }
+
+  function screenParDone() {
+    var run = S.parRun
+      || { mode: 'new', total: 0, shows: 0, known: 0, unknown: 0, learnedBefore: 0 };
+    var par = S.par || {};
+    var closed = Math.max(0, (par.learned || 0) - run.learnedBefore);
+    var repeatMode = run.mode === 'repeat';
+
+    return h('div', { class: 'page' }, [
+      h('div', { style: 'text-align:center' }, [
+        h('div', { class: 'h2', text: 'Подход пройден' }),
+        h('div', { class: 'sub', text: 'Групп в подходе: ' + run.total })
+      ]),
+
+      repeatMode
+        ? h('div', { class: 'tiles tiles--two' }, [
+            tile(closed, 'выучено', closed ? 'tile--green' : ''),
+            tile(run.shows, 'показов', '')
+          ])
+        : h('div', { class: 'tiles tiles--two' }, [
+            tile(run.known, 'знаю', 'tile--green'),
+            tile(run.unknown, 'не знаю', run.unknown ? 'tile--red' : '')
+          ]),
+
+      h('div', { class: 'stack mt-24' }, [
+        par.fresh
+          ? h('button', {
+              class: 'btn btn--primary', type: 'button',
+              onClick: function () { startParRun('new'); }
+            }, 'Ещё подход')
+          : null,
+        par.can_repeat
+          ? h('button', {
+              class: 'btn ' + (par.fresh ? 'btn--ghost' : 'btn--primary'), type: 'button',
+              onClick: function () { startParRun('repeat'); }
+            }, 'Повторить (' + par.ready + ')')
+          : null,
+        h('button', {
+          class: 'btn btn--ghost', type: 'button',
+          onClick: function () { go('par'); loadPar(); }
+        }, 'К словнику')
+      ]),
+
+      h('div', { class: 'banner' }, repeatMode
+        ? 'То, что ты вспомнил, вернётся через сутки — и после этого уйдёт в выученные.'
+        : 'То, что не далось, вернётся через 8 часов в разделе «Повторить».')
+    ]);
+  }
+
+  function screenParWeak() {
+    var data = S.parWeak;
+    if (!data) return screenLoading();
+
+    if (!data.cards.length) {
+      return h('div', { class: 'page' }, [
+        h('div', { class: 'empty' }, [
+          h('div', { class: 'empty__title', text: 'Слабых паронимов нет' }),
+          h('div', {
+            class: 'empty__note',
+            text: 'Сюда попадают группы, на которых ты нажал «Не знаю».'
+          })
+        ])
+      ]);
+    }
+
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'h2', text: 'На повторе ' + data.repeat + ' групп' }),
+      h('div', { class: 'sub', text: 'Готово к повтору: ' + data.ready }),
+      h('div', { class: 'word-list' }, data.cards.map(function (card) {
+        var stage = PAR_STAGES[card.stage] || PAR_STAGES.wait8;
+        var ring = parRing(stage.filled, stage.tone, card.ready ? 'Го!' : stage.label);
+        var badge = card.ready
+          ? h('span', { class: 'ready-badge', text: 'Можно повторять!' })
+          : null;
+        return parRow(card, ring, badge);
+      }))
+    ]);
+  }
+
+  function screenParLearned() {
+    var data = S.parLearned;
+    if (!data) return screenLoading();
+
+    if (!data.cards.length) {
+      return h('div', { class: 'page' }, [
+        h('div', { class: 'empty' }, [
+          h('div', { class: 'empty__title', text: 'Пока пусто' }),
+          h('div', {
+            class: 'empty__note',
+            text: 'Сюда попадают группы, которые ты закрыл: сразу — если нажал «Знаю» '
+              + 'на новой, или после двух повторов по таймеру.'
+          })
+        ])
+      ]);
+    }
+
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'h2', text: 'Выучено ' + data.learned + ' из ' + data.total }),
+      h('div', { class: 'sub', text: 'Сверху те, что закрыты последними' }),
+      h('div', { class: 'word-list' }, data.cards.map(function (card) {
+        return parRow(card, parRing(3, 'var(--ring-done)', '✓'), null);
+      }))
+    ]);
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Шпаргалки                                                          */
   /* ------------------------------------------------------------------ */
   /**
@@ -2405,7 +2854,13 @@
     cardsRun: ['Карточки', 'вспомни и проверь'],
     cardsDone: ['Карточки', 'итог подхода'],
     cardsLearned: ['Выученные слова', 'закрытые карточки'],
-    cardsWeak: ['Слабые слова', 'что ещё на повторе']
+    cardsWeak: ['Слабые слова', 'что ещё на повторе'],
+    cardsMenu: ['Карточки', 'выбери колоду'],
+    par: ['Паронимы', 'задание №5'],
+    parRun: ['Паронимы', 'вспомни и проверь'],
+    parDone: ['Паронимы', 'итог подхода'],
+    parWeak: ['Слабые паронимы', 'что ещё на повторе'],
+    parLearned: ['Выученные паронимы', 'закрытые группы']
   };
 
   var lastViewKey = null;
@@ -2419,6 +2874,7 @@
     }
     if (S.screen === 'mistake') parts.push(S.reviewPosition);
     if (S.run) parts.push(S.run.at, S.run.shown, S.run.round);
+    if (S.parRun) parts.push(S.parRun.at, S.parRun.shown, S.parRun.round);
     if (S.result) parts.push(S.result.id);
     return parts.join('|');
   }
@@ -2437,6 +2893,11 @@
       title = S.run.round > 1
         ? ['Карточки · добиваем', 'пока не вспомнишь']
         : ['Карточки · ' + (S.run.at + 1) + '/' + S.run.total, 'вспомни и проверь'];
+    }
+    if (S.screen === 'parRun' && S.parRun) {
+      title = S.parRun.round > 1
+        ? ['Паронимы · добиваем', 'пока не вспомнишь']
+        : ['Паронимы · ' + (S.parRun.at + 1) + '/' + S.parRun.total, 'вспомни и проверь'];
     }
     dom.title.textContent = title[0];
     dom.sub.textContent = title[1];
@@ -2485,7 +2946,13 @@
         cardsRun: screenCardsRun,
         cardsDone: screenCardsDone,
         cardsLearned: screenCardsLearned,
-        cardsWeak: screenCardsWeak
+        cardsWeak: screenCardsWeak,
+        cardsMenu: screenCardsMenu,
+        par: screenPar,
+        parRun: screenParRun,
+        parDone: screenParDone,
+        parWeak: screenParWeak,
+        parLearned: screenParLearned
       };
       node = (screens[S.screen] || screenHome)();
     }

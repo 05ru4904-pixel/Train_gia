@@ -84,6 +84,7 @@ _INDEXES = (
     "CREATE INDEX IF NOT EXISTS ix_session_items_stats ON session_items (session_id, task_number)",
     "CREATE INDEX IF NOT EXISTS ix_variant_items_variant ON variant_items (variant_id)",
     "CREATE INDEX IF NOT EXISTS ix_card_progress_due ON card_progress (user_id, deck, due_at)",
+    "CREATE INDEX IF NOT EXISTS ix_paronym_progress_due ON paronym_progress (user_id, due_at)",
 )
 
 
