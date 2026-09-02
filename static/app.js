@@ -196,6 +196,8 @@
     onb: null,          // анкета ученика, пока её заполняют
     sheets: null,       // список шпаргалок по заданиям
     sheet: null,        // открытая шпаргалка
+    deck: null,         // состояние колоды карточек
+    run: null,          // текущий подход: карточки, позиция, счёт
     dateFrom: '',
     dateTo: '',
     preset: '',
@@ -241,7 +243,10 @@
     variantIntro: 'home',
     variant: 'home',
     variantResult: 'home',
-    variantReview: 'variantResult'
+    variantReview: 'variantResult',
+    deck: 'home',
+    cardsRun: 'deck',
+    cardsDone: 'deck'
   };
 
   function canGoBack() {
@@ -263,6 +268,8 @@
     }
     if (S.screen === 'result' || S.screen === 'variantResult') refreshBoot();
     go(target);
+    // Счётчики колоды меняются каждым ответом: возвращаясь к ней, берём свежие.
+    if (target === 'deck' && S.deck) loadDeck(S.deck.id);
   }
 
   /* ------------------------------------------------------------------ */
@@ -812,6 +819,18 @@
       h('div', { class: 'card__body' }, [
         h('div', { class: 'card__title', text: 'Тренировать конкретное задание' }),
         h('div', { class: 'card__note', text: 'Выбрать номер и количество вопросов' })
+      ]),
+      h('div', { class: 'card__chevron', text: '›' })
+    ]));
+
+    page.appendChild(h('button', {
+      class: 'card mt-10', type: 'button',
+      onClick: function () { openDeck(DECK_ACCENTS); }
+    }, [
+      h('div', { class: 'card__icon card__icon--cards' }, [h('i'), h('i')]),
+      h('div', { class: 'card__body' }, [
+        h('div', { class: 'card__title', text: 'Карточки: ударения' }),
+        h('div', { class: 'card__note', text: 'Задание №4, по 10 слов за подход' })
       ]),
       h('div', { class: 'card__chevron', text: '›' })
     ]));
@@ -1473,6 +1492,225 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Карточки                                                           */
+  /* ------------------------------------------------------------------ */
+  var DECK_ACCENTS = 'accents';
+
+  function loadDeck(deckId) {
+    return api('/api/cards/' + deckId)
+      .then(function (data) { S.deck = data; render(); return data; })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function openDeck(deckId) {
+    S.deck = null;
+    S.run = null;
+    go('deck');
+    loadDeck(deckId);
+  }
+
+  function startRun(mode) {
+    if (!S.deck) return;
+    api('/api/cards/' + S.deck.id + '/session?mode=' + mode)
+      .then(function (data) {
+        if (!data.cards.length) {
+          toast(mode === 'repeat'
+            ? 'Нечего повторять — все отмеченные слова выучены.'
+            : 'Новых слов не осталось. Повторите отложенные или сбросьте прогресс.');
+          return;
+        }
+        S.run = {
+          mode: mode,
+          cards: data.cards,
+          at: 0,
+          shown: false,     // перевёрнута ли текущая карточка
+          known: 0,
+          repeat: 0
+        };
+        go('cardsRun');
+      })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function currentCard() {
+    if (!S.run) return null;
+    return S.run.cards[S.run.at] || null;
+  }
+
+  function revealCard() {
+    if (!S.run || S.run.shown) return;
+    S.run.shown = true;
+    render();
+  }
+
+  function answerCard(known) {
+    var run = S.run;
+    var card = currentCard();
+    if (!run || !card) return;
+
+    if (known) run.known += 1; else run.repeat += 1;
+    // Отправляем и идём дальше, не дожидаясь ответа сервера: подход не должен
+    // спотыкаться о сеть. Ошибку показываем, но карточку не возвращаем — статус
+    // выставится заново, когда слово выпадет в следующий раз.
+    api('/api/cards/' + S.deck.id + '/answer', {
+      method: 'POST',
+      body: { card: card.key, known: known }
+    }).catch(function (error) { toast(errorText(error)); });
+
+    run.at += 1;
+    run.shown = false;
+    if (run.at >= run.cards.length) {
+      go('cardsDone');
+      loadDeck(S.deck.id);
+      return;
+    }
+    render();
+  }
+
+  function resetDeck() {
+    showDialog({
+      title: 'Начать колоду заново?',
+      text: 'Все отметки «знаю» и «повторить» будут забыты. Слова останутся на месте.',
+      actions: [
+        { label: 'Отмена', kind: 'ghost' },
+        {
+          label: 'Сбросить', kind: 'danger', onClick: function () {
+            api('/api/cards/' + S.deck.id + '/reset', { method: 'POST' })
+              .then(function () { toast('Прогресс сброшен'); return loadDeck(S.deck.id); })
+              .catch(function (error) { toast(errorText(error)); });
+          }
+        }
+      ]
+    });
+  }
+
+  /** Слово с выделенной ударной буквой. */
+  function stressedWord(card) {
+    var before = card.answer.slice(0, card.stress);
+    var letter = card.answer.charAt(card.stress);
+    var after = card.answer.slice(card.stress + 1);
+    return h('div', { class: 'card-word' }, [
+      document.createTextNode(before),
+      h('span', { class: 'card-word__stress', text: letter.toUpperCase() }),
+      document.createTextNode(after)
+    ]);
+  }
+
+  function screenDeck() {
+    var deck = S.deck;
+    if (!deck) return screenLoading();
+    var done = deck.total ? Math.round(deck.known * 100 / deck.total) : 0;
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'h2', text: deck.title }),
+      h('div', { class: 'sub', text: deck.subtitle }),
+
+      h('div', { class: 'deck-bar' }, [
+        h('div', { class: 'deck-bar__fill', style: 'width:' + done + '%' })
+      ]),
+      h('div', { class: 'deck-stats' }, [
+        deckStat(deck.known, 'выучено'),
+        deckStat(deck.repeat, 'на повтор'),
+        deckStat(deck.fresh, 'новых')
+      ]),
+
+      h('div', { class: 'stack mt-24' }, [
+        h('button', {
+          class: 'btn btn--primary', type: 'button', disabled: !deck.fresh && !deck.repeat,
+          onClick: function () { startRun('new'); }
+        }, deck.fresh ? 'Учить ' + Math.min(deck.size, deck.fresh) + ' новых слов' : 'Повторить отложенные'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button', disabled: !deck.repeat,
+          onClick: function () { startRun('repeat'); }
+        }, deck.repeat ? 'Повторить ошибки (' + deck.repeat + ')' : 'Ошибок нет'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button', disabled: !deck.known && !deck.repeat,
+          onClick: resetDeck
+        }, 'Сбросить прогресс')
+      ]),
+
+      h('div', { class: 'banner' },
+        'Посмотри на слово, вспомни ударение и проверь себя. «Знаю» убирает слово '
+        + 'из колоды, «Повторить» вернёт его в следующий подход.')
+    ]);
+  }
+
+  function deckStat(value, label) {
+    return h('div', { class: 'deck-stat' }, [
+      h('div', { class: 'deck-stat__value', text: String(value) }),
+      h('div', { class: 'deck-stat__label', text: label })
+    ]);
+  }
+
+  function screenCardsRun() {
+    var run = S.run;
+    var card = currentCard();
+    if (!run || !card) return screenLoading();
+
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'card-top' }, [
+        h('div', { class: 'card-top__count', text: (run.at + 1) + ' / ' + run.cards.length }),
+        h('div', { class: 'card-top__group', text: card.group })
+      ]),
+
+      h('div', { class: 'flashcard' + (run.shown ? ' is-open' : '') }, [
+        run.shown
+          ? stressedWord(card)
+          : h('div', { class: 'card-word card-word--quiet', text: card.word }),
+        run.shown && card.hint
+          ? h('div', { class: 'card-hint', text: card.hint })
+          : null,
+        !run.shown
+          ? h('div', { class: 'card-tip', text: 'Вспомни, где ударение' })
+          : null
+      ]),
+
+      run.shown
+        ? h('div', { class: 'card-actions' }, [
+            h('button', {
+              class: 'btn btn--ghost', type: 'button',
+              onClick: function () { answerCard(false); }
+            }, 'Повторить'),
+            h('button', {
+              class: 'btn btn--primary', type: 'button',
+              onClick: function () { answerCard(true); }
+            }, 'Знаю')
+          ])
+        : h('button', {
+            class: 'btn btn--primary mt-24', type: 'button', onClick: revealCard
+          }, 'Показать ударение')
+    ]);
+  }
+
+  function screenCardsDone() {
+    var run = S.run || { known: 0, repeat: 0, cards: [] };
+    var deck = S.deck || {};
+    return h('div', { class: 'page' }, [
+      h('div', { style: 'text-align:center' }, [
+        h('div', { class: 'h2', text: 'Подход пройден' }),
+        h('div', { class: 'sub', text: 'Слов в подходе: ' + run.cards.length })
+      ]),
+      h('div', { class: 'tiles tiles--two' }, [
+        tile(run.known, 'знаю', 'tile--green'),
+        tile(run.repeat, 'на повтор', run.repeat ? 'tile--red' : '')
+      ]),
+      h('div', { class: 'stack mt-24' }, [
+        h('button', {
+          class: 'btn btn--primary', type: 'button',
+          onClick: function () { startRun(run.repeat ? 'repeat' : 'new'); }
+        }, run.repeat ? 'Повторить отложенные' : 'Ещё подход'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button',
+          onClick: function () { go('deck'); loadDeck(S.deck.id); }
+        }, 'К колоде')
+      ]),
+      deck.total
+        ? h('div', { class: 'banner' },
+            'Выучено ' + deck.known + ' из ' + deck.total + ' слов колоды.')
+        : null
+    ]);
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Шпаргалки                                                          */
   /* ------------------------------------------------------------------ */
   /**
@@ -1924,7 +2162,10 @@
     profile: ['Профиль', 'аккаунт и подписка'],
     onboarding: ['Знакомство', 'четыре быстрых вопроса'],
     cheatsheets: ['Шпаргалки', 'чек-листы по заданиям'],
-    cheatsheet: ['Шпаргалка', 'как решать это задание']
+    cheatsheet: ['Шпаргалка', 'как решать это задание'],
+    deck: ['Карточки', 'запоминаем словами'],
+    cardsRun: ['Карточки', 'вспомни и проверь'],
+    cardsDone: ['Карточки', 'итог подхода']
   };
 
   var lastViewKey = null;
@@ -1937,6 +2178,7 @@
       if (S.session.question) parts.push(S.session.question.position);
     }
     if (S.screen === 'mistake') parts.push(S.reviewPosition);
+    if (S.run) parts.push(S.run.at, S.run.shown);
     if (S.result) parts.push(S.result.id);
     return parts.join('|');
   }
@@ -1950,6 +2192,9 @@
     }
     if (S.screen === 'cheatsheet' && S.sheet) {
       title = ['Шпаргалка · №' + S.sheet.number, S.sheet.title];
+    }
+    if (S.screen === 'cardsRun' && S.run) {
+      title = ['Карточки · ' + (S.run.at + 1) + '/' + S.run.cards.length, 'вспомни и проверь'];
     }
     dom.title.textContent = title[0];
     dom.sub.textContent = title[1];
@@ -1993,7 +2238,10 @@
         variantIntro: screenVariantIntro,
         variant: screenVariant,
         variantResult: screenVariantResult,
-        variantReview: screenVariantReview
+        variantReview: screenVariantReview,
+        deck: screenDeck,
+        cardsRun: screenCardsRun,
+        cardsDone: screenCardsDone
       };
       node = (screens[S.screen] || screenHome)();
     }

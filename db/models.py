@@ -263,3 +263,39 @@ class SessionItem(Base):
     @property
     def answered(self) -> bool:
         return self.is_correct is not None
+
+
+# --- карточки ------------------------------------------------------------------
+# Статусы карточки у конкретного ученика.
+CARD_KNOWN = "known"
+CARD_UNKNOWN = "unknown"
+
+
+class CardProgress(Base):
+    """Что ученик уже знает в колоде карточек (ударения и будущие колоды).
+
+    Одна строка на пару «ученик — слово». Прогресс держится на сервере, а не в
+    браузере: Telegram чистит хранилище WebView, а с телефона и с ноутбука должна
+    быть одна и та же колода.
+    """
+
+    __tablename__ = "card_progress"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # Идентификатор колоды из core/cards.py — «accents» и далее.
+    deck: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Ключ карточки: слово в нижнем регистре. Правка подсказки в файле прогресс
+    # не сбрасывает, правка самого слова — заводит новую карточку, и это честно.
+    card: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=CARD_UNKNOWN)
+    # Сколько раз карточка показывалась — по нему видно, что даётся тяжело.
+    seen_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "deck", "card", name="uq_card_progress"),
+        Index("ix_card_progress_user_deck", "user_id", "deck"),
+    )

@@ -31,11 +31,13 @@ core/scoring.py           проверка ответов и баллы — ве
 core/tasks_meta.py        номер -> вид, номер -> тема, буквы вариантов
 core/profile_meta.py      анкета ученика: классы, предметы ЕГЭ, цель по баллам
 core/cheatsheets.py       чтение чек-листов из content/cheatsheets/NN.md
-db/models.py              6 таблиц: users, tasks, variants, variant_items, sessions, session_items
+core/cards.py             колоды карточек из content/cards/*.txt (пока «ударения»)
+db/models.py              7 таблиц: users, tasks, variants, variant_items, sessions,
+                          session_items, card_progress
 db/crud.py                запросы
 db/database.py            пул соединений, init_db с ретраями, ALTER-миграции
 api/serializers.py        сборка JSON для Mini App
-api/routers/              training, variant, stats, profile, onboarding, cheatsheets
+api/routers/              training, variant, stats, profile, onboarding, cheatsheets, cards
 bots/admin_bot.py         /upload /add /find /list /variant /variants /templates /stats
 bots/user_bot.py          100 строк, открывает Mini App
 static/app.js             всё приложение, 1655 строк
@@ -194,6 +196,23 @@ python scripts/purge_db.py --yes                          удалить
 В базе у пользователя: `grade`, `math_level`, `subjects` (только предметы по выбору),
 `target_score`, `onboarded_at`. Смена уровня математики выбранное не сбрасывает — лимиты
 пересекаются; обрезается только то, что не влезает в новый максимум.
+
+## Карточки (запоминание слов)
+Вход — карточка на главной тренажёра. Колода одна: «Ударения», задание №4,
+187 слов орфоэпического минимума. Подход — 10 карточек: слово без подсказки ->
+«Показать ударение» -> «Знаю» или «Повторить».
+
+Слова лежат в `content/cards/accents.txt`, ударная гласная пишется ЗАГЛАВНОЙ —
+из неё получаются и вопрос, и ответ, и проверка строки. Строка, где ударение не
+определяется однозначно, в колоду не попадает (то же правило, что у парсера
+вариантов). «Ё» в вопросе показывается как «е»: догадаться, что там не «е», —
+часть задания.
+
+Прогресс — в таблице `card_progress` (ученик, колода, слово, статус), а не в
+браузере: Telegram чистит хранилище WebView, а колода должна быть общей на всех
+устройствах. Отметка пишется сразу после ответа — подходы часто бросают на
+середине. Режима два: `new` (сначала невиданные, добор из отложенных) и `repeat`
+(только отложенные).
 
 ## Шпаргалки (чек-листы по заданиям)
 Четвёртая вкладка приложения. Список всех 26 номеров с темами, внутри — чек-лист:

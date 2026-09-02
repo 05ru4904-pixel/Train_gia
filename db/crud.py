@@ -9,6 +9,8 @@ from core import scoring
 from core.parser import ParsedTask, generate_task_id
 from core.tasks_meta import LAST_TASK, RENDERABLE_KINDS, TASK_NUMBERS
 from db.models import (
+    CARD_KNOWN,
+    CARD_UNKNOWN,
     KIND_CHOICE,
     KIND_DIGITS,
     KIND_MATCH,
@@ -19,6 +21,7 @@ from db.models import (
     STATUS_ABANDONED,
     STATUS_ACTIVE,
     STATUS_FINISHED,
+    CardProgress,
     Session,
     SessionItem,
     Task,
@@ -667,3 +670,74 @@ async def users_count(db) -> int:
 
 
 MAX_TASK_NUMBER = LAST_TASK
+
+
+# --------------------------------------------------------------------------- #
+# Карточки
+# --------------------------------------------------------------------------- #
+async def card_progress(db, user_id: int, deck: str) -> dict[str, str]:
+    """Слово -> статус («known» / «unknown») для одной колоды."""
+    rows = await db.execute(
+        select(CardProgress.card, CardProgress.status)
+        .where(CardProgress.user_id == user_id, CardProgress.deck == deck)
+    )
+    return {card: status for card, status in rows.all()}
+
+
+async def mark_card(db, user_id: int, deck: str, card: str, known: bool) -> None:
+    """Отмечает карточку выученной или отправленной на повтор.
+
+    Пишем сразу, а не в конце подхода: ученик закрывает Mini App на середине
+    постоянно, и терять при этом отмеченное нельзя.
+    """
+    status = CARD_KNOWN if known else CARD_UNKNOWN
+    rows = await db.execute(
+        select(CardProgress).where(
+            CardProgress.user_id == user_id,
+            CardProgress.deck == deck,
+            CardProgress.card == card,
+        )
+    )
+    row = rows.scalar_one_or_none()
+    if row is None:
+        db.add(CardProgress(
+            user_id=user_id, deck=deck, card=card,
+            status=status, seen_count=1, updated_at=utcnow(),
+        ))
+        try:
+            await db.commit()
+            return
+        except IntegrityError:
+            # Параллельный ответ с двух устройств — строка уже есть, обновляем её.
+            await db.rollback()
+            rows = await db.execute(
+                select(CardProgress).where(
+                    CardProgress.user_id == user_id,
+                    CardProgress.deck == deck,
+                    CardProgress.card == card,
+                )
+            )
+            row = rows.scalar_one_or_none()
+            if row is None:
+                return
+
+    row.status = status
+    row.seen_count = (row.seen_count or 0) + 1
+    row.updated_at = utcnow()
+    await db.commit()
+
+
+async def reset_cards(db, user_id: int, deck: str) -> int:
+    """Сбрасывает прогресс по колоде. Возвращает, сколько карточек забыто."""
+    rows = await db.execute(
+        select(func.count()).select_from(CardProgress)
+        .where(CardProgress.user_id == user_id, CardProgress.deck == deck)
+    )
+    total = rows.scalar() or 0
+    await db.execute(
+        delete(CardProgress).where(
+            CardProgress.user_id == user_id, CardProgress.deck == deck
+        )
+    )
+    await db.commit()
+    return total
