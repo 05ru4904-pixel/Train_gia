@@ -1,4 +1,5 @@
 """Операции с базой. Вся работа с сессиями SQLAlchemy собрана здесь."""
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, func, select, update
@@ -10,6 +11,7 @@ from core.parser import ParsedTask, generate_task_id
 from core.tasks_meta import LAST_TASK, RENDERABLE_KINDS, TASK_NUMBERS
 from db.models import (
     CARD_KNOWN,
+    CARD_REPEAT_DEBT,
     CARD_UNKNOWN,
     KIND_CHOICE,
     KIND_DIGITS,
@@ -675,22 +677,63 @@ MAX_TASK_NUMBER = LAST_TASK
 # --------------------------------------------------------------------------- #
 # Карточки
 # --------------------------------------------------------------------------- #
-async def card_progress(db, user_id: int, deck: str) -> dict[str, str]:
-    """Слово -> статус («known» / «unknown») для одной колоды."""
+@dataclass(frozen=True)
+class CardState:
+    """Что известно про одно слово у одного ученика.
+
+    `shows` — сколько раз слово ему показывали, считая самый первый показ, когда
+    оно было новым. По нему слово попадает в свою очередь на повтор.
+    `updated_at` — когда ученик ответил в последний раз. Это ключ очерёдности:
+    кто ответил раньше, тот раньше и вернётся.
+    """
+
+    status: str
+    shows: int
+    updated_at: datetime | None
+
+    @property
+    def learned(self) -> bool:
+        return self.status == CARD_KNOWN
+
+
+async def card_progress(db, user_id: int, deck: str) -> dict[str, CardState]:
+    """Слово -> состояние. Слов, которых ученик не видел, в словаре нет."""
     rows = await db.execute(
-        select(CardProgress.card, CardProgress.status)
+        select(CardProgress.card, CardProgress.status, CardProgress.seen_count,
+               CardProgress.updated_at)
         .where(CardProgress.user_id == user_id, CardProgress.deck == deck)
     )
-    return {card: status for card, status in rows.all()}
+    return {
+        card: CardState(status=status, shows=seen or 0, updated_at=updated)
+        for card, status, seen, updated in rows.all()
+    }
+
+
+def resolve_status(known: bool, shows: int, was_new: bool) -> str:
+    """Куда слово уходит после ответа. Здесь всё правило целиком.
+
+    * новое слово и «Знаю» — сразу выучено, повторять нечего;
+    * новое слово и «Повторить» — берёт долг в два показа;
+    * слово в работе — закрывается только когда позади минимум два повтора
+      И последний ответ был «Знаю».
+
+    Отсюда и разбор случая, который иначе кажется странным: «Повторить», потом
+    «Знаю», потом снова «Повторить» — слово не выучено. Ученик вспомнил его один
+    раз из трёх, и долг он этим не закрыл.
+    """
+    if was_new:
+        return CARD_KNOWN if known else CARD_UNKNOWN
+    if known and shows - 1 >= CARD_REPEAT_DEBT:
+        return CARD_KNOWN
+    return CARD_UNKNOWN
 
 
 async def mark_card(db, user_id: int, deck: str, card: str, known: bool) -> None:
-    """Отмечает карточку выученной или отправленной на повтор.
+    """Отмечает ответ по карточке и решает, выучено слово или ждёт повтора.
 
     Пишем сразу, а не в конце подхода: ученик закрывает Mini App на середине
     постоянно, и терять при этом отмеченное нельзя.
     """
-    status = CARD_KNOWN if known else CARD_UNKNOWN
     rows = await db.execute(
         select(CardProgress).where(
             CardProgress.user_id == user_id,
@@ -702,7 +745,8 @@ async def mark_card(db, user_id: int, deck: str, card: str, known: bool) -> None
     if row is None:
         db.add(CardProgress(
             user_id=user_id, deck=deck, card=card,
-            status=status, seen_count=1, updated_at=utcnow(),
+            status=resolve_status(known, shows=1, was_new=True),
+            seen_count=1, updated_at=utcnow(),
         ))
         try:
             await db.commit()
@@ -721,8 +765,9 @@ async def mark_card(db, user_id: int, deck: str, card: str, known: bool) -> None
             if row is None:
                 return
 
-    row.status = status
-    row.seen_count = (row.seen_count or 0) + 1
+    shows = (row.seen_count or 0) + 1
+    row.status = resolve_status(known, shows=shows, was_new=False)
+    row.seen_count = shows
     row.updated_at = utcnow()
     await db.commit()
 
