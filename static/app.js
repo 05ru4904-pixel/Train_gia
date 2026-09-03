@@ -1737,12 +1737,13 @@
     wait24: { filled: 2, tone: 'var(--ring-24)', label: '24ч' }
   };
 
-  /** Строка списка: слово с ударением слева, метка и кольцо справа. */
+  /** Строка списка: слово с ударением слева, метка и кольцо справа.
+   *  Пояснения здесь нет намеренно: список читают глазами по диагонали,
+   *  а подсказка нужна на самой карточке, где её и показывают. */
   function wordRow(card, ring, badge) {
     return h('div', { class: 'word-row' }, [
       h('div', { class: 'word-row__body' }, [
-        h('div', { class: 'word-row__word' }, stressedNodes(card)),
-        card.hint ? h('div', { class: 'word-row__hint', text: card.hint }) : null
+        h('div', { class: 'word-row__word' }, stressedNodes(card))
       ]),
       h('div', { class: 'word-row__side' }, [badge || null, ring])
     ]);
@@ -2181,11 +2182,11 @@
     }, h('div', { class: 'ring__label', text: label }));
   }
 
+  /** Строка списка: только слова группы, значений здесь нет — они на карточке. */
   function parRow(card, ring, badge) {
     return h('div', { class: 'word-row' }, [
       h('div', { class: 'word-row__body' }, [
-        h('div', { class: 'word-row__word', text: card.title }),
-        h('div', { class: 'word-row__hint', text: card.meanings.join('; ') })
+        h('div', { class: 'word-row__word', text: card.title })
       ]),
       h('div', { class: 'word-row__side' }, [badge || null, ring])
     ]);
