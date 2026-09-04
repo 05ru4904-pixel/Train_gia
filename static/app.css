@@ -1156,3 +1156,27 @@ button {
   color: var(--ink-dim);
 }
 .match-option__num { font-weight: 800; color: var(--accent-ink); flex: none; }
+
+/* Средства выразительности, задание №22.
+   Свой блок: раздел не карточки, общего оформления с ними у него нет. */
+.means-groups { margin-top: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.means-group { padding: 12px 8px; border-radius: var(--radius); background: var(--surface-2); text-align: center; }
+.means-group__value { font-size: 20px; font-weight: 800; color: var(--ink); letter-spacing: -0.02em; }
+.means-group__label { margin-top: 2px; font-size: 11.5px; font-weight: 700; color: var(--muted-2); }
+.means-group__note { margin-top: 1px; font-size: 10.5px; font-weight: 600; color: var(--muted-2); opacity: 0.75; }
+
+/* Выражение, в котором ищут приём. Не .flashcard: карточку переворачивают,
+   а это просто цитата над кнопками. Высота по тексту — попадаются и одна
+   строка, и двустишие с подписью автора. */
+.means-quote {
+  margin-top: 16px;
+  padding: 22px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink-strong);
+  text-align: center;
+}

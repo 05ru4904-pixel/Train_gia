@@ -205,6 +205,8 @@
     parRun: null,       // текущий подход по паронимам
     parWeak: null,      // слабые паронимы
     parLearned: null,   // выученные паронимы
+    means: null,        // средства выразительности, задание №22
+    meansRun: null,     // текущий подход по средствам выразительности
     dateFrom: '',
     dateTo: '',
     preset: '',
@@ -243,6 +245,7 @@
       if (S.screen === 'cardsMenu' && !S.menu) openCardsMenu();
       if (S.screen === 'parWeak' && !S.parWeak) openParWeak();
       if (S.screen === 'parLearned' && !S.parLearned) openParLearned();
+      if (S.screen === 'means' && !S.means) loadMeans();
     }
     if (tab === 'stats') { S.screen = 'stats'; loadStats(); }
     if (tab === 'profile') { S.screen = 'profile'; loadProfile(); }
@@ -267,6 +270,9 @@
     parDone: 'par',
     parWeak: 'par',
     parLearned: 'par',
+    means: 'cardsMenu',
+    meansRun: 'means',
+    meansDone: 'means',
     cardsRun: 'deck',
     cardsDone: 'deck',
     cardsLearned: 'deck',
@@ -295,6 +301,7 @@
     // Счётчики меняются каждым ответом: возвращаясь, берём свежие.
     if (target === 'deck' && S.deck) loadDeck(S.deck.id);
     if (target === 'par') loadPar();
+    if (target === 'means') loadMeans();
     if (target === 'cardsMenu') openCardsMenu();
   }
 
@@ -1971,10 +1978,14 @@
   function openCardsMenu() {
     S.menu = null;
     go('cardsMenu');
-    // Колоды независимы, поэтому и запроса два: у каждой свой прогресс.
-    Promise.all([api('/api/cards/' + DECK_ACCENTS), api('/api/paronyms')])
-      .then(function (both) {
-        S.menu = { accents: both[0], paronyms: both[1] };
+    // Разделы независимы, поэтому и запроса три: у каждого свой прогресс.
+    Promise.all([
+      api('/api/cards/' + DECK_ACCENTS),
+      api('/api/paronyms'),
+      api('/api/means')
+    ])
+      .then(function (all) {
+        S.menu = { accents: all[0], paronyms: all[1], means: all[2] };
         render();
       })
       .catch(function (error) { toast(errorText(error)); });
@@ -1996,14 +2007,31 @@
     ]);
   }
 
+  /** Строка средств выразительности. Своя, а не deckRow: там выучено из всего и
+   *  полоса прогресса, а здесь нет ни того, ни другого — только точность. */
+  function meansRow(data, onClick) {
+    var note = 'Задание №22 · ' + (data.answered
+      ? 'точность ' + data.accuracy + '% за ' + data.answered + ' '
+        + plural(data.answered, 'ответ', 'ответа', 'ответов')
+      : 'ещё не начинали');
+    return h('button', { class: 'card mt-10', type: 'button', onClick: onClick }, [
+      h('div', { class: 'card__body' }, [
+        h('div', { class: 'card__title', text: data.title }),
+        h('div', { class: 'card__note', text: note })
+      ]),
+      h('div', { class: 'card__chevron', text: '›' })
+    ]);
+  }
+
   function screenCardsMenu() {
     var menu = S.menu;
     if (!menu) return screenLoading();
     return h('div', { class: 'page' }, [
       h('div', { class: 'h2', text: 'Карточки' }),
-      h('div', { class: 'sub', text: 'Две колоды, у каждой свой прогресс и свои таймеры' }),
+      h('div', { class: 'sub', text: 'Три раздела, у каждого свой прогресс' }),
       deckRow(menu.accents, 'Задание №4', function () { openDeck(DECK_ACCENTS); }),
-      deckRow(menu.paronyms, 'Задание №5', openPar)
+      deckRow(menu.paronyms, 'Задание №5', openPar),
+      meansRow(menu.means, openMeans)
     ]);
   }
 
@@ -2395,6 +2423,245 @@
       h('div', { class: 'word-list' }, data.cards.map(function (card) {
         return parRow(card, parRing(3, 'var(--ring-done)', '✓'), null);
       }))
+    ]);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Средства выразительности, задание №22                              */
+  /* ------------------------------------------------------------------ */
+  /* Свой раздел целиком: свои экраны, свои запросы, своя таблица в базе.
+     Это не карточки — программа проверяет ответ сама, поэтому здесь нет ни
+     «Знаю / Не знаю», ни таймеров, ни слабых с выученными. Копится только
+     точность по трём группам приёмов. */
+
+  var MEANS_EMPTY = 'В базе ещё нет заданий №22 — спрашивать не из чего';
+
+  function loadMeans() {
+    return api('/api/means')
+      .then(function (data) { S.means = data; render(); return data; })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function openMeans() {
+    S.means = null;
+    S.meansRun = null;
+    go('means');
+    loadMeans();
+  }
+
+  function startMeansRun() {
+    api('/api/means/session')
+      .then(function (data) {
+        if (!data.questions.length) { toast(MEANS_EMPTY); return; }
+        // В ответе лежит и состояние раздела — второй запрос не нужен.
+        S.means = data;
+        S.meansRun = {
+          total: data.questions.length,
+          queue: data.questions.slice(),
+          at: 0,
+          picked: null,    // что нажал ученик
+          verdict: null,   // ответ сервера: верно ли и какой приём правильный
+          busy: false,
+          correct: 0,
+          wrong: 0
+        };
+        go('meansRun');
+      })
+      .catch(function (error) { toast(errorText(error)); });
+  }
+
+  function currentMeans() {
+    if (!S.meansRun) return null;
+    return S.meansRun.queue[S.meansRun.at] || null;
+  }
+
+  /** Проверяет ответ на сервере: правильный приём не уходит на клиент заранее.
+   *  Пока запрос в пути, кнопки не принимают нажатий — иначе один вопрос
+   *  засчитается дважды. */
+  function answerMeans(term) {
+    var run = S.meansRun;
+    var question = currentMeans();
+    if (!run || !question || run.busy || run.verdict) return;
+
+    run.busy = true;
+    run.picked = term;
+    render();
+
+    api('/api/means/answer', {
+      method: 'POST',
+      body: { task_id: question.task_id, position: question.position, term: term }
+    })
+      .then(function (data) {
+        run.busy = false;
+        run.verdict = data;
+        if (data.is_correct) run.correct += 1; else run.wrong += 1;
+        // Точность в шапке раздела обновляем сразу: она пришла вместе с вердиктом.
+        if (S.means) S.means.groups = data.groups;
+        render();
+      })
+      .catch(function (error) {
+        // Ответ не записан — возвращаем вопрос как был, ученик нажмёт заново.
+        run.busy = false;
+        run.picked = null;
+        toast(errorText(error));
+        render();
+      });
+  }
+
+  function nextMeans() {
+    var run = S.meansRun;
+    if (!run || !run.verdict) return;
+    run.at += 1;
+    run.picked = null;
+    run.verdict = null;
+    if (run.at < run.queue.length) { render(); return; }
+    go('meansDone');
+    loadMeans();
+  }
+
+  function resetMeans() {
+    var data = S.means || {};
+    showDialog({
+      title: 'Сбросить точность?',
+      text: 'Будут стёрты все ' + (data.answered || 0) + ' ответов и точность по трём '
+        + 'группам. Вернуть это будет нельзя.',
+      actions: [
+        { label: 'Отмена', kind: 'ghost' },
+        {
+          label: 'Стереть', kind: 'danger', onClick: function () {
+            api('/api/means/reset', { method: 'POST' })
+              .then(function () {
+                toast('Точность сброшена');
+                return loadMeans();
+              })
+              .catch(function (error) { toast(errorText(error)); });
+          }
+        }
+      ]
+    });
+  }
+
+  /** Три группы приёмов с точностью. Показываются только здесь: в общую
+   *  статистику эти ответы не идут, она про решённые задания. */
+  function meansGroups(groups) {
+    return h('div', { class: 'means-groups' }, (groups || []).map(function (group) {
+      return h('div', { class: 'means-group' }, [
+        h('div', {
+          class: 'means-group__value',
+          text: group.total ? group.accuracy + '%' : '—'
+        }),
+        h('div', { class: 'means-group__label', text: group.title }),
+        h('div', {
+          class: 'means-group__note',
+          text: group.total ? group.correct + ' из ' + group.total : 'нет ответов'
+        })
+      ]);
+    }));
+  }
+
+  function screenMeans() {
+    var data = S.means;
+    if (!data) return screenLoading();
+
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'h2', text: data.title }),
+      h('div', { class: 'sub', text: data.subtitle }),
+
+      meansGroups(data.groups),
+
+      h('div', { class: 'stack mt-24' }, [
+        h('button', {
+          class: 'btn btn--primary', type: 'button', disabled: !data.available,
+          onClick: startMeansRun
+        }, data.available ? 'Начать подход' : 'Вопросов пока нет'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button', disabled: !data.answered,
+          onClick: resetMeans
+        }, 'Сбросить точность')
+      ]),
+
+      h('div', { class: 'banner' }, data.available
+        ? 'В подходе ' + Math.min(data.size, data.available) + ' вопросов. Они случайные, '
+          + 'всего их сейчас ' + data.available + '.'
+        : MEANS_EMPTY)
+    ]);
+  }
+
+  function meansOption(term, run) {
+    var classes = ['option'];
+    var mark = '';
+    if (run.verdict) {
+      if (term === run.verdict.correct) { classes.push('is-correct'); mark = '✓'; }
+      else if (term === run.picked) { classes.push('is-wrong'); mark = '✕'; }
+    } else if (term === run.picked) {
+      classes.push('is-picked');
+      mark = '•';
+    }
+    return h('button', {
+      class: classes.join(' '), type: 'button',
+      onClick: function () { answerMeans(term); }
+    }, [
+      h('div', { class: 'option__mark', text: mark }),
+      h('div', { class: 'option__text', text: term })
+    ]);
+  }
+
+  function screenMeansRun() {
+    var run = S.meansRun;
+    var question = currentMeans();
+    if (!run || !question) return screenLoading();
+
+    return h('div', { class: 'page' }, [
+      h('div', { class: 'card-top' }, [
+        h('div', { class: 'card-top__count', text: (run.at + 1) + ' / ' + run.total }),
+        h('div', { class: 'card-top__group', text: 'задание №22' })
+      ]),
+
+      h('div', { class: 'means-quote', text: question.text }),
+
+      h('div', { class: 'options' }, question.options.map(function (term) {
+        return meansOption(term, run);
+      })),
+
+      run.verdict
+        ? h('button', {
+            class: 'btn btn--primary mt-24', type: 'button', onClick: nextMeans
+          }, run.at + 1 < run.total ? 'Дальше' : 'Итог подхода')
+        : null
+    ]);
+  }
+
+  function screenMeansDone() {
+    var run = S.meansRun || { total: 0, correct: 0, wrong: 0 };
+    var data = S.means;
+    var percent = run.total ? Math.round(run.correct * 100 / run.total) : 0;
+
+    return h('div', { class: 'page' }, [
+      h('div', { style: 'text-align:center' }, [
+        h('div', { class: 'h2', text: 'Подход пройден' }),
+        h('div', { class: 'sub', text: 'Верно ' + run.correct + ' из ' + run.total
+          + ' · ' + percent + '%' })
+      ]),
+
+      h('div', { class: 'tiles tiles--two' }, [
+        tile(run.correct, 'верно', 'tile--green'),
+        tile(run.wrong, 'неверно', run.wrong ? 'tile--red' : '')
+      ]),
+
+      data ? meansGroups(data.groups) : null,
+
+      h('div', { class: 'stack mt-24' }, [
+        h('button', {
+          class: 'btn btn--primary', type: 'button', onClick: startMeansRun
+        }, 'Ещё подход'),
+        h('button', {
+          class: 'btn btn--ghost', type: 'button',
+          onClick: function () { go('means'); loadMeans(); }
+        }, 'К разделу')
+      ]),
+
+      h('div', { class: 'banner' },
+        'Точность копится по трём группам приёмов и на выбор вопросов не влияет.')
     ]);
   }
 
@@ -2861,7 +3128,10 @@
     parRun: ['Паронимы', 'вспомни и проверь'],
     parDone: ['Паронимы', 'итог подхода'],
     parWeak: ['Слабые паронимы', 'что ещё на повторе'],
-    parLearned: ['Выученные паронимы', 'закрытые группы']
+    parLearned: ['Выученные паронимы', 'закрытые группы'],
+    means: ['Средства выразительности', 'задание №22'],
+    meansRun: ['Средства выразительности', 'выбери приём'],
+    meansDone: ['Средства выразительности', 'итог подхода']
   };
 
   var lastViewKey = null;
@@ -2876,6 +3146,7 @@
     if (S.screen === 'mistake') parts.push(S.reviewPosition);
     if (S.run) parts.push(S.run.at, S.run.shown, S.run.round);
     if (S.parRun) parts.push(S.parRun.at, S.parRun.shown, S.parRun.round);
+    if (S.meansRun) parts.push(S.meansRun.at, S.meansRun.picked, !!S.meansRun.verdict);
     if (S.result) parts.push(S.result.id);
     return parts.join('|');
   }
@@ -2899,6 +3170,9 @@
       title = S.parRun.round > 1
         ? ['Паронимы · добиваем', 'пока не вспомнишь']
         : ['Паронимы · ' + (S.parRun.at + 1) + '/' + S.parRun.total, 'вспомни и проверь'];
+    }
+    if (S.screen === 'meansRun' && S.meansRun) {
+      title = ['Средства · ' + (S.meansRun.at + 1) + '/' + S.meansRun.total, 'выбери приём'];
     }
     dom.title.textContent = title[0];
     dom.sub.textContent = title[1];
@@ -2953,7 +3227,10 @@
         parRun: screenParRun,
         parDone: screenParDone,
         parWeak: screenParWeak,
-        parLearned: screenParLearned
+        parLearned: screenParLearned,
+        means: screenMeans,
+        meansRun: screenMeansRun,
+        meansDone: screenMeansDone
       };
       node = (screens[S.screen] || screenHome)();
     }

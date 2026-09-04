@@ -29,6 +29,7 @@ from db.models import (
     STATUS_ACTIVE,
     STATUS_FINISHED,
     CardProgress,
+    MeansStat,
     ParonymProgress,
     Session,
     SessionItem,
@@ -913,5 +914,83 @@ async def reset_paronyms(db, user_id: int) -> int:
     )
     total = rows.scalar() or 0
     await db.execute(delete(ParonymProgress).where(ParonymProgress.user_id == user_id))
+    await db.commit()
+    return total
+
+
+# --------------------------------------------------------------------------- #
+# Средства выразительности (задание №22)
+# --------------------------------------------------------------------------- #
+async def means_source_tasks(db, number: int) -> list[Task]:
+    """Задания-источники вопросов о средствах выразительности (№22).
+
+    Берём все: восемь вариантов дают восемь строк, и разбор пяти позиций в каждой
+    дешевле, чем случайная выборка на стороне базы. Вопрос ведь не задание
+    целиком, а одна его позиция — в SQL их не пронумеровать.
+
+    Номер приходит извне: в этом слое ему взяться неоткуда, он живёт в core/means.py.
+    """
+    rows = await db.execute(
+        select(Task).where(Task.number == number, Task.kind == KIND_MATCH)
+    )
+    return list(rows.scalars())
+
+
+async def means_stats(db, user_id: int) -> dict[str, tuple[int, int]]:
+    """Группа -> (решено, верно). Групп, по которым ученик не отвечал, в словаре нет."""
+    rows = await db.execute(
+        select(MeansStat.group_id, MeansStat.total, MeansStat.correct)
+        .where(MeansStat.user_id == user_id)
+    )
+    return {group: (total or 0, correct or 0) for group, total, correct in rows.all()}
+
+
+async def bump_means(db, user_id: int, group_id: str, is_correct: bool) -> None:
+    """Засчитывает один ответ в точность группы. Пишется сразу после ответа:
+    подход часто бросают на середине, и уже отвеченное должно остаться."""
+    now = utcnow()
+    rows = await db.execute(
+        select(MeansStat).where(
+            MeansStat.user_id == user_id,
+            MeansStat.group_id == group_id,
+        )
+    )
+    row = rows.scalar_one_or_none()
+    if row is None:
+        db.add(MeansStat(
+            user_id=user_id, group_id=group_id,
+            total=1, correct=1 if is_correct else 0, updated_at=now,
+        ))
+        try:
+            await db.commit()
+            return
+        except IntegrityError:
+            # Параллельный ответ с двух устройств — строка уже есть, обновляем её.
+            await db.rollback()
+            rows = await db.execute(
+                select(MeansStat).where(
+                    MeansStat.user_id == user_id,
+                    MeansStat.group_id == group_id,
+                )
+            )
+            row = rows.scalar_one_or_none()
+            if row is None:
+                return
+
+    row.total = (row.total or 0) + 1
+    if is_correct:
+        row.correct = (row.correct or 0) + 1
+    row.updated_at = now
+    await db.commit()
+
+
+async def reset_means(db, user_id: int) -> int:
+    """Забывает накопленную точность. Возвращает, сколько ответов стёрто."""
+    rows = await db.execute(
+        select(func.coalesce(func.sum(MeansStat.total), 0))
+        .where(MeansStat.user_id == user_id)
+    )
+    total = rows.scalar() or 0
+    await db.execute(delete(MeansStat).where(MeansStat.user_id == user_id))
     await db.commit()
     return total

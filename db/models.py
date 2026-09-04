@@ -367,3 +367,34 @@ class ParonymProgress(Base):
         # Подход «Повторить» ищет группы с истёкшим сроком — по этому индексу.
         Index("ix_paronym_progress_due", "user_id", "due_at"),
     )
+
+
+# --- средства выразительности --------------------------------------------------
+# Задание №22 живёт отдельно от карточек и паронимов: своя таблица, свой код.
+# Здесь не запоминание, а проверка, поэтому ни этапов, ни таймеров нет — копится
+# только точность по трём группам приёмов.
+class MeansStat(Base):
+    """Точность ученика по одной группе средств выразительности.
+
+    Одна строка на пару «ученик — группа», всего три строки на ученика. Счётчики,
+    а не журнал ответов: на подбор вопросов точность не влияет и в общую
+    статистику (вкладка «Статистика») не входит — она про решённые задания.
+    Показывается только в самом тренажёре.
+    """
+
+    __tablename__ = "means_stats"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # Идентификатор группы из core/means.py: lexical, syntactic, phonetic.
+    # Колонка названа group_id, а не group: GROUP — зарезервированное слово SQL.
+    group_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    correct: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "group_id", name="uq_means_stats"),
+    )
