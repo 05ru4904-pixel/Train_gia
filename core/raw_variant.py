@@ -110,6 +110,23 @@ RE_SERVICE = re.compile(
 
 MATCH_LETTERS = ("А", "Б", "В", "Г", "Д")
 
+# Конец столбцов задания на соответствие: дальше идёт таблица для ответа, а не
+# материал. «Запишите в таблицу…» и «Запишите в ответ…» — обе формулировки живые.
+RE_MATCH_TAIL = re.compile(r"^Запишите\b", re.I)
+
+# Строчная буква — по ней отличается заголовок столбца от его содержимого.
+RE_LOWER = re.compile(r"[а-яёa-z]")
+
+
+def is_column_header(line: str) -> bool:
+    """Заголовок столбца: «ПРЕДЛОЖЕНИЯ», «ГРАММАТИЧЕСКИЕ ОШИБКИ» и подобные.
+
+    Признак — ни одной строчной буквы. Заголовки в источнике всегда набраны
+    прописными, а строки материала — обычным текстом, так что путаницы нет.
+    Сюда же попадает строка-шапка таблицы ответа «А Б В Г Д».
+    """
+    return bool(re.search(r"[А-ЯЁA-Z]", line)) and not RE_LOWER.search(line)
+
 
 @dataclass
 class Problem:
@@ -306,22 +323,71 @@ def take_options(rest: str) -> tuple[list[str], list[int], str, str]:
     return options, numbers, "\n".join(before).strip(), "\n".join(after).strip()
 
 
-def take_match(rest: str) -> tuple[list[str], list[str], list[str]]:
-    """Соответствие -> (левый столбец А-Д, правый столбец 1-9, буквы слева)."""
-    left: list[str] = []
+def take_match(rest: str) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Соответствие -> (левый столбец А-Д, правый столбец 1-9, буквы, лишние строки).
+
+    **Позиция столбца занимает столько строк, сколько ей нужно.** В №22 это почти
+    всегда двустишие, в прозе — фраза, разбитая переносом. Раньше бралась только
+    строка с меткой, а всё остальное молча пропадало — вместе с приёмом, который
+    как раз во второй строке и сидел:
+
+        А)  Людей неинтересных в мире нет.
+            Их судьбы — как истории планет.     <- эту строку теряли
+        ответ: сравнение                        <- а оно только здесь и есть
+
+    Из-за этого №22 был испорчен во всех девяти собранных вариантах, и ученик
+    не мог ответить верно иначе как угадав. Задание стоит 2 балла.
+
+    Пустая строка позицию не закрывает: выгрузка расставляет их между строками
+    одного и того же двустишия. Закрывают позицию только метка следующей
+    («Б)», «3)»), заголовок столбца прописными и строка «Запишите…», после
+    которой идёт таблица для ответа.
+
+    Строки, не попавшие никуда, возвращаются четвёртым значением — молча
+    выбрасывать их нельзя, иначе следующая перемена в разметке источника опять
+    пройдёт незамеченной.
+    """
+    left: list[list[str]] = []
+    right: list[list[str]] = []
     letters: list[str] = []
-    right: list[str] = []
+    stray: list[str] = []
+    current: list[str] | None = None
+
     for line in rest.split("\n"):
         stripped = line.strip()
+        if not stripped:
+            continue
+        if RE_MATCH_TAIL.match(stripped):
+            break
+
         found_left = RE_LEFT.match(stripped)
         if found_left and found_left.group(1) in MATCH_LETTERS:
             letters.append(found_left.group(1))
-            left.append(found_left.group(2).strip())
+            left.append([found_left.group(2).strip()])
+            current = left[-1]
             continue
+
         found_right = RE_OPTION.match(stripped)
         if found_right:
-            right.append(found_right.group(2).strip())
-    return left, right, letters
+            right.append([found_right.group(2).strip()])
+            current = right[-1]
+            continue
+
+        if is_column_header(stripped):
+            current = None
+            continue
+
+        if current is None:
+            stray.append(stripped)
+        else:
+            current.append(stripped)
+
+    return (
+        [squeeze(" ".join(parts)) for parts in left],
+        [squeeze(" ".join(parts)) for parts in right],
+        letters,
+        stray,
+    )
 
 
 def take_answer(explanation: str) -> tuple[str, bool]:
@@ -422,7 +488,14 @@ def _build_task(number: int, source_id: int | None, block: str, result: Result):
         task["material"] = "\n\n".join(p for p in (before, after) if p) or None
 
     elif kind == KIND_MATCH:
-        left, right, letters = take_match(rest)
+        left, right, letters, stray = take_match(rest)
+        if stray:
+            # Не ошибка, но и не норма: разметка источника изменилась, и часть
+            # текста не легла ни в один столбец. Пусть будет видно при вычитке.
+            result.notes.append(
+                f"№{number}: строки вне столбцов, проверьте разбор: "
+                + "; ".join(s[:60] for s in stray[:3])
+            )
         if list(letters) != list(MATCH_LETTERS):
             result.problems.append(
                 Problem(number, f"левый столбец {letters}, ожидался {list(MATCH_LETTERS)}")
