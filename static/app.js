@@ -728,7 +728,7 @@
   function askPause() {
     // Текст предупреждения — дословно из ТЗ п.9.
     showDialog({
-      title: '⚠️ Остановить время?',
+      title: 'Остановить время?',
       text: 'Рекомендуем останавливать время только если вам действительно пришлось внезапно '
         + 'отлучиться, а не с целью увеличить время на решение, так как это может повлиять '
         + 'на вашу подготовку.\n\nВы действительно хотите остановить время?',
@@ -1086,7 +1086,7 @@
       question.multi ? h('div', { class: 'q-hint', text: 'Выберите все верные варианты' }) : null,
       answerArea(question),
       answeredNow ? h('div', { class: 'verdict ' + (S.checked.is_correct ? 'verdict--ok' : 'verdict--no') }, [
-        h('div', { class: 'verdict__title', text: S.checked.is_correct ? '✅ Верно!' : '❌ Неверно' }),
+        h('div', { class: 'verdict__title', text: S.checked.is_correct ? 'Верно!' : 'Неверно' }),
         S.checked.is_correct ? null : h('div', {
           class: 'verdict__note',
           text: 'Правильный ответ: ' + correctLabel(question)
@@ -1204,7 +1204,7 @@
 
     return h('div', { class: 'page' }, [
       h('div', { style: 'text-align:center' }, [
-        h('div', { class: 'h2', text: '🎉 Тренировка завершена' }),
+        h('div', { class: 'h2', text: 'Тренировка завершена' }),
         h('div', { class: 'sub', text: '№' + result.task_number + ' · ' + result.title }),
         h('div', { class: 'result-score', text: result.accuracy + '%' })
       ]),
@@ -1321,18 +1321,24 @@
     var result = S.result;
     if (!result) return screenLoading();
     return h('div', { class: 'page' }, [
-      h('div', { style: 'text-align:center' }, [
-        h('div', { class: 'h2', text: 'Вариант завершён' }),
-        h('div', { class: 'sub', text: 'Задания №1–26 · ' + duration(result.time_spent) })
+      // Обложка на оранжевом градиенте: он отмечает событие, и вариант —
+      // единственное событие в тренажёре. На других экранах его нет.
+      h('div', { class: 'result-cover' }, [
+        h('div', { class: 'result-cover__label', text: 'Вариант завершён' }),
+        h('div', { class: 'result-cover__value', text: String(result.raw_score) }),
+        h('div', {
+          class: 'result-cover__note',
+          text: 'из ' + result.max_raw_score + ' первичных · задания №1–26'
+        })
       ]),
       h('div', { class: 'score-grid' }, [
         h('div', { class: 'score-card score-card--accent' }, [
-          h('div', { class: 'score-card__value', text: result.raw_score + '/' + result.max_raw_score }),
-          h('div', { class: 'score-card__label', text: 'первичный балл' })
-        ]),
-        h('div', { class: 'score-card' }, [
           h('div', { class: 'score-card__value', text: result.accuracy + '%' }),
           h('div', { class: 'score-card__label', text: 'точность' })
+        ]),
+        h('div', { class: 'score-card' }, [
+          h('div', { class: 'score-card__value', text: duration(result.time_spent) }),
+          h('div', { class: 'score-card__label', text: 'затрачено' })
         ])
       ]),
       h('div', { class: 'tiles' }, [
@@ -3027,7 +3033,9 @@
     var initial = (profile.name || '?').trim().charAt(0).toUpperCase();
     return h('div', { class: 'page' }, [
       h('div', { class: 'profile-head' }, [
-        h('div', { class: 'avatar', text: initial }),
+        // Буква — в data-initial: саму букву рисует ::before поверх кольца,
+        // иначе спектральный градиент пришлось бы класть отдельным элементом.
+        h('div', { class: 'avatar', 'data-initial': initial }),
         h('div', {}, [
           h('div', { class: 'profile-name', text: profile.name }),
           profile.username ? h('div', { class: 'profile-username', text: '@' + profile.username }) : null
@@ -3184,9 +3192,15 @@
     // не открыт. При правке из профиля вкладки остаются на месте.
     dom.tabbar.hidden = S.screen === 'onboarding' && !(S.onb && S.onb.editing);
 
-    Array.prototype.forEach.call(dom.tabs, function (tab) {
-      tab.classList.toggle('is-active', tab.getAttribute('data-tab') === S.tab);
+    // Активный раздел отмечает стеклянная капсула, а не цвет иконки: она
+    // переезжает по --tab, поэтому её позиция — это индекс вкладки в разметке.
+    var activeTab = 0;
+    Array.prototype.forEach.call(dom.tabs, function (tab, index) {
+      var on = tab.getAttribute('data-tab') === S.tab;
+      tab.classList.toggle('is-active', on);
+      if (on) activeTab = index;
     });
+    dom.tabbar.style.setProperty('--tab', String(activeTab));
 
     // Прокрутку сбрасываем только при переходе на другой экран или к другому
     // заданию. Иначе выбор варианта — он тоже вызывает перерисовку — отбрасывал

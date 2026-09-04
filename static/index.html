@@ -39,6 +39,9 @@
     <main id="screen" class="screen"></main>
 
     <nav id="tabbar" class="tabbar">
+      <!-- Капсула активного раздела. Переезжает по --tab, а не перерисовывается:
+           анимируется только transform, иначе на слабых телефонах дёргается. -->
+      <div class="tabbar__pill" aria-hidden="true"><i></i></div>
       <button class="tab" type="button" data-tab="trainer">
         <span class="tab__icon tab__icon--grid"><i></i><i></i><i></i><i></i></span>
         <span class="tab__label">Тренажёр</span>
