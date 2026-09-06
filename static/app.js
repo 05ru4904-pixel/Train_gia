@@ -3027,11 +3027,61 @@
     ]);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* ВРЕМЕННО: проверка стекла на живом устройстве                       */
+  /* ------------------------------------------------------------------ */
+  /* Отладочный блок. Rendering-движок в Telegram проверить со стороны нельзя,
+     а два приёма подряд молча не сработали у пользователя, хотя в headless
+     Chromium работали. Поэтому пять квадратов, в каждом ровно один приём:
+     видно, какой из них живой. УБРАТЬ, как только ответ получен. */
+  function glassProbe() {
+    function cell(index, title, style) {
+      return h('div', { class: 'diag__cell' }, [
+        h('div', { class: 'diag__glass', style: style }, String(index)),
+        h('div', { class: 'diag__name', text: title })
+      ]);
+    }
+
+    var supports = [
+      ['backdrop-filter', CSS.supports('backdrop-filter', 'blur(4px)')],
+      ['-webkit-backdrop-filter', CSS.supports('-webkit-backdrop-filter', 'blur(4px)')],
+      ['url() в backdrop-filter', CSS.supports('backdrop-filter', 'url(#a)')],
+      ['mask', CSS.supports('mask-image', 'radial-gradient(#000, transparent)')]
+    ].map(function (pair) {
+      return pair[0] + ': ' + (pair[1] ? 'да' : 'нет');
+    }).join(' · ');
+
+    var blur = 'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+    var mask = 'mask:radial-gradient(circle, transparent 40%, #000 85%);'
+      + '-webkit-mask:radial-gradient(circle, transparent 40%, #000 85%);';
+
+    return h('div', { class: 'diag' }, [
+      h('div', { class: 'eyebrow', text: 'Проверка стекла' }),
+      h('div', { class: 'diag__strip' }, [
+        h('div', { class: 'diag__text', text: 'АБВГД мелкий текст 12345' }),
+        h('div', { class: 'diag__row' }, [
+          cell(1, 'размытие', blur),
+          cell(2, 'размытие + маска', blur + mask),
+          cell(3, 'фильтр', 'backdrop-filter:' + (S.refractValue || 'none')
+            + ';-webkit-backdrop-filter:' + (S.refractValue || 'none') + ';'),
+          cell(4, 'только webkit', '-webkit-backdrop-filter:blur(6px);'),
+          cell(5, 'без стекла', 'background:oklch(1 0 0 / 0.45);')
+        ])
+      ]),
+      h('div', { class: 'diag__note' }, [
+        'Пришлите снимок этого блока. Нужен номер тех квадратов, где фон под '
+          + 'ними размыт или искажён, а не просто светлее.',
+        h('div', { class: 'diag__supports', text: supports })
+      ])
+    ]);
+  }
+
   function screenProfile() {
     var profile = S.profile;
     if (!profile) return screenLoading();
     var initial = (profile.name || '?').trim().charAt(0).toUpperCase();
     return h('div', { class: 'page' }, [
+      glassProbe(),
       h('div', { class: 'profile-head' }, [
         // Буква — в data-initial: саму букву рисует ::before поверх кольца,
         // иначе спектральный градиент пришлось бы класть отдельным элементом.
@@ -3416,6 +3466,7 @@
     var value = 'url(#' + id + ') blur(1px) saturate(1.2)';
     layer.style.backdropFilter = value;
     layer.style.webkitBackdropFilter = value;
+    S.refractValue = value;   // нужен отладочному блоку в профиле
   }
 
   /* ------------------------------------------------------------------ */

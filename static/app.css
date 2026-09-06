@@ -1651,3 +1651,38 @@ button {
   color: var(--ink-strong);
   text-align: center;
 }
+
+/* ВРЕМЕННО: проверка стекла на живом устройстве. Убрать вместе с glassProbe()
+   в app.js, как только станет понятно, какие приёмы работают в Telegram. */
+.diag { margin-bottom: 22px; }
+.diag__strip {
+  position: relative;
+  margin-top: 8px;
+  padding: 14px 10px;
+  border-radius: var(--radius-card);
+  background:
+    repeating-linear-gradient(115deg, oklch(0.55 0.20 38) 0 18px, oklch(0.52 0.29 300) 18px 36px);
+  overflow: hidden;
+}
+.diag__text {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+.diag__row { margin-top: 10px; display: flex; gap: 6px; }
+.diag__cell { flex: 1; min-width: 0; text-align: center; }
+.diag__glass {
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+}
+.diag__name { margin-top: 4px; font-size: 9px; font-weight: 700; color: #fff; line-height: 1.2; }
+.diag__note { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--ink-dim); line-height: 1.4; }
+.diag__supports { margin-top: 4px; font-size: 10.5px; font-weight: 600; color: var(--muted); }
