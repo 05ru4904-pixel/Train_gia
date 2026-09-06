@@ -3307,12 +3307,6 @@
           по id, и без смены линза замерзает;
        4. блик берётся из сырой карты: в WebKit другой порядок композиции. */
 
-  /* Во сколько раз капля вырастает при удержании. Живёт здесь, а не в CSS:
-     раньше JS читал значение обратно через getComputedStyle, и если движок
-     вернёт пустоту, гашение масштаба молча отключалось — внутри капли
-     оставалось увеличение, и выглядело это как второй таббар внутри. */
-  var HOLD_SCALE = 1.55;
-
   var GLASS = {
     // Значения взяты из DEFAULT_LENS_PARAMS библиотеки: там они подобраны
     // под настоящее стекло, а мои прикидки занижали эффект вдвое.
@@ -3615,13 +3609,11 @@
     svg.appendChild(defs);
     document.body.appendChild(svg);
 
-    // Одно значение на два места: CSS растит каплю, JS гасит масштаб внутри
-    // линзы. Ставим его отсюда, чтобы они не разошлись.
-    document.documentElement.style.setProperty('--hold-scale', String(HOLD_SCALE));
-
+    var capsule = pill.querySelector('i');
     var style = getComputedStyle(pill);
     glass = {
       lens: lens,
+      glassEl: capsule,
       row: row,
       copies: row.children,
       defs: defs,
@@ -3648,24 +3640,24 @@
     var step = dom.tabs[0].getBoundingClientRect().width;
     if (!step) return;
     var inner = step * dom.tabs.length;
-    var capW = step - glass.inset * 2;
-    var capH = box.height - glass.pad * 2;
+    // Размер капли меряем у неё самой: при удержании она вырастает по высоте,
+    // и карта смещения должна строиться под фактическую форму.
+    var cap = glass.glassEl.getBoundingClientRect();
+    var capW = cap.width || (step - glass.inset * 2);
+    var capH = cap.height || (box.height - glass.pad * 2);
     glass.row.style.setProperty('--lens-w', inner + 'px');
+    glass.row.style.setProperty('--lens-h', dom.tabs[0].getBoundingClientRect().height + 'px');
     glass.row.style.setProperty('--lens-x', -(at * step + glass.inset) + 'px');
-    // Точка копии, которая должна остаться в центре капли: относительно неё
-    // гасится увеличение.
-    glass.row.style.setProperty('--lens-origin', (at * step + glass.inset + capW / 2) + 'px');
     rebuildGlass(capW, capH);
   }
 
   /** Показывает или прячет линзу. Напрямую стилем, а не классом: правило
    *  на классе однажды не применилось в живом приложении, хотя селектор
-   *  совпадал, — разбираться вслепую дороже, чем поставить свойство. */
+   *  совпадал, — разбираться вслепую дороже, чем поставить свойство.
+   *  Масштабировать копию больше не нужно: капля растёт коробкой. */
   function showGlass(on) {
     if (!glass) return;
     glass.lens.style.opacity = on ? '1' : '0';
-    // Пока капля увеличена, копия внутри сжимается ровно во столько же раз.
-    glass.row.style.setProperty('--lens-counter', on ? String(1 / HOLD_SCALE) : '1');
   }
 
   /** Подсветка раздела в копии: под линзой горит тот же, что снаружи. */
