@@ -3362,7 +3362,10 @@
       squash: 0.55,
       // Надувание при удержании.
       pressLens: 0.07,
-      pressPlate: 0.012,
+      // Подача плашки выключена: любая трансформация предка — лишний повод
+      // для WebKit вынести поддерево в композитор и потерять фильтр. Ради
+      // едва заметного движения рисковать всем эффектом не стоит.
+      pressPlate: 0,
 
       dragThreshold: 6
     };
@@ -3887,14 +3890,26 @@
       var sx = clamp(1 + sim.form + sim.press * GLASS.pressLens, 0.5, 2);
       var sy = clamp(1 - sim.form * GLASS.squash + sim.press * GLASS.pressLens, 0.5, 2);
 
-      el.lens.style.transform = 'translate3d(' + tx.toFixed(2) + 'px,0,0) scale('
+      // Только двумерные трансформации: translate3d вынес бы линзу в
+      // отдельный слой композитора, а WebKit внутри такого слоя выбрасывает
+      // SVG-фильтр вместе со всем преломлением.
+      el.lens.style.transform = 'translate(' + tx.toFixed(2) + 'px,0) scale('
         + sx.toFixed(4) + ',' + sy.toFixed(4) + ')';
-      // Обратная трансформация внутри: стекло тянется, а содержимое под ним
-      // остаётся на месте. Иначе копия разъезжается с оригиналом, и сразу
-      // видно, что под линзой не тот же самый DOM.
-      el.fx.style.transform = 'scale(' + (1 / sx).toFixed(4) + ',' + (1 / sy).toFixed(4) + ')';
-      el.mirror.style.transform = 'translate3d(' + (geo.mx - tx).toFixed(2) + 'px,'
-        + geo.my.toFixed(2) + 'px,0)';
+
+      // Обратная трансформация: стекло тянется, а содержимое под ним остаётся
+      // на месте. Иначе копия разъезжается с оригиналом, и сразу видно, что
+      // под линзой не тот же самый DOM.
+      //
+      // Висит она на зеркале, а НЕ на слое с фильтром. Причина та же: у
+      // WebKit фильтр и собственная трансформация на одном элементе уживаются
+      // плохо. Гасим вокруг центра линзы — того же, вокруг которого растёт
+      // сама линза, иначе взаимного погашения не выйдет.
+      var cx = geo.w / 2, cy = geo.h / 2;
+      el.mirror.style.transform =
+        'translate(' + cx.toFixed(2) + 'px,' + cy.toFixed(2) + 'px) '
+        + 'scale(' + (1 / sx).toFixed(4) + ',' + (1 / sy).toFixed(4) + ') '
+        + 'translate(' + (-cx).toFixed(2) + 'px,' + (-cy).toFixed(2) + 'px) '
+        + 'translate(' + (geo.mx - tx).toFixed(2) + 'px,' + geo.my.toFixed(2) + 'px)';
 
       if (path === 'mirror' && GLASS.pressPlate > 0) {
         // Плашка подаётся только в режиме зеркала: в Chromium трансформация
