@@ -3308,19 +3308,23 @@
        4. блик берётся из сырой карты: в WebKit другой порядок композиции. */
 
   var GLASS = {
-    mapSize: 128,      // разрешение карты, см. оговорку 1
-    depth: 0.42,       // как глубоко внутрь достаёт преломление (доля половины)
-    curvature: 0.3,    // купол: увеличение к середине
-    strength: 0.05,    // сила смещения как доля стороны капли
-    bend: 0.5,         // мениск: добавочный изгиб у самой кромки
-    bendWidth: 0.18,
-    frost: 0,          // матовость до преломления: 0 — см. примечание ниже
-    specular: 1,       // общая яркость блика
-    sheen: 0.34,       // блик по кромке
+    // Значения взяты из DEFAULT_LENS_PARAMS библиотеки: там они подобраны
+    // под настоящее стекло, а мои прикидки занижали эффект вдвое.
+    mapSize: 512,      // разрешение карты; в WebKit увеличивать нельзя
+    depth: 0.65,       // как глубоко внутрь достаёт преломление (доля половины)
+    curvature: 0.6,    // купол: увеличение к середине
+    strength: 0.06,    // сила смещения как доля стороны капли
+    bend: 0,           // мениск у кромки; у них по умолчанию тоже 0
+    bendWidth: 0.16,
+    frost: 0.5,        // матовость копии до преломления, px
+    // Блик выключен по просьбе пользователя: именно он подмешивал белое и
+    // сходился к одной стороне — то самое молочное пятно поверх капли.
+    specular: 0,
+    sheen: 0,
     sheenWidth: 3,
     sheenFalloff: 1.5,
     sheenAngle: 45,
-    glow: 0.14,        // мягкое внутреннее свечение
+    glow: 0,
     glowSpread: 1,
     glowFalloff: 0.5
   };
@@ -3540,15 +3544,18 @@
 
     // Блик: синий канал карты поднимается в белую подсветку и добавляется
     // поверх. Берём сырую карту — в WebKit порядок композиции другой.
-    filter.appendChild(svgNode('feColorMatrix', {
-      'in': 'rawMap', type: 'matrix',
-      values: '0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 1 0 ' + (-128 / 255),
-      result: 'sheenMask'
-    }));
-    filter.appendChild(svgNode('feComposite', {
-      'in': 'sheenMask', in2: 'lensOut', operator: 'arithmetic',
-      k1: 0, k2: GLASS.specular, k3: 1, k4: 0
-    }));
+    // Пока выключен: он и давал молочное пятно поверх капли.
+    if (GLASS.specular > 0) {
+      filter.appendChild(svgNode('feColorMatrix', {
+        'in': 'rawMap', type: 'matrix',
+        values: '0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 1 0 ' + (-128 / 255),
+        result: 'sheenMask'
+      }));
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'sheenMask', in2: 'lensOut', operator: 'arithmetic',
+        k1: 0, k2: GLASS.specular, k3: 1, k4: 0
+      }));
+    }
 
     return filter;
   }

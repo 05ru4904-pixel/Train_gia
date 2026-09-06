@@ -427,22 +427,12 @@ button {
   transform: translateX(calc(var(--tab, 0) * 100%)) scale(var(--hold-scale));
 }
 .tabbar.is-holding .tabbar__pill > i {
-  background: linear-gradient(180deg, oklch(1 0 0 / 0.34) 0%, oklch(1 0 0 / 0.06) 60%);
-  /* Расслоение цвета по краям: тёплая подсветка с одной стороны, холодная с
-     другой. Это не радуга по контуру, а дисперсия, как в стекле. */
-  box-shadow:
-    0 12px 26px oklch(0.35 0.03 45 / 0.22),
-    inset 0 1px 2px oklch(1 0 0 / 0.7),
-    inset 3px 0 5px -1px oklch(0.72 0.20 45 / 0.30),
-    inset -3px 0 5px -1px oklch(0.58 0.27 300 / 0.26),
-    inset 0 -3px 6px oklch(0.35 0.03 45 / 0.10);
-}
-
-/* Пока палец ещё и едет — капсула идёт следом без анимации и слегка
-   вытягивается по ходу движения. */
-.tabbar.is-dragging .tabbar__pill {
-  transition: none;
-  transform: translateX(calc(var(--tab, 0) * 100%)) scale(var(--hold-scale)) scaleX(1.06);
+  /* Пока палец на капле, у стекла нет ни заливки, ни цветных подсветок:
+     смотреть надо на преломление, а всё остальное только мешало — цветная
+     кайма и блик давали молочное пятно поверх. Осталась одна тень, чтобы
+     капля не сливалась с плашкой. */
+  background: none;
+  box-shadow: 0 12px 26px oklch(0.35 0.03 45 / 0.22);
 }
 
 /* Линза внутри капли: копия строки разделов, которую гнёт SVG-фильтр.
