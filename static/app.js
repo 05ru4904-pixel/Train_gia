@@ -3307,16 +3307,25 @@
           по id, и без смены линза замерзает;
        4. блик берётся из сырой карты: в WebKit другой порядок композиции. */
 
+  /* Во сколько раз капля вырастает при удержании. Живёт здесь, а не в CSS:
+     раньше JS читал значение обратно через getComputedStyle, и если движок
+     вернёт пустоту, гашение масштаба молча отключалось — внутри капли
+     оставалось увеличение, и выглядело это как второй таббар внутри. */
+  var HOLD_SCALE = 1.55;
+
   var GLASS = {
     // Значения взяты из DEFAULT_LENS_PARAMS библиотеки: там они подобраны
     // под настоящее стекло, а мои прикидки занижали эффект вдвое.
     mapSize: 512,      // разрешение карты; в WebKit увеличивать нельзя
-    depth: 0.65,       // как глубоко внутрь достаёт преломление (доля половины)
+    // Тонкая полоса у кромки с нейтральной серединой — так это описано в их
+    // же документации: низкое значение даёт ободок, около единицы заполняет
+    // всю форму. Купол тоже перекрыт этим значением и середину не трогает.
+    depth: 0.3,
     curvature: 0.6,    // купол: увеличение к середине
     strength: 0.06,    // сила смещения как доля стороны капли
     bend: 0,           // мениск у кромки; у них по умолчанию тоже 0
     bendWidth: 0.16,
-    frost: 0.5,        // матовость копии до преломления, px
+    frost: 0,          // матовость: нулевая, она мылила всю площадь разом
     // Блик выключен по просьбе пользователя: именно он подмешивал белое и
     // сходился к одной стороне — то самое молочное пятно поверх капли.
     specular: 0,
@@ -3606,6 +3615,10 @@
     svg.appendChild(defs);
     document.body.appendChild(svg);
 
+    // Одно значение на два места: CSS растит каплю, JS гасит масштаб внутри
+    // линзы. Ставим его отсюда, чтобы они не разошлись.
+    document.documentElement.style.setProperty('--hold-scale', String(HOLD_SCALE));
+
     var style = getComputedStyle(pill);
     glass = {
       lens: lens,
@@ -3630,8 +3643,11 @@
     if (!glass) return;
     var box = dom.tabbar.getBoundingClientRect();
     if (!box.width) return;
-    var inner = box.width - glass.pad * 2;
-    var step = inner / dom.tabs.length;
+    // Шаг меряем по настоящему разделу, а не делением ширины плашки: у неё
+    // есть рамка, и расчёт по внешней ширине копил сдвиг копии к правому краю.
+    var step = dom.tabs[0].getBoundingClientRect().width;
+    if (!step) return;
+    var inner = step * dom.tabs.length;
     var capW = step - glass.inset * 2;
     var capH = box.height - glass.pad * 2;
     glass.row.style.setProperty('--lens-w', inner + 'px');
@@ -3648,11 +3664,8 @@
   function showGlass(on) {
     if (!glass) return;
     glass.lens.style.opacity = on ? '1' : '0';
-    // Пока капля увеличена, копия внутри сжимается ровно во столько же раз:
-    // масштаб берём из того же токена, что и рост капли, чтобы не разошлись.
-    var scale = parseFloat(getComputedStyle(document.documentElement)
-      .getPropertyValue('--hold-scale')) || 1;
-    glass.row.style.setProperty('--lens-counter', on ? String(1 / scale) : '1');
+    // Пока капля увеличена, копия внутри сжимается ровно во столько же раз.
+    glass.row.style.setProperty('--lens-counter', on ? String(1 / HOLD_SCALE) : '1');
   }
 
   /** Подсветка раздела в копии: под линзой горит тот же, что снаружи. */
