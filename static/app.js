@@ -3317,6 +3317,9 @@
       // Начинаем только с самой капсулы: нажатие по соседнему разделу — тап.
       if (event.clientX < box.left || event.clientX > box.right) return;
       drag = { id: event.pointerId, startX: event.clientX, lastX: event.clientX, moved: false };
+      // Капсула вырастает и всплывает над подписями уже от удержания, до того
+      // как палец поехал: иначе размывать ей нечего и эффекта не видно.
+      dom.tabbar.classList.add('is-holding');
     });
 
     dom.tabbar.addEventListener('pointermove', function (event) {
@@ -3343,6 +3346,7 @@
       var x = drag.lastX;
       drag = null;
       dom.tabbar.classList.remove('is-dragging');
+      dom.tabbar.classList.remove('is-holding');
       if (!moved) return;   // это был обычный тап, его доведёт click
 
       var index = Math.round(trackAt(x));
