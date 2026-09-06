@@ -4029,6 +4029,12 @@
         + 'translate(' + (geo.mx - geo.pad - tx).toFixed(2) + 'px,'
         + (geo.my - geo.pad).toFixed(2) + 'px)';
 
+      // Подсветка идёт за самой линзой, а не за пальцем: вкладка загорается,
+      // когда линза её уже наполовину накрыла, и к приезду она оранжевая.
+      // classList.toggle без изменения ничего не трогает, поэтому вызывать
+      // это каждый кадр дёшево и наблюдателя копии оно не будит.
+      if (dragging) lightUp(clamp(Math.round(sim.pos), 0, tabs.length - 1));
+
       if (path === 'mirror' && GLASS.pressPlate > 0) {
         // Плашка подаётся только в режиме зеркала: в Chromium трансформация
         // предка создаёт «корень фона» и убивает backdrop-filter у линзы.
@@ -4147,7 +4153,6 @@
         // Ведём цель, а не саму линзу: она догоняет палец пружиной, отсюда
         // естественное отставание и растяжение на резком рывке.
         sim.target = trackAt(event.clientX);
-        lightUp(Math.round(sim.target));
         run();
         event.preventDefault();
       });
