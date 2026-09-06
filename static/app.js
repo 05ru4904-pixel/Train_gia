@@ -3275,6 +3275,150 @@
   /* Запуск                                                             */
   /* ------------------------------------------------------------------ */
   /* ------------------------------------------------------------------ */
+  /* Преломление в капле                                                */
+  /* ------------------------------------------------------------------ */
+  /* Приём с картой смещения взят из shuding/liquid-glass: на скрытом canvas
+     считается расстояние до края скруглённой формы (SDF), из него — вектор
+     смещения пикселя, dx пишется в красный канал, dy в зелёный. Карта уходит
+     в feImage, а feDisplacementMap гнёт по ней изображение. Именно это и даёт
+     настоящее преломление у ободка, а не имитацию размытием.
+
+     Карта строится один раз: она не зависит от того, где сейчас капля.
+
+     Важное про совместимость. В оригинале фильтр вешают прямо в
+     `backdrop-filter: url(#…)`, и это работает только в Chromium — WebKit
+     ссылки на SVG-фильтры там игнорирует, а Telegram на iPhone это как раз
+     WebKit. Поэтому фильтр живёт на отдельном слое `.tabbar__refract`: где
+     он не поддержан, слой просто ничего не делает, а размытие кромки на
+     `::after` остаётся. Если бы фильтр стоял в том же объявлении, что и
+     размытие, недействительным стало бы всё объявление сразу. */
+
+  function smoothStep(edge0, edge1, value) {
+    var t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  }
+
+  /** Расстояние от точки до края скруглённого прямоугольника. Отрицательное
+   *  внутри, положительное снаружи — по нему и решается, как сильно тянуть. */
+  function roundedRectSDF(x, y, width, height, radius) {
+    var qx = Math.abs(x) - width + radius;
+    var qy = Math.abs(y) - height + radius;
+    var outerX = Math.max(qx, 0);
+    var outerY = Math.max(qy, 0);
+    return Math.min(Math.max(qx, qy), 0)
+      + Math.sqrt(outerX * outerX + outerY * outerY) - radius;
+  }
+
+  /** Строит карту смещения и подключает её SVG-фильтром. Один раз за сеанс:
+   *  карта не зависит от того, где сейчас капля. */
+  function buildLensFilter(width, height) {
+    var canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    var ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx || !window.ImageData) return null;
+
+    var count = width * height;
+    var raw = new Float32Array(count * 2);
+    var maxShift = 0;
+
+    for (var i = 0; i < count; i++) {
+      var px = i % width;
+      var py = (i - px) / width;
+      var ix = px / width - 0.5;
+      var iy = py / height - 0.5;
+      // Чем ближе к краю капли, тем сильнее точка тянется к центру: середина
+      // остаётся как есть, а у ободка изображение сминается — так и ведёт
+      // себя толстое стекло.
+      // Полоса, в которой изображение гнётся, узкая: середина капли остаётся
+      // как есть, работает только ободок. Шире — и капля превращается в
+      // размазанное пятно, это было видно на первом же прогоне.
+      var edge = roundedRectSDF(ix, iy, 0.46, 0.42, 0.34);
+      var pull = smoothStep(0.16, 0, edge);
+      // Ход ограничен: без ограничения крайние пиксели уезжают к центру на
+      // половину ширины капли, и вместо преломления получается пятно.
+      var scale = 0.78 + 0.22 * smoothStep(0, 1, pull);
+      var dx = (ix * scale + 0.5) * width - px;
+      var dy = (iy * scale + 0.5) * height - py;
+      raw[i * 2] = dx;
+      raw[i * 2 + 1] = dy;
+      maxShift = Math.max(maxShift, Math.abs(dx), Math.abs(dy));
+    }
+
+    maxShift = Math.max(maxShift, 1);
+    var data = new Uint8ClampedArray(count * 4);
+    for (var j = 0; j < count; j++) {
+      data[j * 4] = (raw[j * 2] / (maxShift * 2) + 0.5) * 255;
+      data[j * 4 + 1] = (raw[j * 2 + 1] / (maxShift * 2) + 0.5) * 255;
+      data[j * 4 + 2] = 0;
+      data[j * 4 + 3] = 255;
+    }
+    ctx.putImageData(new ImageData(data, width, height), 0, 0);
+
+    var NS = 'http://www.w3.org/2000/svg';
+    var XLINK = 'http://www.w3.org/1999/xlink';
+    var id = 'lens-' + Math.random().toString(36).slice(2, 9);
+    var href = canvas.toDataURL();
+
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '0');
+    svg.setAttribute('height', '0');
+    svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+
+    var filter = document.createElementNS(NS, 'filter');
+    filter.setAttribute('id', id);
+    filter.setAttribute('filterUnits', 'userSpaceOnUse');
+    filter.setAttribute('color-interpolation-filters', 'sRGB');
+    filter.setAttribute('x', '0');
+    filter.setAttribute('y', '0');
+    filter.setAttribute('width', String(width));
+    filter.setAttribute('height', String(height));
+
+    var image = document.createElementNS(NS, 'feImage');
+    image.setAttribute('result', 'map');
+    image.setAttribute('width', String(width));
+    image.setAttribute('height', String(height));
+    image.setAttribute('href', href);
+    // Старые движки знают только xlink:href.
+    image.setAttributeNS(XLINK, 'xlink:href', href);
+
+    var displace = document.createElementNS(NS, 'feDisplacementMap');
+    displace.setAttribute('in', 'SourceGraphic');
+    displace.setAttribute('in2', 'map');
+    displace.setAttribute('xChannelSelector', 'R');
+    displace.setAttribute('yChannelSelector', 'G');
+    displace.setAttribute('scale', String(maxShift * 2));
+
+    filter.appendChild(image);
+    filter.appendChild(displace);
+    var defs = document.createElementNS(NS, 'defs');
+    defs.appendChild(filter);
+    svg.appendChild(defs);
+    document.body.appendChild(svg);
+    return id;
+  }
+
+  /** Собирает фильтр и вешает его на слой преломления внутри капли. */
+  function initRefract() {
+    var layer = dom.tabbar.querySelector('.tabbar__refract');
+    var glass = dom.tabbar.querySelector('.tabbar__pill > i');
+    if (!layer || !glass) return;
+
+    var rect = glass.getBoundingClientRect();
+    var width = Math.round(rect.width || 60);
+    var height = Math.round(rect.height || 44);
+    if (width < 8 || height < 8) return;
+
+    var id = buildLensFilter(width, height);
+    if (!id) return;
+    // Размытие и насыщенность идут вместе с искажением: одно объявление, но
+    // на своём слое, поэтому в движке без поддержки url() потеряется только оно.
+    var value = 'url(#' + id + ') blur(1px) saturate(1.2)';
+    layer.style.backdropFilter = value;
+    layer.style.webkitBackdropFilter = value;
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Капсула таббара: тап и перетаскивание                              */
   /* ------------------------------------------------------------------ */
   /* У капсулы два способа управления, и они не мешают друг другу.
@@ -3386,6 +3530,7 @@
     Array.prototype.forEach.call(dom.tabs, function (tab) {
       tab.addEventListener('click', function () { setTab(tab.getAttribute('data-tab')); });
     });
+    initRefract();
     initPillDrag();
 
     if (tg) {

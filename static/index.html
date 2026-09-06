@@ -41,7 +41,13 @@
     <nav id="tabbar" class="tabbar">
       <!-- Капсула активного раздела. Переезжает по --tab, а не перерисовывается:
            анимируется только transform, иначе на слабых телефонах дёргается. -->
-      <div class="tabbar__pill" aria-hidden="true"><i></i></div>
+      <!-- Внутри капли — слой преломления: на нём SVG-фильтр из app.js,
+           который гнёт фон по краям капли. Отдельным слоем намеренно: где
+           движок такой фильтр не поддержит, слой просто ничего не сделает,
+           а размытие кромки останется. -->
+      <div class="tabbar__pill" aria-hidden="true">
+        <i><span class="tabbar__refract"></span></i>
+      </div>
       <button class="tab" type="button" data-tab="trainer">
         <span class="tab__icon tab__icon--grid"><i></i><i></i><i></i><i></i></span>
         <span class="tab__label">Тренажёр</span>
