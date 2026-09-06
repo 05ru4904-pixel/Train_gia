@@ -410,6 +410,96 @@
     },
     'Эта панель обязана гнуть в любом браузере: здесь нет ни фильтров, ни картинок.');
 
+  /* --- 7. выпуклая линза БЕЗ feImage --------------------------------- */
+  /* Главная панель. Карта смещения не рисуется и не грузится — она выводится
+     из самой линзы одними примитивами SVG.
+
+     Как. Размываем альфу линзы: получается плавная ступенька, единица внутри,
+     ноль снаружи, у кромки переход. Её производная и есть поле смещения:
+     нулевая в глубине, где ступенька ровная, наибольшая у кромки, где та
+     растёт, и снова нулевая снаружи. Ровно тот профиль, который я до этого
+     считал на canvas, только даром и без единой картинки.
+
+     Производную берём как разность двух сдвигов. Складывать их через
+     feComposite arithmetic со смещением k4 нельзя: k4 прибавляется и к альфе,
+     та становится 0.5, а следующий примитив делит цвет на неё обратно, и всё
+     вылетает в единицу. Поэтому один сдвиг инвертируется цветовой матрицей, и
+     дальше берётся честное полусреднее: 0.5*cR + 0.5*(1-cL) даёт то же
+     0.5 + 0.5*(cR-cL), но альфа честно остаётся единицей.
+
+     Направление получается внутрь само собой: у левой кромки ступенька растёт
+     вправо, значит красный канал больше половины, значит пиксель берётся
+     правее — из глубины. Это и есть выпуклое стекло, оно увеличивает. */
+  function lensFilter(id, blur, step, scale) {
+    var f = node('filter', {
+      id: id, primitiveUnits: 'userSpaceOnUse',
+      'color-interpolation-filters': 'sRGB',
+      x: '-30%', y: '-30%', width: '160%', height: '160%'
+    });
+    f.appendChild(node('feGaussianBlur', {
+      'in': 'SourceAlpha', stdDeviation: blur, result: 'blur'
+    }));
+    // Альфа переезжает в цвет, альфа становится единицей: дальше считать
+    // разности можно, не думая о предумножении.
+    f.appendChild(node('feColorMatrix', {
+      'in': 'blur', type: 'matrix', result: 'field',
+      values: '0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 0 1'
+    }));
+
+    var INV = '-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 0 1';
+    // Горизонтальная производная.
+    f.appendChild(node('feOffset', { 'in': 'field', dx: -step, dy: 0, result: 'xR' }));
+    f.appendChild(node('feOffset', { 'in': 'field', dx: step, dy: 0, result: 'xLraw' }));
+    f.appendChild(node('feColorMatrix', { 'in': 'xLraw', type: 'matrix', values: INV, result: 'xL' }));
+    f.appendChild(node('feComposite', {
+      'in': 'xR', in2: 'xL', operator: 'arithmetic',
+      k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gx'
+    }));
+    // Вертикальная — так же.
+    f.appendChild(node('feOffset', { 'in': 'field', dx: 0, dy: -step, result: 'yD' }));
+    f.appendChild(node('feOffset', { 'in': 'field', dx: 0, dy: step, result: 'yUraw' }));
+    f.appendChild(node('feColorMatrix', { 'in': 'yUraw', type: 'matrix', values: INV, result: 'yU' }));
+    f.appendChild(node('feComposite', {
+      'in': 'yD', in2: 'yU', operator: 'arithmetic',
+      k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gy'
+    }));
+
+    // Собираем карту: X в красный, Y в зелёный. Альфа у обоих принудительно
+    // единица, поэтому сумма её не ломает.
+    f.appendChild(node('feColorMatrix', {
+      'in': 'gx', type: 'matrix', result: 'mR',
+      values: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1'
+    }));
+    f.appendChild(node('feColorMatrix', {
+      'in': 'gy', type: 'matrix', result: 'mG',
+      values: '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 0 1'
+    }));
+    f.appendChild(node('feComposite', {
+      'in': 'mR', in2: 'mG', operator: 'arithmetic',
+      k1: 0, k2: 1, k3: 1, k4: 0, result: 'map'
+    }));
+
+    f.appendChild(node('feDisplacementMap', {
+      'in': 'SourceGraphic', in2: 'map', scale: scale,
+      xChannelSelector: 'R', yChannelSelector: 'G'
+    }));
+    return f;
+  }
+  defs.appendChild(lensFilter('lt-alpha', 10, 8, 62));
+
+  panel(7, 'Выпуклая линза БЕЗ feImage — карта из собственной альфы',
+    'Здесь нет ни картинки, ни canvas: карта смещения выводится из формы самой линзы примитивами SVG. Содержимое должно заворачиваться к краям капсулы, середина остаётся чистой. <b>Это главная панель.</b>',
+    function (lens, stage) {
+      var m = mirrorInto(lens, stage, 'url(#lt-alpha)');
+      // Форму линзе задаёт её собственная обрезка: из неё и берётся альфа,
+      // а значит и вся карта. Размер при этом может быть любым — карта
+      // подстраивается сама, перестраивать нечего.
+      var fx = m.parentNode;
+      fx.style.borderRadius = '999px';
+      fx.style.overflow = 'hidden';
+    },
+    'Если гнёт — таббар переводится на этот способ, и никакие карты больше не нужны.');
+
   /* --- декодируется ли сама карта ------------------------------------ */
   /* Отдельно от фильтра: если картинка не декодируется, панель 3 не может
      работать в принципе, и причина не в WebKit, а в canvas. */
