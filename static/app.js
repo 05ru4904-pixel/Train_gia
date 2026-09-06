@@ -3027,75 +3027,11 @@
     ]);
   }
 
-  /* ------------------------------------------------------------------ */
-  /* ВРЕМЕННО: проверка стекла на живом устройстве                       */
-  /* ------------------------------------------------------------------ */
-  /* Отладочный блок. Rendering-движок в Telegram проверить со стороны нельзя,
-     а два приёма подряд молча не сработали у пользователя, хотя в headless
-     Chromium работали. Поэтому пять квадратов, в каждом ровно один приём:
-     видно, какой из них живой. УБРАТЬ, как только ответ получен. */
-  function glassProbe() {
-    function cell(index, title, style) {
-      return h('div', { class: 'diag__cell' }, [
-        h('div', { class: 'diag__glass', style: style }, String(index)),
-        h('div', { class: 'diag__name', text: title })
-      ]);
-    }
-
-    var supports = [
-      ['backdrop-filter', CSS.supports('backdrop-filter', 'blur(4px)')],
-      ['-webkit-backdrop-filter', CSS.supports('-webkit-backdrop-filter', 'blur(4px)')],
-      ['url() в backdrop-filter', CSS.supports('backdrop-filter', 'url(#a)')],
-      ['mask', CSS.supports('mask-image', 'radial-gradient(#000, transparent)')]
-    ].map(function (pair) {
-      return pair[0] + ': ' + (pair[1] ? 'да' : 'нет');
-    }).join(' · ');
-
-    var blur = 'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
-    var mask = 'mask:radial-gradient(circle, transparent 40%, #000 85%);'
-      + '-webkit-mask:radial-gradient(circle, transparent 40%, #000 85%);';
-
-    return h('div', { class: 'diag' }, [
-      h('div', { class: 'eyebrow', text: 'Проверка стекла' }),
-      h('div', { class: 'diag__strip' }, [
-        h('div', { class: 'diag__text', text: 'АБВГД мелкий текст 12345' }),
-        h('div', { class: 'diag__row' }, [
-          cell(1, 'размытие', blur),
-          cell(2, 'размытие + маска', blur + mask),
-          cell(3, 'фильтр', 'backdrop-filter:' + (S.refractValue || 'none')
-            + ';-webkit-backdrop-filter:' + (S.refractValue || 'none') + ';'),
-          cell(4, 'только webkit', '-webkit-backdrop-filter:blur(6px);'),
-          cell(5, 'без стекла', 'background:oklch(1 0 0 / 0.45);')
-        ]),
-        // Проверка догадки: мешает ли размытию трансформация у родителя.
-        // Если 6 размывает, а 7 нет — причина именно в ней.
-        h('div', { class: 'diag__row' }, [
-          cell(6, 'своя трансформация', 'transform:scale(1.05);' + blur),
-          // Тот же приём, но размытие лежит ВНУТРИ трансформированного
-          // родителя. Если 6 размывает, а 7 нет — причина найдена.
-          h('div', { class: 'diag__cell' }, [
-            h('div', { style: 'transform:scale(1.05)' }, [
-              h('div', { class: 'diag__glass', style: blur }, '7')
-            ]),
-            h('div', { class: 'diag__name', text: 'внутри трансформации' })
-          ]),
-          h('div', { class: 'diag__cell', style: 'flex:3' })
-        ])
-      ]),
-      h('div', { class: 'diag__note' }, [
-        'Пришлите снимок этого блока. Нужен номер тех квадратов, где фон под '
-          + 'ними размыт или искажён, а не просто светлее.',
-        h('div', { class: 'diag__supports', text: supports })
-      ])
-    ]);
-  }
-
   function screenProfile() {
     var profile = S.profile;
     if (!profile) return screenLoading();
     var initial = (profile.name || '?').trim().charAt(0).toUpperCase();
     return h('div', { class: 'page' }, [
-      glassProbe(),
       h('div', { class: 'profile-head' }, [
         // Буква — в data-initial: саму букву рисует ::before поверх кольца,
         // иначе спектральный градиент пришлось бы класть отдельным элементом.
@@ -3265,6 +3201,8 @@
       if (on) activeTab = index;
     });
     dom.tabbar.style.setProperty('--tab', String(activeTab));
+    syncGlass(activeTab);
+    syncGlassActive(activeTab);
 
     // Прокрутку сбрасываем только при переходе на другой экран или к другому
     // заданию. Иначе выбор варианта — он тоже вызывает перерисовку — отбрасывал
@@ -3339,148 +3277,383 @@
   /* Запуск                                                             */
   /* ------------------------------------------------------------------ */
   /* ------------------------------------------------------------------ */
-  /* Преломление в капле                                                */
+  /* Жидкое стекло: линза капли                                         */
   /* ------------------------------------------------------------------ */
-  /* Приём с картой смещения взят из shuding/liquid-glass: на скрытом canvas
-     считается расстояние до края скруглённой формы (SDF), из него — вектор
-     смещения пикселя, dx пишется в красный канал, dy в зелёный. Карта уходит
-     в feImage, а feDisplacementMap гнёт по ней изображение. Именно это и даёт
-     настоящее преломление у ободка, а не имитацию размытием.
+  /* Порт приёма из библиотеки `@samasante/liquid-glass` (её исходники лежали
+     в корне проекта). Она React, у нас голый JS, поэтому перенесено ядро.
 
-     Карта строится один раз: она не зависит от того, где сейчас капля.
+     Суть. На canvas рисуется карта смещения: для каждой точки капли считается
+     расстояние до её края (SDF скруглённого прямоугольника), из него — вектор,
+     куда сдвинуть пиксель. Сдвиг по X пишется в красный канал, по Y в зелёный,
+     а в синий — маска блика. Дальше SVG-фильтр гонит через эту карту
+     изображение: `feDisplacementMap` гнёт картинку, три прохода с чуть разной
+     силой дают расслоение цвета по краям, синий канал поднимается в блик.
 
-     Важное про совместимость. В оригинале фильтр вешают прямо в
-     `backdrop-filter: url(#…)`, и это работает только в Chromium — WebKit
-     ссылки на SVG-фильтры там игнорирует, а Telegram на iPhone это как раз
-     WebKit. Поэтому фильтр живёт на отдельном слое `.tabbar__refract`: где
-     он не поддержан, слой просто ничего не делает, а размытие кромки на
-     `::after` остаётся. Если бы фильтр стоял в том же объявлении, что и
-     размытие, недействительным стало бы всё объявление сразу. */
+     Главное отличие от первого репозитория, который мы пробовали: фильтр
+     висит НЕ на фоне (`backdrop-filter: url()`, он работает только в Chromium
+     и у пользователя молча не сработал — проверено), а на самом элементе,
+     обычным `filter: url()`. Он живой и в WebKit. Но фильтр может согнуть
+     только то, что лежит внутри элемента, — поэтому внутри капли лежит копия
+     строки разделов, и гнётся она. Настоящие подписи под каплей закрыты
+     заливкой линзы, иначе рядом с изогнутой копией просвечивал бы ровный
+     оригинал.
+
+     Четыре оговорки WebKit, все из BROWSERS.md библиотеки, все соблюдены:
+       1. карта не увеличивается по разрешению — в Safari превышение потолка
+          размера молча выбрасывает дорогие проходы (блик и цвет);
+       2. карта строится только при смене РАЗМЕРА капли, никогда при движении:
+          если менять её на ходу, Safari душит проходы и блик пропадает;
+       3. у фильтра при каждой перестройке новый id — WebKit кэширует результат
+          по id, и без смены линза замерзает;
+       4. блик берётся из сырой карты: в WebKit другой порядок композиции. */
+
+  var GLASS = {
+    mapSize: 128,      // разрешение карты, см. оговорку 1
+    depth: 0.42,       // как глубоко внутрь достаёт преломление (доля половины)
+    curvature: 0.3,    // купол: увеличение к середине
+    strength: 0.05,    // сила смещения как доля стороны капли
+    bend: 0.5,         // мениск: добавочный изгиб у самой кромки
+    bendWidth: 0.18,
+    frost: 0,          // матовость до преломления: 0 — см. примечание ниже
+    specular: 1,       // общая яркость блика
+    sheen: 0.34,       // блик по кромке
+    sheenWidth: 3,
+    sheenFalloff: 1.5,
+    sheenAngle: 45,
+    glow: 0.14,        // мягкое внутреннее свечение
+    glowSpread: 1,
+    glowFalloff: 0.5
+  };
+
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  var glass = null;   // { lens, row, filter, image, id, w, h, version }
 
   function smoothStep(edge0, edge1, value) {
     var t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
     return t * t * (3 - 2 * t);
   }
 
-  /** Расстояние от точки до края скруглённого прямоугольника. Отрицательное
-   *  внутри, положительное снаружи — по нему и решается, как сильно тянуть. */
-  function roundedRectSDF(x, y, width, height, radius) {
-    var qx = Math.abs(x) - width + radius;
-    var qy = Math.abs(y) - height + radius;
-    var outerX = Math.max(qx, 0);
-    var outerY = Math.max(qy, 0);
-    return Math.min(Math.max(qx, qy), 0)
-      + Math.sqrt(outerX * outerX + outerY * outerY) - radius;
+  // erf(x) ≈ tanh(√π · x) — дешёвое гладкое приближение для растушёвки края.
+  function erf(x) {
+    return Math.tanh(Math.sqrt(Math.PI) * x);
   }
 
-  /** Строит карту смещения и подключает её SVG-фильтром. Один раз за сеанс:
-   *  карта не зависит от того, где сейчас капля. */
-  function buildLensFilter(width, height) {
+  /** Расстояние до края скруглённого прямоугольника: внутри отрицательное. */
+  function shapeDistance(px, py, halfW, halfH, radius) {
+    var edgeX = Math.abs(px) - halfW + radius;
+    var edgeY = Math.abs(py) - halfH + radius;
+    var outerX = edgeX > 0 ? edgeX : 0;
+    var outerY = edgeY > 0 ? edgeY : 0;
+    var corner = (outerX > 0 || outerY > 0)
+      ? Math.sqrt(outerX * outerX + outerY * outerY) : 0;
+    return corner + Math.min(Math.max(edgeX, edgeY), 0) - radius;
+  }
+
+  /** Сферический купол: во сколько раз тянуть точку на расстоянии distance. */
+  function domeGradient(distance, radius, scale) {
+    var inside = Math.min(Math.abs(distance), radius * (1 - 1e-3));
+    var sign = distance < 0 ? -1 : 1;
+    return sign * (inside / Math.sqrt(radius * radius - inside * inside)) * scale;
+  }
+
+  /** Радиус и нормировка купола по высоте шапки и полуразмеру. */
+  function domeConstants(capDepth, halfW, halfH) {
+    var cap = Math.max(0.01, Math.min(capDepth, Math.min(halfW, halfH) - 1));
+    var rx = (halfW * halfW + cap * cap) / (2 * cap);
+    var ry = (halfH * halfH + cap * cap) / (2 * cap);
+    // Среднее градиента купола имеет замкнутый вид, численное интегрирование
+    // не нужно: ∫ x/√(R²−x²) dx = R − √(R²−H²).
+    var meanX = halfW > 0 ? (rx - Math.sqrt(rx * rx - halfW * halfW)) / halfW : 0;
+    var meanY = halfH > 0 ? (ry - Math.sqrt(ry * ry - halfH * halfH)) / halfH : 0;
+    return {
+      rx: rx,
+      ry: ry,
+      scaleX: meanX > 0 ? 0.5 / meanX : 1,
+      scaleY: meanY > 0 ? 0.5 / meanY : 1
+    };
+  }
+
+  /** Рисует карту смещения и возвращает её как data-URL. */
+  function buildGlassMap(width, height, radius) {
+    var size = GLASS.mapSize;
     var canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = size;
+    canvas.height = size;
     var ctx = canvas.getContext && canvas.getContext('2d');
     if (!ctx || !window.ImageData) return null;
 
-    var count = width * height;
-    var raw = new Float32Array(count * 2);
-    var maxShift = 0;
+    var halfW = width / 2;
+    var halfH = height / 2;
+    var rad = Math.min(radius, Math.min(halfW, halfH));
+    var minHalf = Math.min(halfW, halfH);
 
-    for (var i = 0; i < count; i++) {
-      var px = i % width;
-      var py = (i - px) / width;
-      var ix = px / width - 0.5;
-      var iy = py / height - 0.5;
-      // Чем ближе к краю капли, тем сильнее точка тянется к центру: середина
-      // остаётся как есть, а у ободка изображение сминается — так и ведёт
-      // себя толстое стекло.
-      // Полоса, в которой изображение гнётся, узкая: середина капли остаётся
-      // как есть, работает только ободок. Шире — и капля превращается в
-      // размазанное пятно, это было видно на первом же прогоне.
-      var edge = roundedRectSDF(ix, iy, 0.46, 0.42, 0.34);
-      var pull = smoothStep(0.16, 0, edge);
-      // Ход ограничен: без ограничения крайние пиксели уезжают к центру на
-      // половину ширины капли, и вместо преломления получается пятно.
-      var scale = 0.78 + 0.22 * smoothStep(0, 1, pull);
-      var dx = (ix * scale + 0.5) * width - px;
-      var dy = (iy * scale + 0.5) * height - py;
-      raw[i * 2] = dx;
-      raw[i * 2 + 1] = dy;
-      maxShift = Math.max(maxShift, Math.abs(dx), Math.abs(dy));
+    // depth — доля половины капли, на которую преломление достаёт внутрь.
+    var depthPx = Math.min(GLASS.depth * minHalf, minHalf - 1);
+    var innerHalfW = Math.max(0, halfW - depthPx);
+    var innerHalfH = Math.max(0, halfH - depthPx);
+    var innerRadius = Math.max(0, Math.min(rad, Math.min(innerHalfW, innerHalfH)));
+    var falloff = depthPx > 0 ? Math.SQRT1_2 / depthPx : 1e6;
+
+    var dome = domeConstants(GLASS.curvature * minHalf, halfW, halfH);
+    var bendInv = 1 / Math.max(2, GLASS.bendWidth * minHalf);
+    var sheenInv = GLASS.sheenWidth > 0 ? 1 / GLASS.sheenWidth : 0;
+    var glowInv = 1 / Math.max(2, GLASS.glowSpread * minHalf);
+    var angle = GLASS.sheenAngle * Math.PI / 180;
+    var cosA = Math.cos(angle);
+    var sinA = Math.sin(angle);
+    var diagNorm = Math.SQRT1_2;
+
+    var stepX = width / size;
+    var stepY = height / size;
+    var data = new Uint8ClampedArray(size * size * 4);
+
+    for (var row = 0; row < size; row++) {
+      var py = (row + 0.5) * stepY - halfH;
+      for (var col = 0; col < size; col++) {
+        var px = (col + 0.5) * stepX - halfW;
+        var at = (row * size + col) * 4;
+        var sdf = shapeDistance(px, py, halfW, halfH, rad);
+
+        if (sdf >= 0) {
+          // Снаружи капли — нейтральный серый: ни смещения, ни блика.
+          data[at] = 128; data[at + 1] = 128; data[at + 2] = 128; data[at + 3] = 255;
+          continue;
+        }
+
+        // Направление сдвига: купол тянет тем сильнее, чем дальше от центра.
+        var dirX = domeGradient(px, dome.rx, dome.scaleX);
+        var dirY = domeGradient(py, dome.ry, dome.scaleY);
+
+        // Растушёвка: у середины преломления нет, оно нарастает к краю.
+        var innerSdf = shapeDistance(px, py, innerHalfW, innerHalfH, innerRadius);
+        var edgeOpacity = 0.5 * (1 + erf(innerSdf * falloff));
+
+        var dx = 0.5 * dirX * edgeOpacity;
+        var dy = 0.5 * dirY * edgeOpacity;
+
+        // Мениск: добавочный изгиб в узкой полосе у самой кромки. Горб гаснет
+        // и на контуре, и вглубь, а пик приходится на треть полосы внутрь —
+        // фон заворачивается внутри губы, а не на линии среза.
+        if (GLASS.bend > 0) {
+          var band = Math.max(0, 1 + sdf * bendInv);
+          if (band > 0) {
+            var len = Math.sqrt(dirX * dirX + dirY * dirY);
+            if (len > 1e-4) {
+              var hump = 6.75 * band * band * (1 - band);
+              var add = 0.5 * GLASS.bend * hump * edgeOpacity / len;
+              dx += dirX * add;
+              dy += dirY * add;
+            }
+          }
+        }
+
+        // Блик: кромочный сходит к оси света, свечение заполняет вглубь.
+        var spec = 0;
+        var normX = Math.max(-1, Math.min(1, px / halfW));
+        var normY = Math.max(-1, Math.min(1, py / halfH));
+        var axis = Math.min(1, Math.abs(normX * cosA + normY * sinA) * diagNorm);
+        if (GLASS.sheen > 0) {
+          var edgeBand = Math.max(0, 1 + sdf * sheenInv);
+          spec += GLASS.sheen * Math.pow(edgeBand, GLASS.sheenFalloff)
+            * (0.16 + 0.84 * Math.pow(axis, 1.6));
+        }
+        if (GLASS.glow > 0) {
+          var reach = Math.min(1, -sdf * glowInv);
+          spec += GLASS.glow * Math.pow(smoothStep(0, 1, 1 - reach), GLASS.glowFalloff)
+            * edgeOpacity * (0.6 + 0.4 * axis);
+        }
+        spec = Math.max(-1, Math.min(1, spec));
+
+        data[at] = ((0.5 + dx) * 255 + 0.5) | 0;
+        data[at + 1] = ((0.5 + dy) * 255 + 0.5) | 0;
+        data[at + 2] = (127 * spec + 128 + 0.5) | 0;
+        data[at + 3] = 255;
+      }
     }
 
-    maxShift = Math.max(maxShift, 1);
-    var data = new Uint8ClampedArray(count * 4);
-    for (var j = 0; j < count; j++) {
-      data[j * 4] = (raw[j * 2] / (maxShift * 2) + 0.5) * 255;
-      data[j * 4 + 1] = (raw[j * 2 + 1] / (maxShift * 2) + 0.5) * 255;
-      data[j * 4 + 2] = 0;
-      data[j * 4 + 3] = 255;
-    }
-    ctx.putImageData(new ImageData(data, width, height), 0, 0);
-
-    var NS = 'http://www.w3.org/2000/svg';
-    var XLINK = 'http://www.w3.org/1999/xlink';
-    var id = 'lens-' + Math.random().toString(36).slice(2, 9);
-    var href = canvas.toDataURL();
-
-    var svg = document.createElementNS(NS, 'svg');
-    svg.setAttribute('width', '0');
-    svg.setAttribute('height', '0');
-    svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
-
-    var filter = document.createElementNS(NS, 'filter');
-    filter.setAttribute('id', id);
-    filter.setAttribute('filterUnits', 'userSpaceOnUse');
-    filter.setAttribute('color-interpolation-filters', 'sRGB');
-    filter.setAttribute('x', '0');
-    filter.setAttribute('y', '0');
-    filter.setAttribute('width', String(width));
-    filter.setAttribute('height', String(height));
-
-    var image = document.createElementNS(NS, 'feImage');
-    image.setAttribute('result', 'map');
-    image.setAttribute('width', String(width));
-    image.setAttribute('height', String(height));
-    image.setAttribute('href', href);
-    // Старые движки знают только xlink:href.
-    image.setAttributeNS(XLINK, 'xlink:href', href);
-
-    var displace = document.createElementNS(NS, 'feDisplacementMap');
-    displace.setAttribute('in', 'SourceGraphic');
-    displace.setAttribute('in2', 'map');
-    displace.setAttribute('xChannelSelector', 'R');
-    displace.setAttribute('yChannelSelector', 'G');
-    displace.setAttribute('scale', String(maxShift * 2));
-
-    filter.appendChild(image);
-    filter.appendChild(displace);
-    var defs = document.createElementNS(NS, 'defs');
-    defs.appendChild(filter);
-    svg.appendChild(defs);
-    document.body.appendChild(svg);
-    return id;
+    ctx.putImageData(new ImageData(data, size, size), 0, 0);
+    return canvas.toDataURL();
   }
 
-  /** Собирает фильтр и вешает его на слой преломления внутри капли. */
-  function initRefract() {
-    var layer = dom.tabbar.querySelector('.tabbar__refract');
-    var glass = dom.tabbar.querySelector('.tabbar__pill > i');
-    if (!layer || !glass) return;
+  function svgNode(name, attrs) {
+    var node = document.createElementNS(SVG_NS, name);
+    Object.keys(attrs || {}).forEach(function (key) {
+      node.setAttribute(key, String(attrs[key]));
+    });
+    return node;
+  }
 
-    var rect = glass.getBoundingClientRect();
-    var width = Math.round(rect.width || 60);
-    var height = Math.round(rect.height || 44);
-    if (width < 8 || height < 8) return;
+  /** Собирает цепочку фильтра. Возвращает элемент <filter> с новым id. */
+  function buildGlassFilter(id, mapHref, width, height) {
+    var filter = svgNode('filter', {
+      id: id,
+      // Область фильтра шире самой капли. Это важно: feDisplacementMap умеет
+      // брать пиксели только изнутри области, и когда она совпадала с каплей,
+      // у края тянуть было неоткуда — вместо соседнего текста подставлялась
+      // прозрачность, и капля выбеливалась тем сильнее, чем больше ход.
+      // Карта при этом остаётся размером ровно с каплю, ей подобласть задана
+      // отдельно, иначе рисунок смещения растянулся бы вместе с областью.
+      filterUnits: 'objectBoundingBox',
+      primitiveUnits: 'userSpaceOnUse',
+      'color-interpolation-filters': 'sRGB',
+      x: -0.35, y: -0.35, width: 1.7, height: 1.7
+    });
 
-    var id = buildLensFilter(width, height);
-    if (!id) return;
-    // Размытие и насыщенность идут вместе с искажением: одно объявление, но
-    // на своём слое, поэтому в движке без поддержки url() потеряется только оно.
-    var value = 'url(#' + id + ') blur(1px) saturate(1.2)';
-    layer.style.backdropFilter = value;
-    layer.style.webkitBackdropFilter = value;
-    S.refractValue = value;   // нужен отладочному блоку в профиле
+    // Подложка нейтрального серого — там, где карты нет, смещения тоже нет.
+    filter.appendChild(svgNode('feFlood', {
+      'flood-color': 'rgb(128,128,128)', 'flood-opacity': 1, result: 'mapBg'
+    }));
+    var image = svgNode('feImage', {
+      preserveAspectRatio: 'none', result: 'rawMap',
+      x: 0, y: 0, width: width, height: height
+    });
+    image.setAttribute('href', mapHref);
+    image.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', mapHref);
+    filter.appendChild(image);
+    filter.appendChild(svgNode('feComposite', {
+      'in': 'rawMap', in2: 'mapBg', operator: 'over', result: 'map'
+    }));
+
+    var source = 'SourceGraphic';
+    if (GLASS.frost > 0) {
+      filter.appendChild(svgNode('feGaussianBlur', {
+        'in': 'SourceGraphic', stdDeviation: GLASS.frost, result: 'blurred'
+      }));
+      source = 'blurred';
+    }
+
+    // Смещение в пикселях: канал даёт ±0.5, значит максимальный сдвиг равен
+    // половине scale. Отсюда множитель 2, чтобы strength читалась как доля
+    // стороны капли.
+    var base = 2 * GLASS.strength * Math.max(width, height);
+
+    // Расслоение цвета тремя проходами (красный, зелёный, синий с чуть разной
+    // силой, потом сложить) в библиотеке есть, у нас — нет. Проверено на
+    // стенде: размытие проходит, одиночное смещение проходит, а сборка трёх
+    // каналов обратно гасит содержимое линзы в белое. Причину найти не удалось,
+    // и класть в прод механизм, который не понимаешь, — уже проходили.
+    filter.appendChild(svgNode('feDisplacementMap', {
+      'in': source, in2: 'map', scale: base,
+      xChannelSelector: 'R', yChannelSelector: 'G', result: 'lensOut'
+    }));
+
+    // Блик: синий канал карты поднимается в белую подсветку и добавляется
+    // поверх. Берём сырую карту — в WebKit порядок композиции другой.
+    filter.appendChild(svgNode('feColorMatrix', {
+      'in': 'rawMap', type: 'matrix',
+      values: '0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 1 0 ' + (-128 / 255),
+      result: 'sheenMask'
+    }));
+    filter.appendChild(svgNode('feComposite', {
+      'in': 'sheenMask', in2: 'lensOut', operator: 'arithmetic',
+      k1: 0, k2: GLASS.specular, k3: 1, k4: 0
+    }));
+
+    return filter;
+  }
+
+  /** Перестраивает карту и фильтр под текущий размер капли. Вызывается только
+   *  при смене размера — на ходу нельзя, см. оговорку 2. */
+  function rebuildGlass(width, height) {
+    if (!glass) return;
+    var w = Math.round(width);
+    var h = Math.round(height);
+    if (w < 8 || h < 8) return;
+    if (glass.w === w && glass.h === h) return;
+
+    var href = buildGlassMap(w, h, h / 2);
+    if (!href) return;
+
+    // Новый id при каждой перестройке: WebKit кэширует результат по id и без
+    // этого линза замерзает (оговорка 3).
+    glass.version += 1;
+    var id = 'glass-' + glass.version;
+    var filter = buildGlassFilter(id, href, w, h);
+    if (glass.filter) glass.defs.removeChild(glass.filter);
+    glass.defs.appendChild(filter);
+    glass.filter = filter;
+    glass.id = id;
+    glass.w = w;
+    glass.h = h;
+    glass.lens.style.filter = 'url(#' + id + ')';
+  }
+
+  function initGlass() {
+    var lens = dom.tabbar.querySelector('.tabbar__lens');
+    var row = dom.tabbar.querySelector('.tabbar__lens-row');
+    var pill = dom.tabbar.querySelector('.tabbar__pill');
+    if (!lens || !row || !pill || !dom.tabs.length) return;
+
+    // Копия строки разделов. Подписи не меняются, копируем один раз.
+    Array.prototype.forEach.call(dom.tabs, function (tab) {
+      var copy = tab.cloneNode(true);
+      copy.removeAttribute('data-tab');
+      copy.setAttribute('tabindex', '-1');
+      row.appendChild(copy);
+    });
+
+    var svg = svgNode('svg', { width: 0, height: 0, 'aria-hidden': 'true' });
+    svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    var defs = svgNode('defs', {});
+    svg.appendChild(defs);
+    document.body.appendChild(svg);
+
+    var style = getComputedStyle(pill);
+    glass = {
+      lens: lens,
+      row: row,
+      copies: row.children,
+      defs: defs,
+      filter: null,
+      id: null,
+      w: 0,
+      h: 0,
+      version: 0,
+      inset: parseFloat(style.paddingLeft) || 0,
+      pad: parseFloat(getComputedStyle(dom.tabbar).paddingLeft) || 0
+    };
+
+    syncGlass(0);
+  }
+
+  /** Ставит копию так, чтобы она совпала с настоящей строкой, и держит карту
+   *  в соответствии с размером капли. `at` — дробная позиция капли. */
+  function syncGlass(at) {
+    if (!glass) return;
+    var box = dom.tabbar.getBoundingClientRect();
+    if (!box.width) return;
+    var inner = box.width - glass.pad * 2;
+    var step = inner / dom.tabs.length;
+    var capW = step - glass.inset * 2;
+    var capH = box.height - glass.pad * 2;
+    glass.row.style.setProperty('--lens-w', inner + 'px');
+    glass.row.style.setProperty('--lens-x', -(at * step + glass.inset) + 'px');
+    // Точка копии, которая должна остаться в центре капли: относительно неё
+    // гасится увеличение.
+    glass.row.style.setProperty('--lens-origin', (at * step + glass.inset + capW / 2) + 'px');
+    rebuildGlass(capW, capH);
+  }
+
+  /** Показывает или прячет линзу. Напрямую стилем, а не классом: правило
+   *  на классе однажды не применилось в живом приложении, хотя селектор
+   *  совпадал, — разбираться вслепую дороже, чем поставить свойство. */
+  function showGlass(on) {
+    if (!glass) return;
+    glass.lens.style.opacity = on ? '1' : '0';
+    // Пока капля увеличена, копия внутри сжимается ровно во столько же раз:
+    // масштаб берём из того же токена, что и рост капли, чтобы не разошлись.
+    var scale = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue('--hold-scale')) || 1;
+    glass.row.style.setProperty('--lens-counter', on ? String(1 / scale) : '1');
+  }
+
+  /** Подсветка раздела в копии: под линзой горит тот же, что снаружи. */
+  function syncGlassActive(index) {
+    if (!glass) return;
+    for (var i = 0; i < glass.copies.length; i++) {
+      glass.copies[i].classList.toggle('is-active', i === index);
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -3516,6 +3689,7 @@
       Array.prototype.forEach.call(dom.tabs, function (tab, i) {
         tab.classList.toggle('is-active', i === index);
       });
+      syncGlassActive(index);
     }
 
     dom.tabbar.addEventListener('pointerdown', function (event) {
@@ -3529,6 +3703,7 @@
       // Капсула вырастает и всплывает над подписями уже от удержания, до того
       // как палец поехал: иначе размывать ей нечего и эффекта не видно.
       dom.tabbar.classList.add('is-holding');
+      showGlass(true);
     });
 
     dom.tabbar.addEventListener('pointermove', function (event) {
@@ -3543,6 +3718,7 @@
       drag.lastX = event.clientX;
       var at = trackAt(event.clientX);
       dom.tabbar.style.setProperty('--tab', String(at));
+      syncGlass(at);
       // Подпись загорается, пока капсула ещё едет: так ученик видит, куда попадёт.
       lightUp(Math.round(at));
       event.preventDefault();
@@ -3556,6 +3732,7 @@
       drag = null;
       dom.tabbar.classList.remove('is-dragging');
       dom.tabbar.classList.remove('is-holding');
+      showGlass(false);
       if (!moved) return;   // это был обычный тап, его доведёт click
 
       var index = Math.round(trackAt(x));
@@ -3595,7 +3772,7 @@
     Array.prototype.forEach.call(dom.tabs, function (tab) {
       tab.addEventListener('click', function () { setTab(tab.getAttribute('data-tab')); });
     });
-    initRefract();
+    initGlass();
     initPillDrag();
 
     if (tg) {

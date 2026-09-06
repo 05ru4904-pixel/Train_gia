@@ -62,6 +62,9 @@
      капсулы), поэтому читаемость держится на плотности: сквозь плашку контент
      чувствуется, но не мешает подписям. */
   --plate-veil: oklch(1 0 0 / 0.72);
+  /* Плотный вариант той же подложки: им залита линза внутри капли, чтобы
+     настоящие подписи под ней не просвечивали и не двоились. */
+  --plate-solid: oklch(0.985 0.004 60);
 
   --shadow-card: 0 1px 2px oklch(0.4 0.02 60 / 0.05);
   --shadow-lift: 0 8px 28px oklch(0.35 0.03 45 / 0.12);
@@ -87,6 +90,10 @@
   --pad: 16px;
 
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Во сколько раз капля вырастает при удержании. Значение читает и app.js:
+     линза компенсирует его, чтобы копия оставалась в масштабе 1:1. */
+  --hold-scale: 1.55;
 }
 
 [data-theme="dark"] {
@@ -133,6 +140,7 @@
   --glass-hi: linear-gradient(180deg, oklch(1 0 0 / 0.14), oklch(1 0 0 / 0) 60%);
 
   --plate-veil: oklch(0.21 0.009 60 / 0.74);
+  --plate-solid: oklch(0.26 0.010 60);
 
   --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4);
   --shadow-lift: 0 10px 32px oklch(0 0 0 / 0.5);
@@ -184,6 +192,7 @@
   --glass-hi: linear-gradient(180deg, oklch(1 0 0 / 0.30), oklch(1 0 0 / 0) 60%);
 
   --plate-veil: oklch(0.55 0.20 38 / 0.62);
+  --plate-solid: oklch(0.60 0.18 38);
 
   --shadow-card: none;
   --shadow-lift: 0 14px 40px oklch(0.30 0.12 30 / 0.35);
@@ -415,7 +424,7 @@ button {
      растёт и линза внутри, и содержимое линзы оказывается увеличенным —
      точка под центром капли остаётся на месте, потому что масштаб идёт
      от центра. */
-  transform: translateX(calc(var(--tab, 0) * 100%)) scale(1.55);
+  transform: translateX(calc(var(--tab, 0) * 100%)) scale(var(--hold-scale));
 }
 .tabbar.is-holding .tabbar__pill > i {
   background: linear-gradient(180deg, oklch(1 0 0 / 0.34) 0%, oklch(1 0 0 / 0.06) 60%);
@@ -429,81 +438,46 @@ button {
     inset 0 -3px 6px oklch(0.35 0.03 45 / 0.10);
 }
 
-/* Зеркальная кромка. Размывает не вся капля, а только её края: середина
-   остаётся чистой, а буквы и иконки, попавшие под ободок, расплываются —
-   так ведёт себя край толстого стекла. Маска и есть весь приём: она гасит
-   фильтр в середине и оставляет его по краю.
-
-   Слой отдельный, а не внутри капли, и лежит в разметке после разделов.
-   Причина проверена на живом устройстве: `backdrop-filter` берёт только то,
-   что нарисовано за элементом внутри его «корня фона», а трансформация у
-   родителя этот корень обрубает. Капля ездит по `--tab` трансформацией, то
-   есть трансформация у неё есть всегда, — и размытие внутри неё не видело
-   ни подписей, ни иконок, размывать ему было нечего. Здесь родитель —
-   сама плашка, она не трансформируется. */
-/* Размытие и трансформация — на одном и том же элементе, без вложенности.
-   Своя трансформация фону не мешает, мешает только родительская: она
-   обрубает «корень фона» у потомков. Поэтому внутренностей у слоя нет.
-   Ширина слоя равна ширине раздела — на этом держится переезд по --tab, —
-   а до размера самой капли его сужает маска. */
-.tabbar__blur {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  left: 3px;
-  width: calc((100% - 6px) / 4);
-  z-index: 2;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(calc(var(--tab, 0) * 100%));
-  transition: transform 460ms cubic-bezier(0.32, 0.72, 0, 1), opacity 200ms ease;
-}
-.tabbar.is-dragging .tabbar__blur { transition: opacity 200ms ease; }
-.tabbar.is-holding .tabbar__blur {
-  opacity: 1;
-  transform: translateX(calc(var(--tab, 0) * 100%)) scale(1.55);
-  /* Дисперсия по ободку: тёплый край с одной стороны, холодный с другой. */
-  background: linear-gradient(
-    90deg,
-    oklch(0.72 0.20 45 / 0.28) 18%,
-    transparent 34%,
-    transparent 66%,
-    oklch(0.58 0.27 300 / 0.24) 82%
-  );
-  backdrop-filter: blur(5px) saturate(1.7);
-  -webkit-backdrop-filter: blur(5px) saturate(1.7);
-  /* Кольцо: прозрачная середина, работающий ободок и полная прозрачность за
-     краем капли. По горизонтали ужато до трети ширины раздела — столько и
-     занимает капля. */
-  -webkit-mask: radial-gradient(34% 104% at 50% 50%, transparent 46%, #000 80%, #000 94%, transparent 100%);
-  mask: radial-gradient(34% 104% at 50% 50%, transparent 46%, #000 80%, #000 94%, transparent 100%);
-}
-
 /* Пока палец ещё и едет — капсула идёт следом без анимации и слегка
    вытягивается по ходу движения. */
 .tabbar.is-dragging .tabbar__pill {
   transition: none;
-  transform: translateX(calc(var(--tab, 0) * 100%)) scale(1.55) scaleX(1.06);
+  transform: translateX(calc(var(--tab, 0) * 100%)) scale(var(--hold-scale)) scaleX(1.06);
 }
 
-/* Слой преломления. Карту смещения и SVG-фильтр для него делает app.js —
-   приём взят из shuding/liquid-glass: расстояние до края капли считается
-   через SDF, из него получается вектор сдвига пикселя, и feDisplacementMap
-   гнёт по этой карте фон.
-   Слой отдельный не случайно: в оригинале фильтр вешают прямо в
-   `backdrop-filter: url(#…)`, а WebKit ссылки на SVG-фильтры там игнорирует.
-   Если бы фильтр стоял в том же объявлении, что и размытие кромки, всё
-   объявление стало бы недействительным и в WebKit пропало бы и размытие.
-   Отдельным слоем он просто ничего не сделает там, где не поддержан. */
-.tabbar__refract {
+/* Линза внутри капли: копия строки разделов, которую гнёт SVG-фильтр.
+   Копия, а не фон, потому что `filter: url()` работает в обоих движках, а
+   `backdrop-filter: url()` — только в Chromium (проверено на устройстве).
+   Заливка обязательна: под каплей лежат настоящие подписи, и без заливки
+   рядом с изогнутой копией просвечивал бы ровный оригинал. */
+.tabbar__lens {
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  overflow: hidden;
+  background: var(--plate-solid);
   opacity: 0;
   transition: opacity 160ms ease;
   pointer-events: none;
 }
-.tabbar.is-holding .tabbar__refract { opacity: 1; }
+.tabbar__lens-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  display: flex;
+  /* Ширину и сдвиг ставит app.js: они зависят от того, где сейчас капля. */
+  width: var(--lens-w, 0px);
+  /* Обратный масштаб гасит увеличение капли: она окно, а не лупа. Точка
+     отсчёта — центр капли в координатах копии, иначе при сжатии содержимое
+     уехало бы вбок. */
+  transform: translateX(var(--lens-x, 0px)) scale(var(--lens-counter, 1));
+  transform-origin: var(--lens-origin, 50%) 50%;
+}
+/* Внутри линзы подписи всегда в полную силу: приглушать их незачем, их и так
+   видно только через стекло. */
+.tabbar__lens-row .tab { opacity: 1; }
+
 .tab {
   position: relative;
   z-index: 1;
@@ -1666,38 +1640,3 @@ button {
   color: var(--ink-strong);
   text-align: center;
 }
-
-/* ВРЕМЕННО: проверка стекла на живом устройстве. Убрать вместе с glassProbe()
-   в app.js, как только станет понятно, какие приёмы работают в Telegram. */
-.diag { margin-bottom: 22px; }
-.diag__strip {
-  position: relative;
-  margin-top: 8px;
-  padding: 14px 10px;
-  border-radius: var(--radius-card);
-  background:
-    repeating-linear-gradient(115deg, oklch(0.55 0.20 38) 0 18px, oklch(0.52 0.29 300) 18px 36px);
-  overflow: hidden;
-}
-.diag__text {
-  font-size: 13px;
-  font-weight: 800;
-  color: #fff;
-  text-align: center;
-  letter-spacing: 0.04em;
-}
-.diag__row { margin-top: 10px; display: flex; gap: 6px; }
-.diag__cell { flex: 1; min-width: 0; text-align: center; }
-.diag__glass {
-  height: 46px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  font-weight: 800;
-  color: #fff;
-}
-.diag__name { margin-top: 4px; font-size: 9px; font-weight: 700; color: #fff; line-height: 1.2; }
-.diag__note { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--ink-dim); line-height: 1.4; }
-.diag__supports { margin-top: 4px; font-size: 10.5px; font-weight: 600; color: var(--muted); }
