@@ -3418,6 +3418,7 @@
     var lastTime = 0;
     var booted = false;  // первый select() ставит линзу на место без проезда
     var dragging = false;
+    var dragPrev = 0;    // положение линзы в прошлом кадре ведения
     var dispScale = 0;   // последнее записанное значение, чтобы не дёргать SVG зря
     var lastPlateT = '';
 
@@ -4087,6 +4088,9 @@
     }
 
     function atRest() {
+      // Пока ведут пальцем, покоя нет по определению: цикл должен крутиться,
+      // иначе линза замирала бы между событиями движения.
+      if (dragging) return false;
       return Math.abs(sim.target - sim.pos) < 0.0004 && Math.abs(sim.vel) < 0.0015
         && Math.abs(sim.form) < 0.0006 && Math.abs(sim.formVel) < 0.002
         && Math.abs(sim.pressTarget - sim.press) < 0.001 && Math.abs(sim.pressVel) < 0.002;
@@ -4099,10 +4103,24 @@
       // Приложение провисело в фоне — не даём пружине улететь на огромном шаге.
       dt = clamp(dt, 1 / 240, 1 / 30);
 
-      // Позиция. Полунеявный Эйлер: устойчив на таких жёсткостях и стоит
-      // четыре умножения.
-      sim.vel += (-GLASS.posK * (sim.pos - sim.target) - GLASS.posC * sim.vel) * dt;
-      sim.pos += sim.vel * dt;
+      if (dragging) {
+        // Под пальцем пружины нет вовсе: положение уже поставлено обработчиком
+        // движения, ровно там, где палец. Прямое управление отставать не имеет
+        // права — пружина при постоянной скорости отстаёт на posC/posK, это
+        // около сотой доли секунды и на глаз читается как задержка.
+        //
+        // Скорость всё равно нужна: ею кормится деформация, и она же достаётся
+        // пружине на отпускании, отсюда бросок. Меряем по фактическому ходу за
+        // кадр, а не по событиям пальца: когда палец замирает, событий нет, а
+        // скорость должна честно упасть в ноль.
+        sim.vel = (sim.pos - dragPrev) / dt;
+        dragPrev = sim.pos;
+      } else {
+        // Позиция. Полунеявный Эйлер: устойчив на таких жёсткостях и стоит
+        // четыре умножения.
+        sim.vel += (-GLASS.posK * (sim.pos - sim.target) - GLASS.posC * sim.vel) * dt;
+        sim.pos += sim.vel * dt;
+      }
 
       // Деформация. Цель задаёт скорость, но идёт к ней своя пружина со слабым
       // демпфированием: после остановки она проскакивает ноль и качается — это
@@ -4145,10 +4163,11 @@
       var drag = null;
       var swallowClick = false;
 
+      /** Положение линзы (в номерах вкладок), при котором её середина
+       *  оказывается в точке clientX. geo.left отсчитан от padding box
+       *  плашки — рамку добавляем обратно. */
       function trackAt(clientX) {
         var plate = el.plate.getBoundingClientRect();
-        // Палец держит линзу за середину, поэтому вычитаем её полуширину.
-        // geo.left отсчитан от padding box плашки — добавляем рамку обратно.
         return clamp(
           (clientX - plate.left - geo.border - geo.left - geo.w / 2) / geo.step,
           0, tabs.length - 1);
@@ -4163,7 +4182,12 @@
         // Начинаем только с самой линзы: нажатие по соседнему разделу — тап,
         // его доведёт обычный click на кнопке.
         if (event.clientX < box.left || event.clientX > box.right) return;
-        drag = { id: event.pointerId, startX: event.clientX, lastX: event.clientX, moved: false };
+        drag = {
+          id: event.pointerId, startX: event.clientX, lastX: event.clientX, moved: false,
+          // За какую точку линзы взялись. Без этого линза при первом же
+          // движении прыгает серединой под палец, даже если взяли за край.
+          grab: event.clientX - (box.left + box.width / 2)
+        };
         sim.pressTarget = 1;
         el.tabbar.classList.add('is-pressed');
         run();
@@ -4175,13 +4199,14 @@
           if (Math.abs(event.clientX - drag.startX) < GLASS.dragThreshold) return;
           drag.moved = true;
           dragging = true;
+          dragPrev = sim.pos;
           // Захват на плашке, а не на линзе: у линзы pointer-events: none.
           try { el.plate.setPointerCapture(event.pointerId); } catch (e) { /* старый WebView */ }
         }
         drag.lastX = event.clientX;
-        // Ведём цель, а не саму линзу: она догоняет палец пружиной, отсюда
-        // естественное отставание и растяжение на резком рывке.
-        sim.target = trackAt(event.clientX);
+        // Линза идёт ровно за пальцем, один к одному. Раньше здесь велась
+        // цель, а линзу тянула к ней пружина — отсюда и бралось отставание.
+        sim.pos = sim.target = trackAt(event.clientX - drag.grab);
         run();
         event.preventDefault();
       });
@@ -4189,7 +4214,7 @@
       function release(event) {
         if (!drag || (event && event.pointerId !== drag.id)) return;
         var moved = drag.moved;
-        var x = drag.lastX;   // pointercancel приходит без осмысленных координат
+        var x = drag.lastX - drag.grab;   // pointercancel приходит без координат
         drag = null;
         dragging = false;
         sim.pressTarget = 0;
