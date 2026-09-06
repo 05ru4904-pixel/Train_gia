@@ -3065,7 +3065,14 @@
         h('button', {
           class: 'btn btn--ghost', type: 'button',
           onClick: function () { toast('Тарифы появятся в следующем обновлении.'); }
-        }, 'Тарифы')
+        }, 'Тарифы'),
+        // ВРЕМЕННО. Вход в страницу проверки оптики линзы, чтобы не искать
+        // адрес приложения руками. Убрать вместе с static/lenstest.html,
+        // как только станет ясно, какой способ преломления работает на iOS.
+        h('button', {
+          class: 'btn btn--ghost', type: 'button',
+          onClick: function () { location.href = '/static/lenstest.html'; }
+        }, 'Проверка линзы (временно)')
       ])
     ]);
   }
