@@ -58,6 +58,11 @@
   --glass-blur: blur(20px) saturate(1.6);
   --glass-hi: linear-gradient(180deg, oklch(1 0 0 / 0.75), oklch(1 0 0 / 0) 60%);
 
+  /* Подложка плашки меню. Размытия у неё нет (оно убивает фильтр кромки у
+     капсулы), поэтому читаемость держится на плотности: сквозь плашку контент
+     чувствуется, но не мешает подписям. */
+  --plate-veil: oklch(1 0 0 / 0.72);
+
   --shadow-card: 0 1px 2px oklch(0.4 0.02 60 / 0.05);
   --shadow-lift: 0 8px 28px oklch(0.35 0.03 45 / 0.12);
   --shadow-glass: 0 6px 24px oklch(0.35 0.03 45 / 0.14);
@@ -127,6 +132,8 @@
   --glass-border: oklch(1 0 0 / 0.16);
   --glass-hi: linear-gradient(180deg, oklch(1 0 0 / 0.14), oklch(1 0 0 / 0) 60%);
 
+  --plate-veil: oklch(0.21 0.009 60 / 0.74);
+
   --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4);
   --shadow-lift: 0 10px 32px oklch(0 0 0 / 0.5);
   --shadow-glass: 0 8px 28px oklch(0 0 0 / 0.45);
@@ -175,6 +182,8 @@
   --glass-bg: oklch(1 0 0 / 0.18);
   --glass-border: oklch(1 0 0 / 0.34);
   --glass-hi: linear-gradient(180deg, oklch(1 0 0 / 0.30), oklch(1 0 0 / 0) 60%);
+
+  --plate-veil: oklch(0.55 0.20 38 / 0.62);
 
   --shadow-card: none;
   --shadow-lift: 0 14px 40px oklch(0.30 0.12 30 / 0.35);
@@ -338,8 +347,8 @@ button {
    Анимируем только transform — left и width на слабых телефонах дёргаются. */
 .tabbar {
   position: fixed;
-  left: 8px;
-  right: 8px;
+  left: 6px;
+  right: 6px;
   bottom: calc(10px + var(--safe-bottom));
   z-index: 30;
   display: flex;
@@ -347,17 +356,16 @@ button {
   padding: 3px;
   border-radius: 22px;
   /* Хром из дизайн-системы: его собственная прозрачность и есть те самые
-     «примерно 50%», отдельного токена под это заводить не нужно. */
-  background: var(--chrome-panel);
+     «примерно 50%», отдельного токена под это заводить не нужно.
+     Размытия у плашки нет намеренно: элемент с backdrop-filter создаёт
+     «корень фона», и вложенный фильтр у капсулы перестаёт работать — а
+     кромка капсулы держится именно на нём. */
+  background-color: var(--plate-veil);
+  background-image: var(--chrome-panel);
   border: 1px solid var(--chrome-panel-border);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-glass);
   /* Капсулу таскают пальцем — браузерные жесты на плашке только мешают. */
   touch-action: none;
-}
-@supports not (backdrop-filter: blur(1px)) {
-  .tabbar { background: var(--surface-2); border-color: var(--border); }
 }
 .tabbar__pill {
   position: absolute;
@@ -365,7 +373,9 @@ button {
   bottom: 3px;
   left: 3px;
   width: calc((100% - 6px) / 4);   /* ширина плашки минус её поля, на 4 раздела */
-  padding: 0 2px;
+  /* Боковые поля задают пропорцию капсулы: без них она вытягивалась в полоску
+     6:3, с ними выходит около 4:3. По высоте она и так впритык к плашке. */
+  padding: 0 16px;
   pointer-events: none;
   transform: translateX(calc(var(--tab, 0) * 100%));
   transition: transform 460ms cubic-bezier(0.32, 0.72, 0, 1);
@@ -410,13 +420,28 @@ button {
     inset 0 -3px 6px oklch(0.35 0.03 45 / 0.10);
 }
 
-/* Само размытие делает не капсула, а раздел под ней. backdrop-filter здесь
-   не годится: плашка сама размывает фон, а элемент с backdrop-filter создаёт
-   «корень фона» — вложенный в него фильтр в WebView Telegram не срабатывает
-   вовсе. Поэтому размываем содержимое раздела фильтром, это работает везде.
-   Раздел под каплей всегда помечен is-active: при перетаскивании подсветка
-   переезжает вместе с ней. */
-.tabbar.is-holding .tab.is-active { filter: blur(2.6px); }
+/* Зеркальная кромка. Размывает не вся капля, а только её края: середина
+   остаётся прозрачной и чистой, а буквы и иконки, попавшие под ободок,
+   расплываются — так ведёт себя край толстого стекла.
+   Маска и есть весь приём: она гасит фильтр в середине и оставляет его по
+   краю. Включается только при удержании, когда капля поднята над подписями —
+   иначе фильтровать ей нечего. */
+.tabbar__pill > i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+.tabbar.is-holding .tabbar__pill > i::after {
+  opacity: 1;
+  backdrop-filter: blur(6px) saturate(1.8);
+  -webkit-backdrop-filter: blur(6px) saturate(1.8);
+  -webkit-mask: radial-gradient(120% 105% at 50% 50%, transparent 26%, #000 78%);
+  mask: radial-gradient(120% 105% at 50% 50%, transparent 26%, #000 78%);
+}
 
 /* Пока палец ещё и едет — капсула идёт следом без анимации и слегка
    вытягивается по ходу движения. */
@@ -431,6 +456,9 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* Вертикальные поля делают плашку выше, а вместе с ней и капсулу: от этого
+     зависит её пропорция. */
+  padding: 4px 0;
   gap: 5px;
   color: var(--ink-dim);
   opacity: 0.65;
