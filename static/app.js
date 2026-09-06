@@ -3320,6 +3320,16 @@
          производная: чем больше, тем сильнее и мягче поле. */
       reach: 0.12,
       gradStep: 0.095,
+      // Размазывание у кромки, в долях высоты линзы. Полоса, в которой оно
+      // работает, задаётся тем же `reach`, поэтому матовость сама садится
+      // туда, где стекло гнёт сильнее всего. Ноль выключает — это четыре
+      // примитива в цепочке. Только для пути зеркала: в режиме Chromium
+      // маску кромки взять неоткуда, там фильтру достаётся непрозрачный фон.
+      edgeBlur: 0.05,
+      // Сколько раз полоса кромки возводится в квадрат: каждый раз она вдвое
+      // теснее прижимается к контуру и стоит одного примитива. Ноль — широкая
+      // полоса на пол-линзы, размазывает и подпись тоже.
+      edgeTight: 2,
 
       /* Настройки карты картинкой (путь Chromium). Здесь профиль считается
          на canvas, потому что формы линзы фильтру взять неоткуда. */
@@ -3375,7 +3385,11 @@
       // Встречное сжатие по вертикали: объём стекла сохраняется.
       squash: 0.55,
       // Надувание при удержании.
-      pressLens: 0.07,
+      // Надувание при удержании. Линза растёт коробкой, а содержимое под ней
+      // остаётся на месте — обратная трансформация на зеркале это и делает.
+      // Поэтому при росте под стекло заезжает больше соседнего содержимого,
+      // как под настоящей лупой, а не растягивается то, что уже было.
+      pressLens: 0.35,
       // Подача плашки выключена: любая трансформация предка — лишний повод
       // для WebKit вынести поддерево в композитор и потерять фильтр. Ради
       // едва заметного движения рисковать всем эффектом не стоит.
@@ -3544,7 +3558,10 @@
        то есть обрезка по скруглению. Из неё берётся альфа, а из альфы — всё
        остальное. Обрезка ДО фильтра здесь безопасна, потому что смещение
        смотрит внутрь и наружных пикселей ему не нужно. */
-    function buildAlphaFilter(id, blur, step, scale) {
+    function buildAlphaFilter(id, h, scale) {
+      // Размытие альфы и плечо производной — в пикселях, от высоты линзы.
+      var blur = GLASS.reach * h;
+      var step = GLASS.gradStep * h;
       var filter = svgNode('filter', {
         id: id,
         primitiveUnits: 'userSpaceOnUse',
@@ -3597,7 +3614,7 @@
           'in': 'gx', type: 'matrix', result: 'map',
           values: '1 0 0 0 0  0 0 0 0 0.5  0 0 0 0 0  0 0 0 0 1'
         }));
-        return { node: filter, disp: addDisplacement(filter, scale) };
+        return finish(filter, scale, h);
       }
 
       filter.appendChild(svgNode('feOffset', { 'in': 'field', dx: 0, dy: -step, result: 'yD' }));
@@ -3631,7 +3648,16 @@
         k1: 0, k2: 1, k3: 1, k4: 0, result: 'map'
       }));
 
-      return { node: filter, disp: addDisplacement(filter, scale) };
+      return finish(filter, scale, h);
+    }
+
+    /** Хвост цепочки: смещение, а за ним, если включено, размазывание кромки. */
+    function finish(filter, scale, h) {
+      var radius = GLASS.edgeBlur * h;
+      if (radius <= 0) return { node: filter, disp: addDisplacement(filter, scale) };
+      var disp = addDisplacement(filter, scale, 'disp');
+      addEdgeBlur(filter, radius);
+      return { node: filter, disp: disp };
     }
 
     /* --- цепочка смещения и расслоение цвета --------------------------- */
@@ -3648,7 +3674,7 @@
        операция, цвет при сложении не пересчитывается, а суммарная альфа
        упирается в ту же единицу. Обнулять альфу нельзя: композиция идёт в
        предумноженном виде, и вместе с альфой обнулился бы цвет. */
-    function addDisplacement(filter, scale) {
+    function addDisplacement(filter, scale, out) {
       var ab = GLASS.aberration;
       var disp = [];
 
@@ -3657,6 +3683,7 @@
           'in': 'SourceGraphic', in2: 'map', scale: scale,
           xChannelSelector: 'R', yChannelSelector: 'G'
         });
+        if (out) one.setAttribute('result', out);
         filter.appendChild(one);
         disp.push({ node: one, k: 1 });
         return disp;
@@ -3690,11 +3717,58 @@
             k1: 0, k2: 1, k3: 1, k4: 0
           };
           if (!last) add.result = 'sum' + n;
+          else if (out) add.result = out;
           filter.appendChild(svgNode('feComposite', add));
           prev = last ? null : 'sum' + n;
         }
       }
       return disp;
+    }
+
+    /* --- размазывание у кромки ------------------------------------------ */
+    /* Полоса матового стекла по краю линзы: в середине картинка резкая, к
+       контуру расплывается. Именно так ведёт себя толстое стекло — у края луч
+       идёт под скользящим углом и собирает свет с большего пятна.
+
+       Маска этой полосы достаётся даром из уже посчитанного размытия альфы.
+       Пусть a — размытая альфа: единица глубоко внутри, ноль снаружи, ровно
+       половина на самом контуре. Тогда 4a(1-a) — горб, который равен единице
+       точно на контуре и гаснет в обе стороны. Это и есть полоса кромки, и
+       считается она ОДНИМ примитивом: feComposite arithmetic умеет перемножать
+       вход сам на себя, а -4a² + 4a как раз такая форма.
+
+       Ширина полосы задаётся тем же `reach`, что и глубина преломления,
+       поэтому размазывание само садится туда, где стекло гнёт сильнее всего.
+       Наружная половина полосы уходит под обрезку линзы и не видна. */
+    function addEdgeBlur(filter, radius) {
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'blur', in2: 'blur', operator: 'arithmetic',
+        k1: -4, k2: 4, k3: 0, k4: 0, result: 'rim0'
+      }));
+
+      // Горб 4a(1-a) сам по себе слишком широк: линза всего 45 px высотой, и
+      // подпись стоит внутри полосы — размазывало её целиком, а не край.
+      // Возведение в квадрат поджимает полосу к контуру, и стоит это одного
+      // примитива: arithmetic умеет перемножать вход сам на себя.
+      var mask = 'rim0';
+      for (var i = 0; i < GLASS.edgeTight; i++) {
+        filter.appendChild(svgNode('feComposite', {
+          'in': mask, in2: mask, operator: 'arithmetic',
+          k1: 1, k2: 0, k3: 0, k4: 0, result: 'rim' + (i + 1)
+        }));
+        mask = 'rim' + (i + 1);
+      }
+
+      filter.appendChild(svgNode('feGaussianBlur', {
+        'in': 'disp', stdDeviation: radius, result: 'soft'
+      }));
+      // Мягкую копию оставляем только в полосе кромки и кладём поверх резкой.
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'soft', in2: mask, operator: 'in', result: 'softRim'
+      }));
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'softRim', in2: 'disp', operator: 'over'
+      }));
     }
 
     /* --- карта картинкой: только для Chromium --------------------------- */
@@ -3755,7 +3829,7 @@
         if (!href) return;
         built = buildImageFilter(id, href, iw, ih, dispScale);
       } else {
-        built = buildAlphaFilter(id, GLASS.reach * ih, GLASS.gradStep * ih, dispScale);
+        built = buildAlphaFilter(id, ih, dispScale);
       }
 
       if (fx.filter) fx.defs.removeChild(fx.filter);
@@ -3900,6 +3974,13 @@
       geo.mx = (rowBox.left - first.left) - GLASS.insetX;
       geo.my = (rowBox.top - first.top) - GLASS.insetY;
 
+      // Запас вокруг зеркала. Надутая линза выше строки, и без запаса её
+      // верхняя и нижняя полосы оказывались пустыми: под стеклом ничего нет,
+      // и сквозь него виден край плашки. Запас делается рамкой того же цвета,
+      // что заливка, — тогда содержимое само отъезжает внутрь на её толщину,
+      // и городить лишний узел не нужно.
+      geo.pad = Math.ceil(Math.max(geo.w, geo.h) * GLASS.pressLens * 0.5) + 4;
+
       el.lens.style.left = geo.left + 'px';
       el.lens.style.top = geo.top + 'px';
       el.lens.style.width = geo.w + 'px';
@@ -3907,6 +3988,7 @@
       el.lens.style.borderRadius = (geo.h / 2) + 'px';
       el.mirror.style.width = geo.rowW + 'px';
       el.mirror.style.height = geo.rowH + 'px';
+      el.mirror.style.borderWidth = geo.pad + 'px';
 
       rebuild(geo.w, geo.h);
       el.tabbar.classList.add('is-ready');
@@ -3937,12 +4019,15 @@
       // WebKit фильтр и собственная трансформация на одном элементе уживаются
       // плохо. Гасим вокруг центра линзы — того же, вокруг которого растёт
       // сама линза, иначе взаимного погашения не выйдет.
+      // Запас вычитается здесь: содержимое зеркала отодвинуто внутрь рамкой,
+      // и без поправки копия уехала бы на её толщину.
       var cx = geo.w / 2, cy = geo.h / 2;
       el.mirror.style.transform =
         'translate(' + cx.toFixed(2) + 'px,' + cy.toFixed(2) + 'px) '
         + 'scale(' + (1 / sx).toFixed(4) + ',' + (1 / sy).toFixed(4) + ') '
         + 'translate(' + (-cx).toFixed(2) + 'px,' + (-cy).toFixed(2) + 'px) '
-        + 'translate(' + (geo.mx - tx).toFixed(2) + 'px,' + geo.my.toFixed(2) + 'px)';
+        + 'translate(' + (geo.mx - geo.pad - tx).toFixed(2) + 'px,'
+        + (geo.my - geo.pad).toFixed(2) + 'px)';
 
       if (path === 'mirror' && GLASS.pressPlate > 0) {
         // Плашка подаётся только в режиме зеркала: в Chromium трансформация
