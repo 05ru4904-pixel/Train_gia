@@ -322,40 +322,49 @@ button {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  /* Под таббаром: он плавает поверх контента, иначе размывать ему нечего. */
-  padding-bottom: calc(74px + var(--safe-bottom));
+  /* Под плашкой меню: она плавает поверх контента, иначе размывать ей нечего.
+     Высота плашки около 55, плюс её отступ снизу и запас, чтобы последняя
+     строка экрана не оказывалась прижатой к ней вплотную. */
+  padding-bottom: calc(82px + var(--safe-bottom));
 }
 .screen::-webkit-scrollbar { width: 0; height: 0; }
 
 .page { padding: 22px var(--pad) 28px; }
 
-/* Таббар. Активный раздел отмечает не цвет иконки, а стеклянная капсула:
-   при переключении она переезжает, а не появляется заново. Анимируем только
-   transform — left и width на слабых телефонах дёргаются. */
+/* Таббар — отдельная плавающая плашка, а не полоса во всю ширину. Материал
+   хромовый и полупрозрачный: сквозь него проезжает контент, поэтому под ним
+   есть что размывать. Активный раздел отмечает не цвет иконки, а стеклянная
+   капсула: при переключении она переезжает, а не появляется заново.
+   Анимируем только transform — left и width на слабых телефонах дёргаются. */
 .tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 12px;
+  right: 12px;
+  bottom: calc(10px + var(--safe-bottom));
   z-index: 30;
   display: flex;
-  padding: 8px 0 calc(10px + var(--safe-bottom));
-  background: var(--glass-bg);
+  padding: 6px;
+  border-radius: 999px;
+  /* Хром из дизайн-системы: его собственная прозрачность и есть те самые
+     «примерно 50%», отдельного токена под это заводить не нужно. */
+  background: var(--chrome-panel);
+  border: 1px solid var(--chrome-panel-border);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border-top: 1px solid var(--glass-border);
   box-shadow: var(--shadow-glass);
+  /* Капсулу таскают пальцем — браузерные жесты на плашке только мешают. */
+  touch-action: none;
 }
 @supports not (backdrop-filter: blur(1px)) {
-  .tabbar { background: var(--surface); border-top-color: var(--border); }
+  .tabbar { background: var(--surface-2); border-color: var(--border); }
 }
 .tabbar__pill {
   position: absolute;
   top: 6px;
-  bottom: calc(8px + var(--safe-bottom));
-  left: 0;
-  width: 25%;               /* 100% / число разделов */
-  padding: 0 13px;
+  bottom: 6px;
+  left: 6px;
+  width: calc((100% - 12px) / 4);   /* ширина плашки минус её поля, на 4 раздела */
+  padding: 0 4px;
   pointer-events: none;
   transform: translateX(calc(var(--tab, 0) * 100%));
   transition: transform 460ms cubic-bezier(0.32, 0.72, 0, 1);
@@ -364,6 +373,7 @@ button {
    ней, иначе на белой странице получается просто белая плашка. Объём даёт
    светотень — яркая кромка сверху, тёмная снизу и падающая тень. */
 .tabbar__pill > i {
+  position: relative;
   display: block;
   width: 100%;
   height: 100%;
@@ -377,7 +387,42 @@ button {
     0 1px 3px oklch(0.35 0.03 45 / 0.12),
     inset 0 1.5px 0 oklch(1 0 0 / 1),
     inset 0 -2px 4px oklch(0.35 0.03 45 / 0.07);
+  transition: transform 240ms ease, box-shadow 240ms ease;
 }
+
+/* Радужная кромка мыльного пузыря. Лежит готовой и невидимой: включается
+   только пока капсулу тащат пальцем. Спектральный градиент здесь не значит
+   «верно» или «ошибка» — он про материал, а не про смысл. */
+.tabbar__pill > i::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: var(--grad-spectrum-ring);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+/* Пока палец на капсуле: она идёт за ним без задержки, растягивается по ходу
+   движения, сильнее преломляет фон и получает радужную кромку. */
+.tabbar.is-dragging .tabbar__pill { transition: none; }
+.tabbar.is-dragging .tabbar__pill > i {
+  transform: scaleX(1.12) scaleY(0.94);
+  backdrop-filter: blur(7px) saturate(2.4) contrast(1.08) brightness(1.04);
+  -webkit-backdrop-filter: blur(7px) saturate(2.4) contrast(1.08) brightness(1.04);
+  box-shadow:
+    0 12px 26px oklch(0.35 0.03 45 / 0.26),
+    0 2px 6px oklch(0.35 0.03 45 / 0.16),
+    inset 0 2px 0 oklch(1 0 0 / 1),
+    inset 0 -3px 6px oklch(0.35 0.03 45 / 0.10);
+}
+.tabbar.is-dragging .tabbar__pill > i::before { opacity: 0.9; }
 .tab {
   position: relative;
   z-index: 1;

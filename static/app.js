@@ -3274,6 +3274,99 @@
   /* ------------------------------------------------------------------ */
   /* Запуск                                                             */
   /* ------------------------------------------------------------------ */
+  /* ------------------------------------------------------------------ */
+  /* Капсула таббара: тап и перетаскивание                              */
+  /* ------------------------------------------------------------------ */
+  /* У капсулы два способа управления, и они не мешают друг другу.
+     Тап по разделу переключает его как раньше. Палец, легший на саму капсулу
+     и поехавший вбок, тащит её за собой: пока он не оторвался, капсула идёт
+     следом без анимации, а на отпускании доезжает до ближайшего раздела и
+     открывает его. Тап от перетаскивания отличаем по порогу в 6 пикселей —
+     иначе дрожь пальца превращала бы каждое нажатие в перетаскивание. */
+  var DRAG_THRESHOLD = 6;
+
+  function initPillDrag() {
+    var pill = dom.tabbar.querySelector('.tabbar__pill');
+    if (!pill || !window.PointerEvent) return;
+
+    var drag = null;
+    var swallowClick = false;
+
+    /** Дорожка, по которой ездит капсула: плашка минус её внутренние поля. */
+    function trackAt(clientX) {
+      var box = dom.tabbar.getBoundingClientRect();
+      var pad = parseFloat(getComputedStyle(dom.tabbar).paddingLeft) || 0;
+      var step = (box.width - pad * 2) / dom.tabs.length;
+      // −0.5, потому что позиция капсулы считается по её левому краю, а палец
+      // держит её за середину.
+      var at = (clientX - box.left - pad) / step - 0.5;
+      return Math.min(dom.tabs.length - 1, Math.max(0, at));
+    }
+
+    function lightUp(index) {
+      Array.prototype.forEach.call(dom.tabs, function (tab, i) {
+        tab.classList.toggle('is-active', i === index);
+      });
+    }
+
+    dom.tabbar.addEventListener('pointerdown', function (event) {
+      var box = pill.getBoundingClientRect();
+      // Гасим флаг здесь: если прошлое перетаскивание оборвалось системой,
+      // click после него не пришёл, и без сброса флаг съел бы следующий тап.
+      swallowClick = false;
+      // Начинаем только с самой капсулы: нажатие по соседнему разделу — тап.
+      if (event.clientX < box.left || event.clientX > box.right) return;
+      drag = { id: event.pointerId, startX: event.clientX, lastX: event.clientX, moved: false };
+    });
+
+    dom.tabbar.addEventListener('pointermove', function (event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      if (!drag.moved) {
+        if (Math.abs(event.clientX - drag.startX) < DRAG_THRESHOLD) return;
+        drag.moved = true;
+        dom.tabbar.classList.add('is-dragging');
+        // Захват вешаем на плашку, а не на капсулу: у неё pointer-events: none.
+        try { dom.tabbar.setPointerCapture(event.pointerId); } catch (e) { /* старый WebView */ }
+      }
+      drag.lastX = event.clientX;
+      var at = trackAt(event.clientX);
+      dom.tabbar.style.setProperty('--tab', String(at));
+      // Подпись загорается, пока капсула ещё едет: так ученик видит, куда попадёт.
+      lightUp(Math.round(at));
+      event.preventDefault();
+    });
+
+    function release(event) {
+      if (!drag || (event && event.pointerId !== drag.id)) return;
+      var moved = drag.moved;
+      // pointercancel приходит без осмысленных координат — берём последние свои.
+      var x = drag.lastX;
+      drag = null;
+      dom.tabbar.classList.remove('is-dragging');
+      if (!moved) return;   // это был обычный тап, его доведёт click
+
+      var index = Math.round(trackAt(x));
+      var tab = dom.tabs[index];
+      dom.tabbar.style.setProperty('--tab', String(index));
+      // После перетаскивания браузер всё равно пришлёт click по разделу, над
+      // которым оторвался палец, — он может не совпасть с тем, куда доехала
+      // капсула. Гасим его и переключаем сами.
+      swallowClick = true;
+      if (tab) setTab(tab.getAttribute('data-tab'));
+      else render();
+    }
+
+    dom.tabbar.addEventListener('pointerup', release);
+    dom.tabbar.addEventListener('pointercancel', release);
+
+    dom.tabbar.addEventListener('click', function (event) {
+      if (!swallowClick) return;
+      swallowClick = false;
+      event.stopPropagation();
+      event.preventDefault();
+    }, true);
+  }
+
   function init() {
     dom.app = document.getElementById('app');
     dom.screen = document.getElementById('screen');
@@ -3289,6 +3382,7 @@
     Array.prototype.forEach.call(dom.tabs, function (tab) {
       tab.addEventListener('click', function () { setTab(tab.getAttribute('data-tab')); });
     });
+    initPillDrag();
 
     if (tg) {
       try {
