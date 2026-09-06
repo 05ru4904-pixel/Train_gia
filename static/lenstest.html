@@ -558,95 +558,68 @@
      и заодно записывают выбранное для самого приложения. */
 
   var PRESETS = [
-    { name: 'полная', hint: 'аберрация и вертикаль',
-      over: { aberration: 0.02, axisY: 0.38, refract: 0.3 } },
-    { name: 'без аберрации', hint: 'так сейчас в приложении',
-      over: { aberration: 0, axisY: 0.38, refract: 0.3 } },
-    { name: 'без вертикали', hint: 'минус пять примитивов',
-      over: { aberration: 0, axisY: 0, refract: 0.3 } },
-    { name: 'самая лёгкая', hint: 'ещё и поле уже',
-      over: { aberration: 0, axisY: 0, refract: 0.24, reach: 0.1, gradStep: 0.08 } }
+    { name: 'как сейчас', hint: 'то, что стоит в приложении',
+      over: { refract: 0.3, edgeBlur: 0.05, edgeSharp: 2.6 } },
+    { name: 'кромка слабее', hint: 'размазывание вдвое тише',
+      over: { refract: 0.3, edgeBlur: 0.025, edgeSharp: 2.6 } },
+    { name: 'без кромки', hint: 'минус три прохода из двенадцати',
+      over: { refract: 0.3, edgeBlur: 0 } },
+    { name: 'самая лёгкая', hint: 'без кромки и поле уже',
+      over: { refract: 0.24, edgeBlur: 0, reach: 0.1, gradStep: 0.08 } }
   ];
 
-  /** Та же цепочка, что в таббаре, включая дешёвые ветки. Держать её здесь
-   *  копией приходится: страница проверки не грузит app.js, иначе замер
-   *  мешался бы с настоящим таббаром. */
+  /** Точная копия цепочки из таббара, включая дешёвые ветки. Держать её здесь
+   *  приходится: страница проверки не грузит app.js, иначе замер мешался бы с
+   *  настоящим таббаром. Если правишь фильтр в app.js — поправь и тут, иначе
+   *  панель начнёт мерить не то, что работает в приложении. */
   function appFilter(id, h, over) {
     var blur = (over.reach || 0.12) * h;
     var step = (over.gradStep || 0.095) * h;
     var scale = over.refract * h;
-    var ay = over.axisY, ab = over.aberration;
+    var edge = (over.edgeBlur || 0) * h;
+    var k = over.edgeSharp || 2.6;
+
     var f = node('filter', {
       id: id, primitiveUnits: 'userSpaceOnUse',
       'color-interpolation-filters': 'sRGB',
-      x: '-12%', y: '-22%', width: '124%', height: '144%'
+      x: '-9%', y: '-18%', width: '118%', height: '136%'
     });
     var INV = '-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 0 1';
-    f.appendChild(node('feGaussianBlur', { 'in': 'SourceAlpha', stdDeviation: blur, result: 'blur' }));
+
+    f.appendChild(node('feGaussianBlur', {
+      'in': 'SourceAlpha', stdDeviation: blur, result: 'blur' }));
+    // Зелёный обнулён: после инверсии он станет единицей, в полусреднем даст
+    // ровно 0.5, и отдельный примитив «вертикали нет» не нужен.
     f.appendChild(node('feColorMatrix', {
       'in': 'blur', type: 'matrix', result: 'field',
-      values: '0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 0 1'
-    }));
+      values: '0 0 0 1 0  0 0 0 0 0  0 0 0 1 0  0 0 0 0 1' }));
     f.appendChild(node('feOffset', { 'in': 'field', dx: -step, dy: 0, result: 'xR' }));
     f.appendChild(node('feOffset', { 'in': 'field', dx: step, dy: 0, result: 'xLraw' }));
-    f.appendChild(node('feColorMatrix', { 'in': 'xLraw', type: 'matrix', values: INV, result: 'xL' }));
+    f.appendChild(node('feColorMatrix', {
+      'in': 'xLraw', type: 'matrix', values: INV, result: 'xL' }));
     f.appendChild(node('feComposite', {
-      'in': 'xR', in2: 'xL', operator: 'arithmetic', k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gx'
-    }));
+      'in': 'xR', in2: 'xL', operator: 'arithmetic',
+      k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'map' }));
 
-    if (ay <= 0) {
-      f.appendChild(node('feColorMatrix', {
-        'in': 'gx', type: 'matrix', result: 'map',
-        values: '1 0 0 0 0  0 0 0 0 0.5  0 0 0 0 0  0 0 0 0 1'
-      }));
-    } else {
-      f.appendChild(node('feOffset', { 'in': 'field', dx: 0, dy: -step, result: 'yD' }));
-      f.appendChild(node('feOffset', { 'in': 'field', dx: 0, dy: step, result: 'yUraw' }));
-      f.appendChild(node('feColorMatrix', { 'in': 'yUraw', type: 'matrix', values: INV, result: 'yU' }));
-      f.appendChild(node('feComposite', {
-        'in': 'yD', in2: 'yU', operator: 'arithmetic', k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gy'
-      }));
-      f.appendChild(node('feColorMatrix', {
-        'in': 'gx', type: 'matrix', result: 'mR',
-        values: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1'
-      }));
-      f.appendChild(node('feColorMatrix', {
-        'in': 'gy', type: 'matrix', result: 'mG',
-        values: '0 0 0 0 0  0 ' + ay + ' 0 0 ' + (0.5 * (1 - ay)) + '  0 0 0 0 0  0 0 0 0 1'
-      }));
-      f.appendChild(node('feComposite', {
-        'in': 'mR', in2: 'mG', operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, result: 'map'
-      }));
-    }
+    var disp = node('feDisplacementMap', {
+      'in': 'SourceGraphic', in2: 'map', scale: scale,
+      xChannelSelector: 'R', yChannelSelector: 'G' });
+    if (edge > 0) disp.setAttribute('result', 'disp');
+    f.appendChild(disp);
 
-    if (ab <= 0) {
-      f.appendChild(node('feDisplacementMap', {
-        'in': 'SourceGraphic', in2: 'map', scale: scale,
-        xChannelSelector: 'R', yChannelSelector: 'G'
-      }));
-    } else {
-      var chans = [
-        { k: 1 - ab, key: 'R', m: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1' },
-        { k: 1, key: 'G', m: '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 0 1' },
-        { k: 1 + ab, key: 'B', m: '0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 0 1' }
-      ];
-      var prev = null;
-      for (var n = 0; n < 3; n++) {
-        var ch = chans[n];
-        f.appendChild(node('feDisplacementMap', {
-          'in': 'SourceGraphic', in2: 'map', scale: scale * ch.k,
-          xChannelSelector: 'R', yChannelSelector: 'G', result: 'd' + ch.key
-        }));
-        f.appendChild(node('feColorMatrix', {
-          'in': 'd' + ch.key, type: 'matrix', values: ch.m, result: 'c' + ch.key
-        }));
-        if (prev === null) { prev = 'c' + ch.key; continue; }
-        var last = n === 2;
-        var add = { 'in': 'c' + ch.key, in2: prev, operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0 };
-        if (!last) add.result = 'sum' + n;
-        f.appendChild(node('feComposite', add));
-        prev = last ? null : 'sum' + n;
-      }
+    if (edge > 0) {
+      f.appendChild(node('feComposite', {
+        'in': 'blur', in2: 'blur', operator: 'arithmetic',
+        k1: -4, k2: 4, k3: 0, k4: 0, result: 'rim0' }));
+      f.appendChild(node('feComposite', {
+        'in': 'rim0', in2: 'rim0', operator: 'arithmetic',
+        k1: k, k2: -(k - 1) / 2, k3: -(k - 1) / 2, k4: 0, result: 'rim' }));
+      f.appendChild(node('feGaussianBlur', {
+        'in': 'disp', stdDeviation: edge, result: 'soft' }));
+      f.appendChild(node('feComposite', {
+        'in': 'soft', in2: 'rim', operator: 'in', result: 'softRim' }));
+      f.appendChild(node('feComposite', {
+        'in': 'softRim', in2: 'disp', operator: 'over' }));
     }
     return f;
   }
