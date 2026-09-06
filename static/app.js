@@ -3066,6 +3066,20 @@
             + ';-webkit-backdrop-filter:' + (S.refractValue || 'none') + ';'),
           cell(4, 'только webkit', '-webkit-backdrop-filter:blur(6px);'),
           cell(5, 'без стекла', 'background:oklch(1 0 0 / 0.45);')
+        ]),
+        // Проверка догадки: мешает ли размытию трансформация у родителя.
+        // Если 6 размывает, а 7 нет — причина именно в ней.
+        h('div', { class: 'diag__row' }, [
+          cell(6, 'своя трансформация', 'transform:scale(1.05);' + blur),
+          // Тот же приём, но размытие лежит ВНУТРИ трансформированного
+          // родителя. Если 6 размывает, а 7 нет — причина найдена.
+          h('div', { class: 'diag__cell' }, [
+            h('div', { style: 'transform:scale(1.05)' }, [
+              h('div', { class: 'diag__glass', style: blur }, '7')
+            ]),
+            h('div', { class: 'diag__name', text: 'внутри трансформации' })
+          ]),
+          h('div', { class: 'diag__cell', style: 'flex:3' })
         ])
       ]),
       h('div', { class: 'diag__note' }, [
