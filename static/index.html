@@ -38,32 +38,40 @@
 
     <main id="screen" class="screen"></main>
 
+    <!-- Таббар: одна физическая линза жидкого стекла ездит между четырьмя
+         настоящими кнопками. Геометрию линзы целиком считает app.js по живым
+         прямоугольникам кнопок — в разметке нет ни одной координаты. -->
     <nav id="tabbar" class="tabbar">
-      <!-- Капсула активного раздела. Переезжает по --tab, а не перерисовывается:
-           анимируется только transform, иначе на слабых телефонах дёргается. -->
-      <!-- Внутри капли — линза: копия строки разделов, которую SVG-фильтр из
-           app.js гнёт и увеличивает. Копия нужна потому, что фильтр умеет
-           гнуть только содержимое самого элемента; фон через backdrop-filter
-           гнётся лишь в Chromium. Заполняется из app.js. -->
-      <div class="tabbar__pill" aria-hidden="true">
-        <i><span class="tabbar__lens"><span class="tabbar__lens-row"></span></span></i>
+      <div class="tabbar__plate">
+        <div class="tabbar__row">
+          <button class="tab" type="button" data-tab="trainer">
+            <span class="tab__icon tab__icon--grid"><i></i><i></i><i></i><i></i></span>
+            <span class="tab__label">Тренажёр</span>
+          </button>
+          <button class="tab" type="button" data-tab="cheats">
+            <span class="tab__icon tab__icon--book"><i></i><i></i><i></i></span>
+            <span class="tab__label">Шпаргалки</span>
+          </button>
+          <button class="tab" type="button" data-tab="stats">
+            <span class="tab__icon tab__icon--bars"><i></i><i></i><i></i></span>
+            <span class="tab__label">Статистика</span>
+          </button>
+          <button class="tab" type="button" data-tab="profile">
+            <span class="tab__icon tab__icon--user"><i></i></span>
+            <span class="tab__label">Профиль</span>
+          </button>
+        </div>
+
+        <!-- Линза. Лежит НАД кнопками намеренно: в Chromium её фоном
+             (backdrop) служат сами кнопки, и преломляется настоящий DOM.
+             В WebKit backdrop-filter: url() молча не работает, поэтому там
+             внутри линзы живёт зеркало — клоны тех же кнопок, которые
+             MutationObserver держит в точном соответствии с оригиналом. -->
+        <div class="tabbar__lens" aria-hidden="true">
+          <div class="tabbar__fx"><div class="tabbar__mirror"></div></div>
+          <div class="tabbar__sheen"></div>
+        </div>
       </div>
-      <button class="tab" type="button" data-tab="trainer">
-        <span class="tab__icon tab__icon--grid"><i></i><i></i><i></i><i></i></span>
-        <span class="tab__label">Тренажёр</span>
-      </button>
-      <button class="tab" type="button" data-tab="cheats">
-        <span class="tab__icon tab__icon--book"><i></i><i></i><i></i></span>
-        <span class="tab__label">Шпаргалки</span>
-      </button>
-      <button class="tab" type="button" data-tab="stats">
-        <span class="tab__icon tab__icon--bars"><i></i><i></i><i></i></span>
-        <span class="tab__label">Статистика</span>
-      </button>
-      <button class="tab" type="button" data-tab="profile">
-        <span class="tab__icon tab__icon--user"><i></i></span>
-        <span class="tab__label">Профиль</span>
-      </button>
     </nav>
   </div>
 

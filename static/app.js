@@ -3192,17 +3192,15 @@
     // не открыт. При правке из профиля вкладки остаются на месте.
     dom.tabbar.hidden = S.screen === 'onboarding' && !(S.onb && S.onb.editing);
 
-    // Активный раздел отмечает стеклянная капсула, а не цвет иконки: она
-    // переезжает по --tab, поэтому её позиция — это индекс вкладки в разметке.
+    // Активный раздел отмечает линза, а не цвет иконки. Её позиция — индекс
+    // вкладки в разметке; довести её туда пружиной — забота таббара.
     var activeTab = 0;
     Array.prototype.forEach.call(dom.tabs, function (tab, index) {
       var on = tab.getAttribute('data-tab') === S.tab;
       tab.classList.toggle('is-active', on);
       if (on) activeTab = index;
     });
-    dom.tabbar.style.setProperty('--tab', String(activeTab));
-    syncGlass(activeTab);
-    syncGlassActive(activeTab);
+    TabBar.select(activeTab);
 
     // Прокрутку сбрасываем только при переходе на другой экран или к другому
     // заданию. Иначе выбор варианта — он тоже вызывает перерисовку — отбрасывал
@@ -3274,535 +3272,774 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Запуск                                                             */
+  /* Таббар: одна линза жидкого стекла                                  */
   /* ------------------------------------------------------------------ */
-  /* ------------------------------------------------------------------ */
-  /* Жидкое стекло: линза капли                                         */
-  /* ------------------------------------------------------------------ */
-  /* Порт приёма из библиотеки `@samasante/liquid-glass` (её исходники лежали
-     в корне проекта). Она React, у нас голый JS, поэтому перенесено ядро.
+  /* Архитектура. Четыре настоящие кнопки живут в .tabbar__row и ничем не
+     украшены. Над ними лежит ОДНА линза, которая ездит между ними: она и есть
+     весь эффект. Своего стеклянного элемента нет ни у одной вкладки.
 
-     Суть. На canvas рисуется карта смещения: для каждой точки капли считается
-     расстояние до её края (SDF скруглённого прямоугольника), из него — вектор,
-     куда сдвинуть пиксель. Сдвиг по X пишется в красный канал, по Y в зелёный,
-     а в синий — маска блика. Дальше SVG-фильтр гонит через эту карту
-     изображение: `feDisplacementMap` гнёт картинку, три прохода с чуть разной
-     силой дают расслоение цвета по краям, синий канал поднимается в блик.
+     Преломление настоящее, а не имитация: пиксели под линзой физически
+     сдвигаются картой смещения через feDisplacementMap. Путей два, и
+     выбираются они по движку:
 
-     Главное отличие от первого репозитория, который мы пробовали: фильтр
-     висит НЕ на фоне (`backdrop-filter: url()`, он работает только в Chromium
-     и у пользователя молча не сработал — проверено), а на самом элементе,
-     обычным `filter: url()`. Он живой и в WebKit. Но фильтр может согнуть
-     только то, что лежит внутри элемента, — поэтому внутри капли лежит копия
-     строки разделов, и гнётся она. Настоящие подписи под каплей закрыты
-     заливкой линзы, иначе рядом с изогнутой копией просвечивал бы ровный
-     оригинал.
+       · Chromium — линза лежит НАД кнопками и гнёт их через
+         `backdrop-filter: url(#id)`. Преломляется буквально то, что
+         отрисовано за ней: живые кнопки, их текст и иконки.
 
-     Четыре оговорки WebKit, все из BROWSERS.md библиотеки, все соблюдены:
-       1. карта не увеличивается по разрешению — в Safari превышение потолка
-          размера молча выбрасывает дорогие проходы (блик и цвет);
-       2. карта строится только при смене РАЗМЕРА капли, никогда при движении:
-          если менять её на ходу, Safari душит проходы и блик пропадает;
-       3. у фильтра при каждой перестройке новый id — WebKit кэширует результат
-          по id, и без смены линза замерзает;
-       4. блик берётся из сырой карты: в WebKit другой порядок композиции. */
+       · WebKit (сюда попадает Telegram на iPhone) — `backdrop-filter: url()`
+         там разбирается парсером, но игнорируется при отрисовке. Проверено на
+         устройстве пользователя: CSS.supports отвечает «да» и врёт. Поэтому
+         фильтр вешается обычным `filter: url()` на зеркало — клоны тех же
+         кнопок внутри линзы. Это не скриншот и не canvas: живые узлы, текст
+         остаётся текстом, а MutationObserver держит копию в точном
+         соответствии с оригиналом, включая класс активного раздела.
 
-  var GLASS = {
-    // Значения взяты из DEFAULT_LENS_PARAMS библиотеки: там они подобраны
-    // под настоящее стекло, а мои прикидки занижали эффект вдвое.
-    mapSize: 512,      // разрешение карты; в WebKit увеличивать нельзя
-    // Глубина как у них. Узкая полоса (0.3) давала жёсткий шов: переход
-    // укладывался в шесть пикселей, и граница читалась полукругом. Плавность
-    // получается наоборот — когда преломление достаёт глубоко, но у середины
-    // почти нулевое и нарастает к краю постепенно.
-    depth: 0.65,
-    curvature: 0.6,    // купол: увеличение к середине
-    // Перекос по осям. Вертикальную составляющую почти гасим: капля широкая,
-    // а под ней одна строка текста — вертикальный сдвиг её просто двоит,
-    // над чёткой подписью повисает вторая, бледная. В библиотеке для таких
-    // вытянутых линз ровно для этого есть отдельная ручка по осям.
-    axisY: 0.15,
-    // Сила меньше, чем у них (0.06): полоса теперь широкая, и при их силе
-    // середина капли заметно плыла бы.
-    strength: 0.045,
-    bend: 0,           // мениск у кромки; у них по умолчанию тоже 0
-    bendWidth: 0.16,
-    frost: 0,          // матовость: нулевая, она мылила всю площадь разом
-    // Блик выключен по просьбе пользователя: именно он подмешивал белое и
-    // сходился к одной стороне — то самое молочное пятно поверх капли.
-    specular: 0,
-    sheen: 0,
-    sheenWidth: 3,
-    sheenFalloff: 1.5,
-    sheenAngle: 45,
-    glow: 0,
-    glowSpread: 1,
-    glowFalloff: 0.5
-  };
+     Геометрия всегда из живых getBoundingClientRect(): ни одной вшитой
+     координаты. Движение считает пружина в одном requestAnimationFrame,
+     который пишет три transform и ничего не перерисовывает. */
 
-  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var TabBar = (function () {
 
-  var glass = null;   // { lens, row, filter, image, id, w, h, version }
+    var GLASS = {
+      /* --- форма линзы --- */
+      insetX: 10,        // боковые поля: из них получается пропорция капсулы
+      insetY: 0,         // по высоте линза занимает строку целиком
+      mapMax: 220,       // предел разрешения карты; в WebKit больше нельзя
 
-  function smoothStep(edge0, edge1, value) {
-    var t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
-    return t * t * (3 - 2 * t);
-  }
+      /* --- преломление --- */
+      // Доля полувысоты, на которую преломление достаёт внутрь. Больше
+      // половины ставить нельзя: линза всего 45 px высотой, и подпись с
+      // иконкой оказываются целиком в зоне работы — их рвёт.
+      depth: 0.55,
+      // Показатель профиля: чем больше, тем ближе к кромке жмётся вся работа.
+      profile: 3,
+      // Ширина полосы у самого контура, на которой смещение гасится в ноль.
+      // Без неё поле обрывается скачком, и обрыв читается ровной дугой — тот
+      // самый шов-полукруг из прошлой реализации.
+      rimFade: 2,
+      // Максимальный сдвиг как доля высоты линзы. Считать по снимкам из
+      // headless нельзя: записано, что Chromium этот эффект ЗАНИЖАЕТ, а на
+      // устройстве он виден отчётливее. Поэтому берём заведомо скромно.
+      refract: 0.085,
+      // Вертикальная составляющая. Полностью не гасим: без неё стекло плоское.
+      // Но и не единица: линза широкая, под ней одна строка, и сильный
+      // вертикальный сдвиг её двоит.
+      // Подпись стоит низко в кнопке и попадает как раз в полосу сильной
+      // работы у нижней кромки: вертикальную составляющую держим маленькой,
+      // иначе низ букв размазывает. Красоту даёт горизонтальный выгиб.
+      axisY: 0.28,
+      // Насколько сильнее гнёт прижатая линза.
+      pressRefract: 0.5,
+      // Расслоение цвета: разбег силы смещения между каналами в долях.
+      // Ноль полностью выключает трёхпроходную схему.
+      aberration: 0.02,
 
-  // erf(x) ≈ tanh(√π · x) — дешёвое гладкое приближение для растушёвки края.
-  function erf(x) {
-    return Math.tanh(Math.sqrt(Math.PI) * x);
-  }
+      /* --- пружины --- */
+      // Позиция: чуть недодемпфирована, отсюда лёгкий перелёт и мягкий доводчик.
+      posK: 210, posC: 22,
+      // Деформация: демпфирована заметно слабее — отсюда wobble после остановки.
+      formK: 150, formC: 11,
+      // Нажатие: почти без перелёта, оно не должно «звенеть».
+      pressK: 260, pressC: 26,
+      // Скорость -> растяжение. Скорость меряется во вкладках в секунду.
+      stretchGain: 0.034,
+      stretchMax: 0.32,
+      // Встречное сжатие по вертикали: объём стекла сохраняется.
+      squash: 0.55,
+      // Надувание при удержании.
+      pressLens: 0.07,
+      pressPlate: 0.012,
 
-  /** Расстояние до края скруглённого прямоугольника: внутри отрицательное. */
-  function shapeDistance(px, py, halfW, halfH, radius) {
-    var edgeX = Math.abs(px) - halfW + radius;
-    var edgeY = Math.abs(py) - halfH + radius;
-    var outerX = edgeX > 0 ? edgeX : 0;
-    var outerY = edgeY > 0 ? edgeY : 0;
-    var corner = (outerX > 0 || outerY > 0)
-      ? Math.sqrt(outerX * outerX + outerY * outerY) : 0;
-    return corner + Math.min(Math.max(edgeX, edgeY), 0) - radius;
-  }
-
-  /** Сферический купол: во сколько раз тянуть точку на расстоянии distance. */
-  function domeGradient(distance, radius, scale) {
-    var inside = Math.min(Math.abs(distance), radius * (1 - 1e-3));
-    var sign = distance < 0 ? -1 : 1;
-    return sign * (inside / Math.sqrt(radius * radius - inside * inside)) * scale;
-  }
-
-  /** Радиус и нормировка купола по высоте шапки и полуразмеру. */
-  function domeConstants(capDepth, halfW, halfH) {
-    var cap = Math.max(0.01, Math.min(capDepth, Math.min(halfW, halfH) - 1));
-    var rx = (halfW * halfW + cap * cap) / (2 * cap);
-    var ry = (halfH * halfH + cap * cap) / (2 * cap);
-    // Среднее градиента купола имеет замкнутый вид, численное интегрирование
-    // не нужно: ∫ x/√(R²−x²) dx = R − √(R²−H²).
-    var meanX = halfW > 0 ? (rx - Math.sqrt(rx * rx - halfW * halfW)) / halfW : 0;
-    var meanY = halfH > 0 ? (ry - Math.sqrt(ry * ry - halfH * halfH)) / halfH : 0;
-    return {
-      rx: rx,
-      ry: ry,
-      scaleX: meanX > 0 ? 0.5 / meanX : 1,
-      scaleY: meanY > 0 ? 0.5 / meanY : 1
+      dragThreshold: 6
     };
-  }
 
-  /** Рисует карту смещения и возвращает её как data-URL. */
-  function buildGlassMap(width, height, radius) {
-    var size = GLASS.mapSize;
-    var canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    var ctx = canvas.getContext && canvas.getContext('2d');
-    if (!ctx || !window.ImageData) return null;
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+    var XLINK_NS = 'http://www.w3.org/1999/xlink';
 
-    var halfW = width / 2;
-    var halfH = height / 2;
-    var rad = Math.min(radius, Math.min(halfW, halfH));
-    var minHalf = Math.min(halfW, halfH);
+    var el = null;      // ссылки на узлы
+    var geo = null;     // измеренная геометрия
+    var fx = null;      // { defs, filter, id, disp[], ratios[], w, h, version }
+    var path = 'mirror';
+    var tabs = [];
+    var onSelect = null;
+    var reduced = false;
 
-    // depth — доля половины капли, на которую преломление достаёт внутрь.
-    var depthPx = Math.min(GLASS.depth * minHalf, minHalf - 1);
-    var innerHalfW = Math.max(0, halfW - depthPx);
-    var innerHalfH = Math.max(0, halfH - depthPx);
-    var innerRadius = Math.max(0, Math.min(rad, Math.min(innerHalfW, innerHalfH)));
-    var falloff = depthPx > 0 ? Math.SQRT1_2 / depthPx : 1e6;
+    // Состояние пружин. Это всё, что меняется в кадре.
+    var sim = {
+      pos: 0, vel: 0, target: 0,
+      form: 0, formVel: 0,
+      press: 0, pressVel: 0, pressTarget: 0
+    };
+    var frame = 0;
+    var lastTime = 0;
+    var booted = false;  // первый select() ставит линзу на место без проезда
+    var dragging = false;
+    var dispScale = 0;   // последнее записанное значение, чтобы не дёргать SVG зря
+    var lastPlateT = '';
 
-    var dome = domeConstants(GLASS.curvature * minHalf, halfW, halfH);
-    var bendInv = 1 / Math.max(2, GLASS.bendWidth * minHalf);
-    var sheenInv = GLASS.sheenWidth > 0 ? 1 / GLASS.sheenWidth : 0;
-    var glowInv = 1 / Math.max(2, GLASS.glowSpread * minHalf);
-    var angle = GLASS.sheenAngle * Math.PI / 180;
-    var cosA = Math.cos(angle);
-    var sinA = Math.sin(angle);
-    var diagNorm = Math.SQRT1_2;
+    /* --- мелкая математика ------------------------------------------- */
 
-    var stepX = width / size;
-    var stepY = height / size;
-    var data = new Uint8ClampedArray(size * size * 4);
-    // Поле считаем сначала целиком, а кодируем вторым проходом, нормируя по
-    // фактическому максимуму. Без этого купол у кромки упирается в потолок
-    // канала и обрезается: получается кольцо одинакового максимального сдвига
-    // и ступенька за контуром — на экране это читается швом-полукругом.
-    var field = new Float32Array(size * size * 2);
-    var peak = 0;
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-    for (var row = 0; row < size; row++) {
-      var py = (row + 0.5) * stepY - halfH;
-      for (var col = 0; col < size; col++) {
-        var px = (col + 0.5) * stepX - halfW;
-        var at = (row * size + col) * 4;
-        var sdf = shapeDistance(px, py, halfW, halfH, rad);
+    function smoothStep(edge0, edge1, v) {
+      var t = clamp((v - edge0) / (edge1 - edge0), 0, 1);
+      return t * t * (3 - 2 * t);
+    }
 
-        if (sdf >= 0) {
-          // Снаружи капли — нейтральный серый: ни смещения, ни блика.
-          data[at] = 128; data[at + 1] = 128; data[at + 2] = 128; data[at + 3] = 255;
-          continue;
+    /** Знаковое расстояние до края скруглённого прямоугольника: внутри < 0. */
+    function shapeSDF(px, py, halfW, halfH, radius) {
+      var ex = Math.abs(px) - halfW + radius;
+      var ey = Math.abs(py) - halfH + radius;
+      var ox = ex > 0 ? ex : 0;
+      var oy = ey > 0 ? ey : 0;
+      var corner = (ox > 0 || oy > 0) ? Math.sqrt(ox * ox + oy * oy) : 0;
+      return corner + Math.min(Math.max(ex, ey), 0) - radius;
+    }
+
+    function svgNode(name, attrs) {
+      var node = document.createElementNS(SVG_NS, name);
+      for (var key in attrs) {
+        if (Object.prototype.hasOwnProperty.call(attrs, key)) {
+          node.setAttribute(key, String(attrs[key]));
         }
+      }
+      return node;
+    }
 
-        // Направление сдвига: купол тянет тем сильнее, чем дальше от центра.
-        var dirX = domeGradient(px, dome.rx, dome.scaleX);
-        var dirY = domeGradient(py, dome.ry, dome.scaleY);
+    /* --- карта смещения ----------------------------------------------- */
+    /* Для каждой точки линзы считается расстояние до её края, из него —
+       вектор, куда сдвинуть пиксель. Сдвиг по X пишется в красный канал, по
+       Y — в зелёный; синий не используется, блик рисует CSS.
 
-        // Растушёвка: у середины преломления нет, оно нарастает к краю.
-        var innerSdf = shapeDistance(px, py, innerHalfW, innerHalfH, innerRadius);
-        var edgeOpacity = 0.5 * (1 + erf(innerSdf * falloff));
+       Вектор смотрит ВНУТРЬ, к середине линзы. Это и делает стекло выпуклым:
+       точка у кромки берёт пиксель из глубины, значит середина картинки
+       растягивается на всю линзу — увеличение. Развернуть вектор наружу —
+       получится вогнутое стекло, оно сжимает.
 
-        var dx = 0.5 * dirX * edgeOpacity;
-        var dy = 0.5 * dirY * edgeOpacity * GLASS.axisY;
+       Величина в середине ровно ноль и растёт к кромке, а в последних двух
+       пикселях гасится обратно в ноль. Оба нуля обязательны: без первого
+       середина линзы плывёт, без второго поле обрывается скачком и обрыв
+       виден ровной дугой по контуру. */
+    function buildMap(w, h) {
+      var mw = Math.max(48, Math.min(GLASS.mapMax, Math.round(w)));
+      var mh = Math.max(24, Math.round(mw * h / w));
+      var canvas = document.createElement('canvas');
+      canvas.width = mw;
+      canvas.height = mh;
+      var ctx = canvas.getContext && canvas.getContext('2d');
+      if (!ctx || !window.ImageData) return null;
 
-        // Мениск: добавочный изгиб в узкой полосе у самой кромки. Горб гаснет
-        // и на контуре, и вглубь, а пик приходится на треть полосы внутрь —
-        // фон заворачивается внутри губы, а не на линии среза.
-        if (GLASS.bend > 0) {
-          var band = Math.max(0, 1 + sdf * bendInv);
-          if (band > 0) {
-            var len = Math.sqrt(dirX * dirX + dirY * dirY);
-            if (len > 1e-4) {
-              var hump = 6.75 * band * band * (1 - band);
-              var add = 0.5 * GLASS.bend * hump * edgeOpacity / len;
-              dx += dirX * add;
-              dy += dirY * add * GLASS.axisY;
-            }
-          }
+      var halfW = w / 2;
+      var halfH = h / 2;
+      var radius = Math.min(halfW, halfH);
+      var depth = Math.max(1, GLASS.depth * Math.min(halfW, halfH));
+      var stepX = w / mw;
+      var stepY = h / mh;
+      var eps = 0.35;
+
+      var vx = new Float32Array(mw * mh);
+      var vy = new Float32Array(mw * mh);
+      var peak = 0;
+      var r, c, i;
+
+      for (r = 0; r < mh; r++) {
+        var py = (r + 0.5) * stepY - halfH;
+        for (c = 0; c < mw; c++) {
+          var px = (c + 0.5) * stepX - halfW;
+          var sdf = shapeSDF(px, py, halfW, halfH, radius);
+          if (sdf >= 0) continue;                 // снаружи линзы сдвига нет
+
+          var deep = Math.min(1, -sdf / depth);   // 0 у кромки, 1 в глубине
+          var mag = Math.pow(1 - deep, GLASS.profile);
+          mag *= smoothStep(0, GLASS.rimFade, -sdf);
+          if (mag <= 0) continue;
+
+          // Нормаль к контуру — численно, по градиенту того же расстояния.
+          var gx = shapeSDF(px + eps, py, halfW, halfH, radius)
+                 - shapeSDF(px - eps, py, halfW, halfH, radius);
+          var gy = shapeSDF(px, py + eps, halfW, halfH, radius)
+                 - shapeSDF(px, py - eps, halfW, halfH, radius);
+          var len = Math.sqrt(gx * gx + gy * gy);
+          if (len < 1e-6) continue;
+
+          i = r * mw + c;
+          // Минус: градиент смотрит наружу, а тянуть надо внутрь.
+          var dx = -(gx / len) * mag;
+          var dy = -(gy / len) * mag * GLASS.axisY;
+          vx[i] = dx;
+          vy[i] = dy;
+          if (Math.abs(dx) > peak) peak = Math.abs(dx);
+          if (Math.abs(dy) > peak) peak = Math.abs(dy);
         }
+      }
 
-        // Блик: кромочный сходит к оси света, свечение заполняет вглубь.
-        var spec = 0;
-        var normX = Math.max(-1, Math.min(1, px / halfW));
-        var normY = Math.max(-1, Math.min(1, py / halfH));
-        var axis = Math.min(1, Math.abs(normX * cosA + normY * sinA) * diagNorm);
-        if (GLASS.sheen > 0) {
-          var edgeBand = Math.max(0, 1 + sdf * sheenInv);
-          spec += GLASS.sheen * Math.pow(edgeBand, GLASS.sheenFalloff)
-            * (0.16 + 0.84 * Math.pow(axis, 1.6));
-        }
-        if (GLASS.glow > 0) {
-          var reach = Math.min(1, -sdf * glowInv);
-          spec += GLASS.glow * Math.pow(smoothStep(0, 1, 1 - reach), GLASS.glowFalloff)
-            * edgeOpacity * (0.6 + 0.4 * axis);
-        }
-        spec = Math.max(-1, Math.min(1, spec));
-
-        // Гасим смещение у самого контура: без этого поле обрывается скачком
-        // с большого значения до нуля, и обрыв виден как ровная дуга.
-        var rim = smoothStep(0, 2.5, -sdf);
-        dx *= rim;
-        dy *= rim;
-
-        var f = (row * size + col) * 2;
-        field[f] = dx;
-        field[f + 1] = dy;
-        if (Math.abs(dx) > peak) peak = Math.abs(dx);
-        if (Math.abs(dy) > peak) peak = Math.abs(dy);
-
-        data[at + 2] = (127 * spec + 128 + 0.5) | 0;
+      // Нормируем по общему максимуму, а не обрезаем по каналу: срезанные
+      // значения дают кольцо одинакового сдвига и ступеньку за ним.
+      var data = new Uint8ClampedArray(mw * mh * 4);
+      var norm = peak > 0 ? 0.5 / peak : 0;
+      for (i = 0; i < mw * mh; i++) {
+        var at = i * 4;
+        data[at] = ((0.5 + vx[i] * norm) * 255 + 0.5) | 0;
+        data[at + 1] = ((0.5 + vy[i] * norm) * 255 + 0.5) | 0;
+        data[at + 2] = 128;
         data[at + 3] = 255;
       }
+      ctx.putImageData(new ImageData(data, mw, mh), 0, 0);
+      return canvas.toDataURL();
     }
 
-    // Второй проход: нормируем поле по его же максимуму, чтобы занять весь
-    // диапазон канала и ничего не обрезать.
-    var norm = peak > 0 ? 0.5 / peak : 0;
-    for (var i = 0; i < size * size; i++) {
-      var idx = i * 4;
-      // Снаружи капли поле нулевое, кодируется в те же 128 — трогать отдельно
-      // не нужно.
-      data[idx] = ((0.5 + field[i * 2] * norm) * 255 + 0.5) | 0;
-      data[idx + 1] = ((0.5 + field[i * 2 + 1] * norm) * 255 + 0.5) | 0;
-    }
+    /* --- цепочка фильтра ---------------------------------------------- */
+    /* Расслоение цвета делается тремя проходами смещения с чуть разной силой,
+       и вся сложность — в альфе. Прошлая попытка складывала проходы через
+       feComposite arithmetic, не тронув альфу: она набегала до трёх,
+       обрезалась в единицу, а цвет, поделённый обратно на меньшую альфу,
+       уходил в белое — линза выбеливалась.
 
-    ctx.putImageData(new ImageData(data, size, size), 0, 0);
-    return canvas.toDataURL();
-  }
-
-  function svgNode(name, attrs) {
-    var node = document.createElementNS(SVG_NS, name);
-    Object.keys(attrs || {}).forEach(function (key) {
-      node.setAttribute(key, String(attrs[key]));
-    });
-    return node;
-  }
-
-  /** Собирает цепочку фильтра. Возвращает элемент <filter> с новым id. */
-  function buildGlassFilter(id, mapHref, width, height) {
-    var filter = svgNode('filter', {
-      id: id,
-      // Область фильтра шире самой капли. Это важно: feDisplacementMap умеет
-      // брать пиксели только изнутри области, и когда она совпадала с каплей,
-      // у края тянуть было неоткуда — вместо соседнего текста подставлялась
-      // прозрачность, и капля выбеливалась тем сильнее, чем больше ход.
-      // Карта при этом остаётся размером ровно с каплю, ей подобласть задана
-      // отдельно, иначе рисунок смещения растянулся бы вместе с областью.
-      filterUnits: 'objectBoundingBox',
-      primitiveUnits: 'userSpaceOnUse',
-      'color-interpolation-filters': 'sRGB',
-      x: -0.35, y: -0.35, width: 1.7, height: 1.7
-    });
-
-    // Подложка нейтрального серого — там, где карты нет, смещения тоже нет.
-    filter.appendChild(svgNode('feFlood', {
-      'flood-color': 'rgb(128,128,128)', 'flood-opacity': 1, result: 'mapBg'
-    }));
-    var image = svgNode('feImage', {
-      preserveAspectRatio: 'none', result: 'rawMap',
-      x: 0, y: 0, width: width, height: height
-    });
-    image.setAttribute('href', mapHref);
-    image.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', mapHref);
-    filter.appendChild(image);
-    filter.appendChild(svgNode('feComposite', {
-      'in': 'rawMap', in2: 'mapBg', operator: 'over', result: 'map'
-    }));
-
-    var source = 'SourceGraphic';
-    if (GLASS.frost > 0) {
-      filter.appendChild(svgNode('feGaussianBlur', {
-        'in': 'SourceGraphic', stdDeviation: GLASS.frost, result: 'blurred'
-      }));
-      source = 'blurred';
-    }
-
-    // Смещение в пикселях: канал даёт ±0.5, значит максимальный сдвиг равен
-    // половине scale. Отсюда множитель 2, чтобы strength читалась как доля
-    // стороны капли.
-    var base = 2 * GLASS.strength * Math.max(width, height);
-
-    // Расслоение цвета тремя проходами (красный, зелёный, синий с чуть разной
-    // силой, потом сложить) в библиотеке есть, у нас — нет. Проверено на
-    // стенде: размытие проходит, одиночное смещение проходит, а сборка трёх
-    // каналов обратно гасит содержимое линзы в белое. Причину найти не удалось,
-    // и класть в прод механизм, который не понимаешь, — уже проходили.
-    filter.appendChild(svgNode('feDisplacementMap', {
-      'in': source, in2: 'map', scale: base,
-      xChannelSelector: 'R', yChannelSelector: 'G', result: 'lensOut'
-    }));
-
-    // Блик: синий канал карты поднимается в белую подсветку и добавляется
-    // поверх. Берём сырую карту — в WebKit порядок композиции другой.
-    // Пока выключен: он и давал молочное пятно поверх капли.
-    if (GLASS.specular > 0) {
-      filter.appendChild(svgNode('feColorMatrix', {
-        'in': 'rawMap', type: 'matrix',
-        values: '0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 1 0 ' + (-128 / 255),
-        result: 'sheenMask'
-      }));
-      filter.appendChild(svgNode('feComposite', {
-        'in': 'sheenMask', in2: 'lensOut', operator: 'arithmetic',
-        k1: 0, k2: GLASS.specular, k3: 1, k4: 0
-      }));
-    }
-
-    return filter;
-  }
-
-  /** Перестраивает карту и фильтр под текущий размер капли. Вызывается только
-   *  при смене размера — на ходу нельзя, см. оговорку 2. */
-  function rebuildGlass(width, height) {
-    if (!glass) return;
-    var w = Math.round(width);
-    var h = Math.round(height);
-    if (w < 8 || h < 8) return;
-    if (glass.w === w && glass.h === h) return;
-
-    var href = buildGlassMap(w, h, h / 2);
-    if (!href) return;
-
-    // Новый id при каждой перестройке: WebKit кэширует результат по id и без
-    // этого линза замерзает (оговорка 3).
-    glass.version += 1;
-    var id = 'glass-' + glass.version;
-    var filter = buildGlassFilter(id, href, w, h);
-    if (glass.filter) glass.defs.removeChild(glass.filter);
-    glass.defs.appendChild(filter);
-    glass.filter = filter;
-    glass.id = id;
-    glass.w = w;
-    glass.h = h;
-    glass.lens.style.filter = 'url(#' + id + ')';
-  }
-
-  function initGlass() {
-    var lens = dom.tabbar.querySelector('.tabbar__lens');
-    var row = dom.tabbar.querySelector('.tabbar__lens-row');
-    var pill = dom.tabbar.querySelector('.tabbar__pill');
-    if (!lens || !row || !pill || !dom.tabs.length) return;
-
-    // Копия строки разделов. Подписи не меняются, копируем один раз.
-    Array.prototype.forEach.call(dom.tabs, function (tab) {
-      var copy = tab.cloneNode(true);
-      copy.removeAttribute('data-tab');
-      copy.setAttribute('tabindex', '-1');
-      row.appendChild(copy);
-    });
-
-    var svg = svgNode('svg', { width: 0, height: 0, 'aria-hidden': 'true' });
-    svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
-    var defs = svgNode('defs', {});
-    svg.appendChild(defs);
-    document.body.appendChild(svg);
-
-    var capsule = pill.querySelector('i');
-    var style = getComputedStyle(pill);
-    glass = {
-      lens: lens,
-      glassEl: capsule,
-      row: row,
-      copies: row.children,
-      defs: defs,
-      filter: null,
-      id: null,
-      w: 0,
-      h: 0,
-      version: 0,
-      inset: parseFloat(style.paddingLeft) || 0,
-      pad: parseFloat(getComputedStyle(dom.tabbar).paddingLeft) || 0
-    };
-
-    syncGlass(0);
-  }
-
-  /** Ставит копию так, чтобы она совпала с настоящей строкой, и держит карту
-   *  в соответствии с размером капли. `at` — дробная позиция капли. */
-  function syncGlass(at) {
-    if (!glass) return;
-    var box = dom.tabbar.getBoundingClientRect();
-    if (!box.width) return;
-    // Шаг меряем по настоящему разделу, а не делением ширины плашки: у неё
-    // есть рамка, и расчёт по внешней ширине копил сдвиг копии к правому краю.
-    var step = dom.tabs[0].getBoundingClientRect().width;
-    if (!step) return;
-    var inner = step * dom.tabs.length;
-    // Размер капли меряем у неё самой: при удержании она вырастает по высоте,
-    // и карта смещения должна строиться под фактическую форму.
-    var cap = glass.glassEl.getBoundingClientRect();
-    var capW = cap.width || (step - glass.inset * 2);
-    var capH = cap.height || (box.height - glass.pad * 2);
-    glass.row.style.setProperty('--lens-w', inner + 'px');
-    glass.row.style.setProperty('--lens-h', dom.tabs[0].getBoundingClientRect().height + 'px');
-    glass.row.style.setProperty('--lens-x', -(at * step + glass.inset) + 'px');
-    rebuildGlass(capW, capH);
-  }
-
-  /** Показывает или прячет линзу. Напрямую стилем, а не классом: правило
-   *  на классе однажды не применилось в живом приложении, хотя селектор
-   *  совпадал, — разбираться вслепую дороже, чем поставить свойство.
-   *  Масштабировать копию больше не нужно: капля растёт коробкой. */
-  function showGlass(on) {
-    if (!glass) return;
-    glass.lens.style.opacity = on ? '1' : '0';
-  }
-
-  /** Подсветка раздела в копии: под линзой горит тот же, что снаружи. */
-  function syncGlassActive(index) {
-    if (!glass) return;
-    for (var i = 0; i < glass.copies.length; i++) {
-      glass.copies[i].classList.toggle('is-active', i === index);
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Капсула таббара: тап и перетаскивание                              */
-  /* ------------------------------------------------------------------ */
-  /* У капсулы два способа управления, и они не мешают друг другу.
-     Тап по разделу переключает его как раньше. Палец, легший на саму капсулу
-     и поехавший вбок, тащит её за собой: пока он не оторвался, капсула идёт
-     следом без анимации, а на отпускании доезжает до ближайшего раздела и
-     открывает его. Тап от перетаскивания отличаем по порогу в 6 пикселей —
-     иначе дрожь пальца превращала бы каждое нажатие в перетаскивание. */
-  var DRAG_THRESHOLD = 6;
-
-  function initPillDrag() {
-    var pill = dom.tabbar.querySelector('.tabbar__pill');
-    if (!pill || !window.PointerEvent) return;
-
-    var drag = null;
-    var swallowClick = false;
-
-    /** Дорожка, по которой ездит капсула: плашка минус её внутренние поля. */
-    function trackAt(clientX) {
-      var box = dom.tabbar.getBoundingClientRect();
-      var pad = parseFloat(getComputedStyle(dom.tabbar).paddingLeft) || 0;
-      var step = (box.width - pad * 2) / dom.tabs.length;
-      // −0.5, потому что позиция капсулы считается по её левому краю, а палец
-      // держит её за середину.
-      var at = (clientX - box.left - pad) / step - 0.5;
-      return Math.min(dom.tabs.length - 1, Math.max(0, at));
-    }
-
-    function lightUp(index) {
-      Array.prototype.forEach.call(dom.tabs, function (tab, i) {
-        tab.classList.toggle('is-active', i === index);
+       Здесь каждый проход сначала идёт через feColorMatrix, который оставляет
+       ровно один канал и ПРИНУДИТЕЛЬНО ставит альфу в единицу (последняя
+       строка матрицы `0 0 0 0 1`). Тогда домножение на альфу — пустая
+       операция, цвет при сложении не пересчитывается, а суммарная альфа
+       упирается в ту же единицу. Обнулять альфу нельзя: композиция идёт в
+       предумноженном виде, и вместе с альфой обнулился бы цвет. */
+    function buildFilter(id, href, w, h, scale) {
+      var filter = svgNode('filter', {
+        id: id,
+        // Область шире самой линзы: feDisplacementMap берёт пиксели только
+        // изнутри области, и когда она совпадает с линзой, у кромки тянуть
+        // неоткуда — вместо соседнего текста подставляется прозрачность.
+        filterUnits: 'objectBoundingBox',
+        primitiveUnits: 'userSpaceOnUse',
+        'color-interpolation-filters': 'sRGB',
+        x: -0.3, y: -0.3, width: 1.6, height: 1.6
       });
-      syncGlassActive(index);
-    }
 
-    dom.tabbar.addEventListener('pointerdown', function (event) {
-      var box = pill.getBoundingClientRect();
-      // Гасим флаг здесь: если прошлое перетаскивание оборвалось системой,
-      // click после него не пришёл, и без сброса флаг съел бы следующий тап.
-      swallowClick = false;
-      // Начинаем только с самой капсулы: нажатие по соседнему разделу — тап.
-      if (event.clientX < box.left || event.clientX > box.right) return;
-      drag = { id: event.pointerId, startX: event.clientX, lastX: event.clientX, moved: false };
-      // Капсула вырастает и всплывает над подписями уже от удержания, до того
-      // как палец поехал: иначе размывать ей нечего и эффекта не видно.
-      dom.tabbar.classList.add('is-holding');
-      showGlass(true);
-    });
+      filter.appendChild(svgNode('feFlood', {
+        'flood-color': 'rgb(128,128,128)', 'flood-opacity': 1, result: 'mapBg'
+      }));
+      var image = svgNode('feImage', {
+        preserveAspectRatio: 'none', result: 'rawMap',
+        x: 0, y: 0, width: w, height: h
+      });
+      image.setAttribute('href', href);
+      image.setAttributeNS(XLINK_NS, 'xlink:href', href);
+      filter.appendChild(image);
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'rawMap', in2: 'mapBg', operator: 'over', result: 'map'
+      }));
 
-    dom.tabbar.addEventListener('pointermove', function (event) {
-      if (!drag || event.pointerId !== drag.id) return;
-      if (!drag.moved) {
-        if (Math.abs(event.clientX - drag.startX) < DRAG_THRESHOLD) return;
-        drag.moved = true;
-        dom.tabbar.classList.add('is-dragging');
-        // Захват вешаем на плашку, а не на капсулу: у неё pointer-events: none.
-        try { dom.tabbar.setPointerCapture(event.pointerId); } catch (e) { /* старый WebView */ }
+      var disp = [];
+      var ratios = [];
+      var ab = GLASS.aberration;
+
+      if (ab <= 0) {
+        var one = svgNode('feDisplacementMap', {
+          'in': 'SourceGraphic', in2: 'map', scale: scale,
+          xChannelSelector: 'R', yChannelSelector: 'G'
+        });
+        filter.appendChild(one);
+        disp.push(one);
+        ratios.push(1);
+        return { node: filter, disp: disp, ratios: ratios };
       }
-      drag.lastX = event.clientX;
-      var at = trackAt(event.clientX);
-      dom.tabbar.style.setProperty('--tab', String(at));
-      syncGlass(at);
-      // Подпись загорается, пока капсула ещё едет: так ученик видит, куда попадёт.
-      lightUp(Math.round(at));
-      event.preventDefault();
-    });
 
-    function release(event) {
-      if (!drag || (event && event.pointerId !== drag.id)) return;
-      var moved = drag.moved;
-      // pointercancel приходит без осмысленных координат — берём последние свои.
-      var x = drag.lastX;
-      drag = null;
-      dom.tabbar.classList.remove('is-dragging');
-      dom.tabbar.classList.remove('is-holding');
-      showGlass(false);
-      if (!moved) return;   // это был обычный тап, его доведёт click
+      var channels = [
+        { key: 'R', k: 1 - ab, m: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1' },
+        { key: 'G', k: 1,      m: '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 0 1' },
+        { key: 'B', k: 1 + ab, m: '0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 0 1' }
+      ];
+      var prev = null;
+      for (var n = 0; n < channels.length; n++) {
+        var ch = channels[n];
+        var node = svgNode('feDisplacementMap', {
+          'in': 'SourceGraphic', in2: 'map', scale: scale * ch.k,
+          xChannelSelector: 'R', yChannelSelector: 'G', result: 'd' + ch.key
+        });
+        filter.appendChild(node);
+        disp.push(node);
+        ratios.push(ch.k);
 
-      var index = Math.round(trackAt(x));
-      var tab = dom.tabs[index];
-      dom.tabbar.style.setProperty('--tab', String(index));
-      // После перетаскивания браузер всё равно пришлёт click по разделу, над
-      // которым оторвался палец, — он может не совпасть с тем, куда доехала
-      // капсула. Гасим его и переключаем сами.
-      swallowClick = true;
-      if (tab) setTab(tab.getAttribute('data-tab'));
-      else render();
+        filter.appendChild(svgNode('feColorMatrix', {
+          'in': 'd' + ch.key, type: 'matrix', values: ch.m, result: 'c' + ch.key
+        }));
+
+        if (prev === null) {
+          prev = 'c' + ch.key;
+        } else {
+          var last = n === channels.length - 1;
+          var add = {
+            'in': 'c' + ch.key, in2: prev, operator: 'arithmetic',
+            k1: 0, k2: 1, k3: 1, k4: 0
+          };
+          if (!last) add.result = 'sum' + n;
+          filter.appendChild(svgNode('feComposite', add));
+          prev = last ? null : 'sum' + n;
+        }
+      }
+      return { node: filter, disp: disp, ratios: ratios };
     }
 
-    dom.tabbar.addEventListener('pointerup', release);
-    dom.tabbar.addEventListener('pointercancel', release);
+    /** Перестраивает карту и фильтр. Только при смене РАЗМЕРА линзы: менять их
+     *  на ходу нельзя — WebKit душит фильтр, и преломление пропадает. */
+    function rebuild(w, h) {
+      var iw = Math.round(w);
+      var ih = Math.round(h);
+      if (iw < 8 || ih < 8) return;
+      if (fx.w === iw && fx.h === ih) return;
 
-    dom.tabbar.addEventListener('click', function (event) {
-      if (!swallowClick) return;
-      swallowClick = false;
-      event.stopPropagation();
-      event.preventDefault();
-    }, true);
-  }
+      var href = buildMap(iw, ih);
+      if (!href) return;
+
+      dispScale = 2 * GLASS.refract * ih;
+      // Новый id при каждой перестройке: WebKit кэширует результат по id, и
+      // без смены линза замерзает на прежней карте.
+      fx.version += 1;
+      var id = 'tabbar-lens-' + fx.version;
+      var built = buildFilter(id, href, iw, ih, dispScale);
+
+      if (fx.filter) fx.defs.removeChild(fx.filter);
+      fx.defs.appendChild(built.node);
+      fx.filter = built.node;
+      fx.disp = built.disp;
+      fx.ratios = built.ratios;
+      fx.id = id;
+      fx.w = iw;
+      fx.h = ih;
+
+      var ref = 'url(#' + id + ')';
+      if (path === 'backdrop') {
+        el.lens.style.webkitBackdropFilter = ref;
+        el.lens.style.backdropFilter = ref;
+      } else {
+        el.fx.style.filter = ref;
+      }
+    }
+
+    /** Сила преломления растёт, пока линзу держат. Одно число на примитив, и
+     *  только когда оно ощутимо изменилось: SVG в кадре трогать дорого. */
+    function applyRefraction() {
+      if (!fx || !fx.disp.length || !fx.h) return;
+      var want = 2 * GLASS.refract * fx.h * (1 + sim.press * GLASS.pressRefract);
+      if (Math.abs(want - dispScale) < 0.3) return;
+      dispScale = want;
+      for (var i = 0; i < fx.disp.length; i++) {
+        fx.disp[i].setAttribute('scale', String(want * fx.ratios[i]));
+      }
+    }
+
+    /* --- зеркало живого DOM -------------------------------------------- */
+    /* Копия строки разделов, которую гнёт фильтр. Всё держится на том, что она
+       неотличима от оригинала, поэтому синхронизация двухуровневая.
+
+       Смена атрибута (а это почти всегда class активного раздела) переносится
+       на тот же узел копии точечно. Так у копии срабатывает её собственный
+       переход цвета — тот же самый и в тот же момент, что у оригинала.
+       Пересоздание копии здесь не годится: свежевставленный узел не
+       анимируется, он сразу рисуется конечным цветом, и все 260 мс перехода
+       копия шла бы впереди оригинала. У кромки линзы это видно.
+
+       Перестройка структуры (появился узел, изменился текст) встречает полное
+       переклеивание: тогда важна не плавность, а точность. */
+    var mirrorPending = false;
+    var realNodes = null;
+    var copyNodes = null;
+
+    function syncMirror() {
+      if (path !== 'mirror' || !el) return;
+      var copy = el.row.cloneNode(true);
+      var live = copy.querySelectorAll('[data-tab]');
+      for (var i = 0; i < live.length; i++) {
+        // Копия не должна ловить фокус, клики и попадать в выборки по data-tab.
+        live[i].removeAttribute('data-tab');
+        live[i].setAttribute('tabindex', '-1');
+        live[i].setAttribute('aria-hidden', 'true');
+      }
+      el.mirror.innerHTML = '';
+      el.mirror.appendChild(copy);
+      // Оба дерева одинаковы по построению, поэтому узлы сопоставляются по
+      // порядку обхода. Любая правка структуры проходит здесь же и списки
+      // пересобирает, так что разъехаться они не могут.
+      realNodes = [el.row].concat(Array.prototype.slice.call(el.row.querySelectorAll('*')));
+      copyNodes = [copy].concat(Array.prototype.slice.call(copy.querySelectorAll('*')));
+    }
+
+    /** Переносит один атрибут на узел-близнец. false — не смогли, нужна
+     *  полная пересборка копии. */
+    function mirrorAttribute(target, name) {
+      if (!realNodes || !name) return false;
+      var i = realNodes.indexOf(target);
+      if (i < 0 || !copyNodes[i]) return false;
+      // data-tab в копии убран намеренно, обратно возвращать нельзя.
+      if (name === 'data-tab') return true;
+      var value = target.getAttribute(name);
+      if (value === null) copyNodes[i].removeAttribute(name);
+      else copyNodes[i].setAttribute(name, value);
+      return true;
+    }
+
+    function watchMirror() {
+      if (path !== 'mirror' || !window.MutationObserver) return;
+      var observer = new MutationObserver(function (records) {
+        var full = false;
+        for (var i = 0; i < records.length; i++) {
+          var rec = records[i];
+          if (rec.type !== 'attributes' || !mirrorAttribute(rec.target, rec.attributeName)) {
+            full = true;
+          }
+        }
+        if (!full || mirrorPending) return;
+        mirrorPending = true;
+        requestAnimationFrame(function () {
+          mirrorPending = false;
+          syncMirror();
+        });
+      });
+      observer.observe(el.row, {
+        subtree: true, childList: true, attributes: true, characterData: true
+      });
+    }
+
+    /* --- измерения ------------------------------------------------------ */
+    /* Всё до единого числа берётся из живых прямоугольников. Шаг меряется по
+       расстоянию между первой и последней кнопкой, а не делением ширины
+       плашки: у плашки есть поля и рамка, и расчёт по внешней ширине копит
+       сдвиг к правому краю. */
+    function measure() {
+      if (!el || !tabs.length) return false;
+      var plate = el.plate.getBoundingClientRect();
+      var first = tabs[0].getBoundingClientRect();
+      if (!plate.width || !first.width) return false;
+      var rowBox = el.row.getBoundingClientRect();
+
+      var step = tabs.length > 1
+        ? (tabs[tabs.length - 1].getBoundingClientRect().left - first.left) / (tabs.length - 1)
+        : first.width;
+
+      // getBoundingClientRect отдаёт border box, а left/top у абсолютного
+      // потомка отсчитываются от PADDING box — то есть от внутреннего края
+      // рамки. Без поправки линза и зеркало съезжают ровно на толщину рамки:
+      // мало, но копия перестаёт совпадать с оригиналом, и это видно.
+      var plateStyle = getComputedStyle(el.plate);
+      var padLeft = plate.left + (parseFloat(plateStyle.borderLeftWidth) || 0);
+      var padTop = plate.top + (parseFloat(plateStyle.borderTopWidth) || 0);
+
+      geo = {
+        step: step,
+        // Толщина рамки слева: по ней жест пересчитывает палец в позицию линзы.
+        border: padLeft - plate.left,
+        w: Math.max(8, first.width - GLASS.insetX * 2),
+        h: Math.max(8, first.height - GLASS.insetY * 2),
+        left: first.left - padLeft + GLASS.insetX,
+        top: first.top - padTop + GLASS.insetY,
+        rowW: rowBox.width,
+        rowH: rowBox.height
+      };
+      // Сдвиг зеркала внутри линзы: столько, чтобы копия легла ровно на
+      // оригинал. Считается от кнопки, а не от плашки, — тогда в разность не
+      // входит ни рамка, ни поля. Ход линзы вычитается в кадре.
+      geo.mx = (rowBox.left - first.left) - GLASS.insetX;
+      geo.my = (rowBox.top - first.top) - GLASS.insetY;
+
+      el.lens.style.left = geo.left + 'px';
+      el.lens.style.top = geo.top + 'px';
+      el.lens.style.width = geo.w + 'px';
+      el.lens.style.height = geo.h + 'px';
+      el.lens.style.borderRadius = (geo.h / 2) + 'px';
+      el.mirror.style.width = geo.rowW + 'px';
+      el.mirror.style.height = geo.rowH + 'px';
+
+      rebuild(geo.w, geo.h);
+      el.tabbar.classList.add('is-ready');
+      return true;
+    }
+
+    /* --- кадр ----------------------------------------------------------- */
+
+    function paint() {
+      if (!geo) return;
+      var tx = sim.pos * geo.step;
+      // Растяжение вдоль хода и встречное сжатие поперёк: объём стекла
+      // сохраняется, поэтому на разгоне линза не раздувается.
+      var sx = clamp(1 + sim.form + sim.press * GLASS.pressLens, 0.5, 2);
+      var sy = clamp(1 - sim.form * GLASS.squash + sim.press * GLASS.pressLens, 0.5, 2);
+
+      el.lens.style.transform = 'translate3d(' + tx.toFixed(2) + 'px,0,0) scale('
+        + sx.toFixed(4) + ',' + sy.toFixed(4) + ')';
+      // Обратная трансформация внутри: стекло тянется, а содержимое под ним
+      // остаётся на месте. Иначе копия разъезжается с оригиналом, и сразу
+      // видно, что под линзой не тот же самый DOM.
+      el.fx.style.transform = 'scale(' + (1 / sx).toFixed(4) + ',' + (1 / sy).toFixed(4) + ')';
+      el.mirror.style.transform = 'translate3d(' + (geo.mx - tx).toFixed(2) + 'px,'
+        + geo.my.toFixed(2) + 'px,0)';
+
+      if (path === 'mirror' && GLASS.pressPlate > 0) {
+        // Плашка подаётся только в режиме зеркала: в Chromium трансформация
+        // предка создаёт «корень фона» и убивает backdrop-filter у линзы.
+        var plateT = sim.press > 0.001
+          ? 'scale(' + (1 + sim.press * GLASS.pressPlate).toFixed(4) + ')' : '';
+        // Пишем только на изменение: в покое и на ходу press равен нулю, а
+        // присвоение стиля каждый кадр всё равно сбрасывает расчёт стилей.
+        if (plateT !== lastPlateT) {
+          el.plate.style.transform = plateT;
+          lastPlateT = plateT;
+        }
+      }
+      applyRefraction();
+    }
+
+    function atRest() {
+      return Math.abs(sim.target - sim.pos) < 0.0004 && Math.abs(sim.vel) < 0.0015
+        && Math.abs(sim.form) < 0.0006 && Math.abs(sim.formVel) < 0.002
+        && Math.abs(sim.pressTarget - sim.press) < 0.001 && Math.abs(sim.pressVel) < 0.002;
+    }
+
+    function step(now) {
+      frame = 0;
+      var dt = lastTime ? (now - lastTime) / 1000 : 1 / 60;
+      lastTime = now;
+      // Приложение провисело в фоне — не даём пружине улететь на огромном шаге.
+      dt = clamp(dt, 1 / 240, 1 / 30);
+
+      // Позиция. Полунеявный Эйлер: устойчив на таких жёсткостях и стоит
+      // четыре умножения.
+      sim.vel += (-GLASS.posK * (sim.pos - sim.target) - GLASS.posC * sim.vel) * dt;
+      sim.pos += sim.vel * dt;
+
+      // Деформация. Цель задаёт скорость, но идёт к ней своя пружина со слабым
+      // демпфированием: после остановки она проскакивает ноль и качается — это
+      // и есть wobble. Без отдельной пружины растяжение гасло бы вместе со
+      // скоростью, и стекло было бы мёртвым.
+      var want = clamp(Math.abs(sim.vel) * GLASS.stretchGain, 0, GLASS.stretchMax);
+      sim.formVel += (-GLASS.formK * (sim.form - want) - GLASS.formC * sim.formVel) * dt;
+      sim.form += sim.formVel * dt;
+
+      sim.pressVel += (-GLASS.pressK * (sim.press - sim.pressTarget)
+        - GLASS.pressC * sim.pressVel) * dt;
+      sim.press += sim.pressVel * dt;
+
+      paint();
+
+      if (atRest()) {
+        sim.pos = sim.target; sim.vel = 0;
+        sim.form = 0; sim.formVel = 0;
+        sim.press = sim.pressTarget; sim.pressVel = 0;
+        lastTime = 0;
+        paint();
+        return;
+      }
+      frame = requestAnimationFrame(step);
+    }
+
+    function run() {
+      if (frame || !geo) return;
+      lastTime = 0;
+      frame = requestAnimationFrame(step);
+    }
+
+    /** Подсветка раздела, пока линза ещё едет: видно, куда попадёшь. */
+    function lightUp(index) {
+      for (var i = 0; i < tabs.length; i++) {
+        tabs[i].classList.toggle('is-active', i === index);
+      }
+    }
+
+    /* --- жесты ---------------------------------------------------------- */
+    /* Тап по разделу переключает его прежним обработчиком click — routing не
+       трогали вовсе. Здесь только палец, легший на саму линзу: он её тащит.
+       Порог в шесть пикселей отделяет перетаскивание от тапа, иначе дрожь
+       руки превращала бы каждое нажатие в жест. */
+    function initGestures() {
+      if (!window.PointerEvent) return;
+      var drag = null;
+      var swallowClick = false;
+
+      function trackAt(clientX) {
+        var plate = el.plate.getBoundingClientRect();
+        // Палец держит линзу за середину, поэтому вычитаем её полуширину.
+        // geo.left отсчитан от padding box плашки — добавляем рамку обратно.
+        return clamp(
+          (clientX - plate.left - geo.border - geo.left - geo.w / 2) / geo.step,
+          0, tabs.length - 1);
+      }
+
+      el.plate.addEventListener('pointerdown', function (event) {
+        if (!geo) return;
+        var box = el.lens.getBoundingClientRect();
+        // Гасим флаг здесь: если прошлый жест оборвала система, click после
+        // него не пришёл, и без сброса флаг съел бы следующий тап.
+        swallowClick = false;
+        // Начинаем только с самой линзы: нажатие по соседнему разделу — тап,
+        // его доведёт обычный click на кнопке.
+        if (event.clientX < box.left || event.clientX > box.right) return;
+        drag = { id: event.pointerId, startX: event.clientX, lastX: event.clientX, moved: false };
+        sim.pressTarget = 1;
+        el.tabbar.classList.add('is-pressed');
+        run();
+      });
+
+      el.plate.addEventListener('pointermove', function (event) {
+        if (!drag || event.pointerId !== drag.id) return;
+        if (!drag.moved) {
+          if (Math.abs(event.clientX - drag.startX) < GLASS.dragThreshold) return;
+          drag.moved = true;
+          dragging = true;
+          // Захват на плашке, а не на линзе: у линзы pointer-events: none.
+          try { el.plate.setPointerCapture(event.pointerId); } catch (e) { /* старый WebView */ }
+        }
+        drag.lastX = event.clientX;
+        // Ведём цель, а не саму линзу: она догоняет палец пружиной, отсюда
+        // естественное отставание и растяжение на резком рывке.
+        sim.target = trackAt(event.clientX);
+        lightUp(Math.round(sim.target));
+        run();
+        event.preventDefault();
+      });
+
+      function release(event) {
+        if (!drag || (event && event.pointerId !== drag.id)) return;
+        var moved = drag.moved;
+        var x = drag.lastX;   // pointercancel приходит без осмысленных координат
+        drag = null;
+        dragging = false;
+        sim.pressTarget = 0;
+        el.tabbar.classList.remove('is-pressed');
+        run();
+        if (!moved) return;   // это был тап, его доведёт click
+
+        var index = clamp(Math.round(trackAt(x)), 0, tabs.length - 1);
+        sim.target = index;
+        // Браузер всё равно пришлёт click по разделу, над которым оторвался
+        // палец, — он может не совпасть с тем, куда доехала линза.
+        swallowClick = true;
+        if (onSelect) onSelect(index);
+      }
+
+      el.plate.addEventListener('pointerup', release);
+      el.plate.addEventListener('pointercancel', release);
+      el.plate.addEventListener('click', function (event) {
+        if (!swallowClick) return;
+        swallowClick = false;
+        event.stopPropagation();
+        event.preventDefault();
+      }, true);
+    }
+
+    /* --- размеры окна ---------------------------------------------------- */
+    /* Плашка стоит на env(safe-area-inset-bottom), но в Telegram этого мало:
+       клиент меняет высоту вьюпорта сам, и на каждый пересчёт надо
+       переизмериться, иначе линза считает шаг по старой ширине. */
+    function watchViewport() {
+      var pending = false;
+      function remeasure() {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function () {
+          pending = false;
+          // Под пальцем плашка отмасштабирована, и её прямоугольник врёт:
+          // шаг раздела вышел бы больше настоящего. Ждём, пока отпустят.
+          if (sim.press > 0.01) { requestAnimationFrame(remeasure); return; }
+          if (measure()) paint();
+        });
+      }
+      if (window.ResizeObserver) new ResizeObserver(remeasure).observe(el.plate);
+      window.addEventListener('resize', remeasure);
+      window.addEventListener('orientationchange', remeasure);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', remeasure);
+      }
+      try {
+        if (tg && tg.onEvent) tg.onEvent('viewportChanged', remeasure);
+      } catch (e) { /* версия клиента без событий */ }
+    }
+
+    /* --- выбор пути ------------------------------------------------------ */
+    /* Честно: живой пробы здесь нет и быть не может. Отрисованные пиксели без
+       скриншота из DOM не прочитать, а CSS.supports про `backdrop-filter:
+       url()` в WebKit отвечает «да» и врёт — ровно та ловушка, на которой
+       сгорела прошлая реализация. Поэтому движок определяется по строке
+       клиента, и по умолчанию берётся зеркало: оно работает везде.
+       `backdrop-filter` включается только там, где мы уверены, что Chromium.
+       Перебрать вручную при отладке: window.__tabbarPath = 'mirror'. */
+    function pickPath() {
+      if (window.__tabbarPath) return window.__tabbarPath;
+      var ua = navigator.userAgent || '';
+      var apple = /iPhone|iPad|iPod/.test(ua)
+        || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+      var chromium = /Chrome\/|Chromium\/|Edg\/|OPR\//.test(ua);
+      if (apple || !chromium) return 'mirror';
+      if (window.CSS && CSS.supports
+        && !CSS.supports('backdrop-filter', 'url(#x)')
+        && !CSS.supports('-webkit-backdrop-filter', 'url(#x)')) return 'mirror';
+      return 'backdrop';
+    }
+
+    /* --- сборка ---------------------------------------------------------- */
+
+    function init(tabbar, tabNodes, select) {
+      if (!tabbar || !tabNodes || !tabNodes.length) return;
+      el = {
+        tabbar: tabbar,
+        plate: tabbar.querySelector('.tabbar__plate'),
+        row: tabbar.querySelector('.tabbar__row'),
+        lens: tabbar.querySelector('.tabbar__lens'),
+        fx: tabbar.querySelector('.tabbar__fx'),
+        mirror: tabbar.querySelector('.tabbar__mirror')
+      };
+      if (!el.plate || !el.row || !el.lens || !el.fx || !el.mirror) { el = null; return; }
+
+      tabs = Array.prototype.slice.call(tabNodes);
+      onSelect = select || null;
+      path = pickPath();
+      tabbar.classList.toggle('is-mirror', path === 'mirror');
+      window.__tabbarPathUsed = path;   // видно из консоли при отладке
+
+      try {
+        reduced = !!(window.matchMedia
+          && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      } catch (e) { reduced = false; }
+
+      var svg = svgNode('svg', { width: 0, height: 0, 'aria-hidden': 'true', focusable: 'false' });
+      svg.setAttribute('class', 'tabbar__defs');
+      var defs = svgNode('defs', {});
+      svg.appendChild(defs);
+      document.body.appendChild(svg);
+      fx = { defs: defs, filter: null, id: null, disp: [], ratios: [], w: 0, h: 0, version: 0 };
+
+      if (path === 'mirror') { syncMirror(); watchMirror(); }
+      measure();
+      paint();
+      initGestures();
+      watchViewport();
+    }
+
+    /** Ведёт линзу к разделу. Вызывается из render() на каждой перерисовке,
+     *  поэтому повторный вызов с прежней целью не должен ничего будить. */
+    function select(index) {
+      if (!el) return;
+      var at = clamp(index, 0, Math.max(0, tabs.length - 1));
+      // Пока палец ведёт линзу, render() ей не указ: иначе случайная
+      // перерисовка посреди жеста дёрнула бы её обратно.
+      if (dragging) return;
+      var first = !booted;
+      booted = true;
+      if (sim.target === at && !first) return;
+      sim.target = at;
+      if (!geo && !measure()) { sim.pos = at; return; }
+      // Первый вызов — восстановление раздела из настроек на запуске. Линза
+      // должна уже стоять на нём, а не приезжать через весь таббар на глазах.
+      if (first || reduced) {
+        sim.pos = at; sim.vel = 0; sim.form = 0; sim.formVel = 0;
+        paint();
+        return;
+      }
+      run();
+    }
+
+    return { init: init, select: select };
+  })();
+
+  /* ------------------------------------------------------------------ */
+  /* Запуск                                                             */
+  /* ------------------------------------------------------------------ */
 
   function init() {
     dom.app = document.getElementById('app');
@@ -3810,8 +4047,10 @@
     dom.title = document.getElementById('header-title');
     dom.sub = document.getElementById('header-sub');
     dom.back = document.getElementById('back');
-    dom.tabs = document.querySelectorAll('.tab');
     dom.tabbar = document.getElementById('tabbar');
+    // Только прямые потомки строки: у зеркала внутри линзы лежат клоны с теми
+    // же классами, и без этого уточнения они попали бы в выборку.
+    dom.tabs = dom.tabbar.querySelectorAll('.tabbar__plate > .tabbar__row > .tab');
     dom.dialogRoot = document.getElementById('dialog-root');
     dom.toast = document.getElementById('toast');
 
@@ -3819,8 +4058,10 @@
     Array.prototype.forEach.call(dom.tabs, function (tab) {
       tab.addEventListener('click', function () { setTab(tab.getAttribute('data-tab')); });
     });
-    initGlass();
-    initPillDrag();
+    TabBar.init(dom.tabbar, dom.tabs, function (index) {
+      var tab = dom.tabs[index];
+      if (tab) setTab(tab.getAttribute('data-tab'));
+    });
 
     if (tg) {
       try {
