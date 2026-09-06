@@ -3422,6 +3422,12 @@
     var stepX = width / size;
     var stepY = height / size;
     var data = new Uint8ClampedArray(size * size * 4);
+    // Поле считаем сначала целиком, а кодируем вторым проходом, нормируя по
+    // фактическому максимуму. Без этого купол у кромки упирается в потолок
+    // канала и обрезается: получается кольцо одинакового максимального сдвига
+    // и ступенька за контуром — на экране это читается швом-полукругом.
+    var field = new Float32Array(size * size * 2);
+    var peak = 0;
 
     for (var row = 0; row < size; row++) {
       var py = (row + 0.5) * stepY - halfH;
@@ -3480,11 +3486,32 @@
         }
         spec = Math.max(-1, Math.min(1, spec));
 
-        data[at] = ((0.5 + dx) * 255 + 0.5) | 0;
-        data[at + 1] = ((0.5 + dy) * 255 + 0.5) | 0;
+        // Гасим смещение у самого контура: без этого поле обрывается скачком
+        // с большого значения до нуля, и обрыв виден как ровная дуга.
+        var rim = smoothStep(0, 2.5, -sdf);
+        dx *= rim;
+        dy *= rim;
+
+        var f = (row * size + col) * 2;
+        field[f] = dx;
+        field[f + 1] = dy;
+        if (Math.abs(dx) > peak) peak = Math.abs(dx);
+        if (Math.abs(dy) > peak) peak = Math.abs(dy);
+
         data[at + 2] = (127 * spec + 128 + 0.5) | 0;
         data[at + 3] = 255;
       }
+    }
+
+    // Второй проход: нормируем поле по его же максимуму, чтобы занять весь
+    // диапазон канала и ничего не обрезать.
+    var norm = peak > 0 ? 0.5 / peak : 0;
+    for (var i = 0; i < size * size; i++) {
+      var idx = i * 4;
+      // Снаружи капли поле нулевое, кодируется в те же 128 — трогать отдельно
+      // не нужно.
+      data[idx] = ((0.5 + field[i * 2] * norm) * 255 + 0.5) | 0;
+      data[idx + 1] = ((0.5 + field[i * 2 + 1] * norm) * 255 + 0.5) | 0;
     }
 
     ctx.putImageData(new ImageData(data, size, size), 0, 0);
