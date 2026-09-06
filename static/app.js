@@ -3346,7 +3346,15 @@
       pressRefract: 0.5,
       // Расслоение цвета: разбег силы смещения между каналами в долях.
       // Ноль полностью выключает трёхпроходную схему.
-      aberration: 0.02,
+      //
+      // ВЫКЛЮЧЕНО ИЗ-ЗА ЦЕНЫ. Линзу нельзя вынести в отдельный слой
+      // композитора — вместе со слоем WebKit выбрасывает и сам фильтр, — а
+      // значит вся цепочка пересчитывается на процессоре каждый кадр.
+      // Расслоение стоит трёх проходов смещения вместо одного и плюс пять
+      // примитивов на сборку: это больше трети всей работы кадра, и таббар
+      // от неё заметно терял кадры на телефоне. Эффект от неё — цветная кайма
+      // толщиной меньше пикселя. Плохой размен, но включается одним числом.
+      aberration: 0,
 
       /* --- пружины --- */
       // Позиция: чуть недодемпфирована, отсюда лёгкий перелёт и мягкий доводчик.
@@ -3534,8 +3542,14 @@
       var filter = svgNode('filter', {
         id: id,
         primitiveUnits: 'userSpaceOnUse',
+        // sRGB, а не linearRGB: перевод в линейное пространство и обратно —
+        // лишняя работа на каждом примитиве, а на карте смещения он не нужен.
         'color-interpolation-filters': 'sRGB',
-        x: '-30%', y: '-30%', width: '160%', height: '160%'
+        // Область держим тесной. Каждый лишний процент — это пиксели, через
+        // которые прогоняется вся цепочка, причём каждый кадр. Широкий запас
+        // здесь не нужен: смещение смотрит ВНУТРЬ, наружные пиксели ему не
+        // нужны, а размытию хватает небольшого поля за кромкой.
+        x: '-12%', y: '-22%', width: '124%', height: '144%'
       });
 
       filter.appendChild(svgNode('feGaussianBlur', {
@@ -3566,6 +3580,20 @@
         k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gx'
       }));
 
+      var ay = GLASS.axisY;
+
+      if (ay <= 0) {
+        // Вертикали нет — вся её ветка не строится вовсе. Достаточно оставить
+        // красный канал как есть и прибить зелёный к середине, где сдвиг
+        // нулевой: пять примитивов заменяются одним. Заметная экономия, а
+        // цепочка считается каждый кадр.
+        filter.appendChild(svgNode('feColorMatrix', {
+          'in': 'gx', type: 'matrix', result: 'map',
+          values: '1 0 0 0 0  0 0 0 0 0.5  0 0 0 0 0  0 0 0 0 1'
+        }));
+        return { node: filter, disp: addDisplacement(filter, scale) };
+      }
+
       filter.appendChild(svgNode('feOffset', { 'in': 'field', dx: 0, dy: -step, result: 'yD' }));
       filter.appendChild(svgNode('feOffset', { 'in': 'field', dx: 0, dy: step, result: 'yUraw' }));
       filter.appendChild(svgNode('feColorMatrix', {
@@ -3587,7 +3615,6 @@
       // где сдвиг нулевой. Отдельным примитивом это делать нельзя — любое
       // слагаемое через k4 портит альфу. Гасить нужно: линза широкая, под ней
       // одна строка, и сильный вертикальный сдвиг просто смазывает подпись.
-      var ay = GLASS.axisY;
       filter.appendChild(svgNode('feColorMatrix', {
         'in': 'gy', type: 'matrix', result: 'mG',
         values: '0 0 0 0 0  0 ' + ay + ' 0 0 ' + (0.5 * (1 - ay))
@@ -4114,8 +4141,30 @@
 
     /* --- сборка ---------------------------------------------------------- */
 
+    /** Переопределения настроек стекла из localStorage. Нужны затем, что
+     *  единственный судья этому эффекту — живое устройство: ни headless, ни
+     *  Chromium не показывают ни силы преломления, ни настоящей цены кадра.
+     *  Страница проверки пишет сюда набор чисел, приложение их подхватывает,
+     *  и подбор настройки перестаёт стоить деплоя за каждое значение.
+     *  Берём только те ключи, что уже есть в GLASS, и только числа. */
+    function readOverrides() {
+      try {
+        var raw = window.localStorage && localStorage.getItem('tabbarGlass');
+        if (!raw) return;
+        var over = JSON.parse(raw);
+        for (var key in over) {
+          if (Object.prototype.hasOwnProperty.call(over, key)
+            && Object.prototype.hasOwnProperty.call(GLASS, key)
+            && typeof over[key] === 'number' && isFinite(over[key])) {
+            GLASS[key] = over[key];
+          }
+        }
+      } catch (e) { /* приватный режим или испорченный JSON */ }
+    }
+
     function init(tabbar, tabNodes, select) {
       if (!tabbar || !tabNodes || !tabNodes.length) return;
+      readOverrides();
       el = {
         tabbar: tabbar,
         plate: tabbar.querySelector('.tabbar__plate'),

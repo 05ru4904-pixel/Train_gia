@@ -545,6 +545,218 @@
     },
     'Это ровно то, что сейчас в приложении. Должна вести себя так же, как таббар.');
 
+  /* --- 12. замер частоты кадров и подбор настройки -------------------- */
+  /* Оптика заработала, но таббар теряет кадры. Причина известна: линзу нельзя
+     вынести в отдельный слой композитора — вместе со слоем WebKit выбрасывает
+     и фильтр, — поэтому вся цепочка считается на процессоре каждый кадр.
+     Значит вопрос только в цене цепочки.
+
+     Измерить её ни в headless, ни в Chromium нельзя: там кадр укладывается в
+     бюджет при любой настройке, и разница не видна вовсе. Судья один — это
+     устройство. Поэтому здесь живая линза ездит без остановки, рядом счётчик
+     кадров, а кнопки переключают ровно те же настройки, что стоят в таббаре,
+     и заодно записывают выбранное для самого приложения. */
+
+  var PRESETS = [
+    { name: 'полная', hint: 'аберрация и вертикаль',
+      over: { aberration: 0.02, axisY: 0.38, refract: 0.3 } },
+    { name: 'без аберрации', hint: 'так сейчас в приложении',
+      over: { aberration: 0, axisY: 0.38, refract: 0.3 } },
+    { name: 'без вертикали', hint: 'минус пять примитивов',
+      over: { aberration: 0, axisY: 0, refract: 0.3 } },
+    { name: 'самая лёгкая', hint: 'ещё и поле уже',
+      over: { aberration: 0, axisY: 0, refract: 0.24, reach: 0.1, gradStep: 0.08 } }
+  ];
+
+  /** Та же цепочка, что в таббаре, включая дешёвые ветки. Держать её здесь
+   *  копией приходится: страница проверки не грузит app.js, иначе замер
+   *  мешался бы с настоящим таббаром. */
+  function appFilter(id, h, over) {
+    var blur = (over.reach || 0.12) * h;
+    var step = (over.gradStep || 0.095) * h;
+    var scale = over.refract * h;
+    var ay = over.axisY, ab = over.aberration;
+    var f = node('filter', {
+      id: id, primitiveUnits: 'userSpaceOnUse',
+      'color-interpolation-filters': 'sRGB',
+      x: '-12%', y: '-22%', width: '124%', height: '144%'
+    });
+    var INV = '-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 0 1';
+    f.appendChild(node('feGaussianBlur', { 'in': 'SourceAlpha', stdDeviation: blur, result: 'blur' }));
+    f.appendChild(node('feColorMatrix', {
+      'in': 'blur', type: 'matrix', result: 'field',
+      values: '0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 0 1'
+    }));
+    f.appendChild(node('feOffset', { 'in': 'field', dx: -step, dy: 0, result: 'xR' }));
+    f.appendChild(node('feOffset', { 'in': 'field', dx: step, dy: 0, result: 'xLraw' }));
+    f.appendChild(node('feColorMatrix', { 'in': 'xLraw', type: 'matrix', values: INV, result: 'xL' }));
+    f.appendChild(node('feComposite', {
+      'in': 'xR', in2: 'xL', operator: 'arithmetic', k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gx'
+    }));
+
+    if (ay <= 0) {
+      f.appendChild(node('feColorMatrix', {
+        'in': 'gx', type: 'matrix', result: 'map',
+        values: '1 0 0 0 0  0 0 0 0 0.5  0 0 0 0 0  0 0 0 0 1'
+      }));
+    } else {
+      f.appendChild(node('feOffset', { 'in': 'field', dx: 0, dy: -step, result: 'yD' }));
+      f.appendChild(node('feOffset', { 'in': 'field', dx: 0, dy: step, result: 'yUraw' }));
+      f.appendChild(node('feColorMatrix', { 'in': 'yUraw', type: 'matrix', values: INV, result: 'yU' }));
+      f.appendChild(node('feComposite', {
+        'in': 'yD', in2: 'yU', operator: 'arithmetic', k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gy'
+      }));
+      f.appendChild(node('feColorMatrix', {
+        'in': 'gx', type: 'matrix', result: 'mR',
+        values: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1'
+      }));
+      f.appendChild(node('feColorMatrix', {
+        'in': 'gy', type: 'matrix', result: 'mG',
+        values: '0 0 0 0 0  0 ' + ay + ' 0 0 ' + (0.5 * (1 - ay)) + '  0 0 0 0 0  0 0 0 0 1'
+      }));
+      f.appendChild(node('feComposite', {
+        'in': 'mR', in2: 'mG', operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0, result: 'map'
+      }));
+    }
+
+    if (ab <= 0) {
+      f.appendChild(node('feDisplacementMap', {
+        'in': 'SourceGraphic', in2: 'map', scale: scale,
+        xChannelSelector: 'R', yChannelSelector: 'G'
+      }));
+    } else {
+      var chans = [
+        { k: 1 - ab, key: 'R', m: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1' },
+        { k: 1, key: 'G', m: '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 0 1' },
+        { k: 1 + ab, key: 'B', m: '0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 0 1' }
+      ];
+      var prev = null;
+      for (var n = 0; n < 3; n++) {
+        var ch = chans[n];
+        f.appendChild(node('feDisplacementMap', {
+          'in': 'SourceGraphic', in2: 'map', scale: scale * ch.k,
+          xChannelSelector: 'R', yChannelSelector: 'G', result: 'd' + ch.key
+        }));
+        f.appendChild(node('feColorMatrix', {
+          'in': 'd' + ch.key, type: 'matrix', values: ch.m, result: 'c' + ch.key
+        }));
+        if (prev === null) { prev = 'c' + ch.key; continue; }
+        var last = n === 2;
+        var add = { 'in': 'c' + ch.key, in2: prev, operator: 'arithmetic', k1: 0, k2: 1, k3: 1, k4: 0 };
+        if (!last) add.result = 'sum' + n;
+        f.appendChild(node('feComposite', add));
+        prev = last ? null : 'sum' + n;
+      }
+    }
+    return f;
+  }
+
+  (function fpsPanel() {
+    var sec = document.createElement('section');
+    sec.className = 't';
+    sec.innerHTML = '<h2><span>12</span>Замер частоты кадров</h2>'
+      + '<p>Линза ездит без остановки с тем же фильтром, что в таббаре. '
+      + 'Нажмите каждую кнопку, подождите пару секунд и запомните число. '
+      + 'Выбранная настройка сразу записывается для приложения — вернитесь по '
+      + 'ссылке наверху и посмотрите, как поедет настоящий таббар.</p>';
+
+    var bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px';
+    var fpsBox = document.createElement('div');
+    fpsBox.style.cssText = 'font:700 22px/1.2 ui-monospace,Menlo,monospace;'
+      + 'margin-bottom:8px;color:#1c1917';
+    fpsBox.textContent = '— кадров/с';
+
+    var stage = document.createElement('div');
+    stage.className = 'stage';
+    stage.appendChild(content());
+    var lens = document.createElement('div');
+    lens.className = 'lens';
+    // Едет сама, поэтому центрирование по левому краю и без отрицательных полей.
+    lens.style.cssText = 'left:0;top:50%;margin:-42px 0 0 0;width:150px';
+    stage.appendChild(lens);
+
+    sec.appendChild(bar);
+    sec.appendChild(fpsBox);
+    sec.appendChild(stage);
+    host.appendChild(sec);
+
+    var mirror = mirrorInto(lens, stage, null);
+    var fx = mirror.parentNode;
+    fx.style.borderRadius = '999px';
+    fx.style.overflow = 'hidden';
+    var sheen = document.createElement('div');
+    sheen.style.cssText = 'position:absolute;inset:0;border-radius:inherit;'
+      + 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.7)';
+    lens.appendChild(sheen);
+
+    var version = 0;
+    var current = null;
+
+    function apply(preset) {
+      version += 1;
+      var id = 'lt-fps-' + version;
+      if (current) defs.removeChild(current);
+      current = appFilter(id, 84, preset.over);
+      defs.appendChild(current);
+      fx.style.filter = 'url(#' + id + ')';
+      try { localStorage.setItem('tabbarGlass', JSON.stringify(preset.over)); } catch (e) {}
+      for (var i = 0; i < bar.children.length; i++) {
+        bar.children[i].style.background = bar.children[i].dataset.name === preset.name
+          ? '#c2410c' : '#fff';
+        bar.children[i].style.color = bar.children[i].dataset.name === preset.name
+          ? '#fff' : '#1c1917';
+      }
+    }
+
+    PRESETS.forEach(function (preset) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.name = preset.name;
+      b.textContent = preset.name;
+      b.title = preset.hint;
+      b.style.cssText = 'border:1px solid #d6d3d1;border-radius:999px;'
+        + 'padding:7px 12px;font:600 13px inherit;background:#fff;color:#1c1917';
+      b.onclick = function () { apply(preset); };
+      bar.appendChild(b);
+    });
+
+    var reset = document.createElement('button');
+    reset.type = 'button';
+    reset.textContent = 'сбросить';
+    reset.style.cssText = 'border:1px dashed #d6d3d1;border-radius:999px;'
+      + 'padding:7px 12px;font:600 13px inherit;background:#fff;color:#78716c';
+    reset.onclick = function () {
+      try { localStorage.removeItem('tabbarGlass'); } catch (e) {}
+      reset.textContent = 'сброшено';
+      setTimeout(function () { reset.textContent = 'сбросить'; }, 1200);
+    };
+    bar.appendChild(reset);
+
+    apply(PRESETS[1]);
+
+    // Линза ходит туда-обратно, счётчик обновляется раз в полсекунды.
+    // Базовый сдвиг зеркала, который поставил mirrorInto, надо сохранить:
+    // без него копия перестанет совпадать с оригиналом.
+    var sb = stage.getBoundingClientRect(), lb = lens.getBoundingClientRect();
+    var baseX = sb.left - lb.left, baseY = sb.top - lb.top;
+    var frames = 0, mark = 0, span = stage.clientWidth - 150;
+    function loop(t) {
+      if (!mark) mark = t;
+      frames++;
+      if (t - mark >= 500) {
+        fpsBox.textContent = Math.round(frames * 1000 / (t - mark)) + ' кадров/с';
+        frames = 0; mark = t;
+      }
+      var x = (0.5 - 0.5 * Math.cos(t / 900)) * (span > 0 ? span : 0);
+      lens.style.transform = 'translate(' + x.toFixed(2) + 'px,0)';
+      mirror.style.transform = 'translate(' + (baseX - x).toFixed(2) + 'px,'
+        + baseY.toFixed(2) + 'px)';
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  })();
+
   /* --- декодируется ли сама карта ------------------------------------ */
   /* Отдельно от фильтра: если картинка не декодируется, панель 3 не может
      работать в принципе, и причина не в WebKit, а в canvas. */
