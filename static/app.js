@@ -3314,27 +3314,34 @@
       mapMax: 220,       // предел разрешения карты; в WebKit больше нельзя
 
       /* --- преломление --- */
-      // Доля полувысоты, на которую преломление достаёт внутрь. Больше
-      // половины ставить нельзя: линза всего 45 px высотой, и подпись с
-      // иконкой оказываются целиком в зоне работы — их рвёт.
+      /* Настройки карты из альфы (путь WebKit, он же основной).
+         reach — размытие альфы в долях высоты линзы: насколько глубоко
+         преломление достаёт внутрь. gradStep — плечо, на котором берётся
+         производная: чем больше, тем сильнее и мягче поле. */
+      reach: 0.12,
+      gradStep: 0.095,
+
+      /* Настройки карты картинкой (путь Chromium). Здесь профиль считается
+         на canvas, потому что формы линзы фильтру взять неоткуда. */
       depth: 0.55,
-      // Показатель профиля: чем больше, тем ближе к кромке жмётся вся работа.
       profile: 3,
       // Ширина полосы у самого контура, на которой смещение гасится в ноль.
       // Без неё поле обрывается скачком, и обрыв читается ровной дугой — тот
       // самый шов-полукруг из прошлой реализации.
       rimFade: 2,
-      // Максимальный сдвиг как доля высоты линзы. Считать по снимкам из
-      // headless нельзя: записано, что Chromium этот эффект ЗАНИЖАЕТ, а на
-      // устройстве он виден отчётливее. Поэтому берём заведомо скромно.
-      refract: 0.085,
+      // Сила смещения в долях высоты линзы. Это главная ручка. В прошлый раз
+      // я убавил её по снимку из headless до 0.085 и получил на подписи сдвиг
+      // в сотую пикселя — на телефоне это выглядело как «капля без оптики».
+      // Теперь берём заведомо заметно: убавить по живому устройству дешевле,
+      // чем второй раз гадать, работает эффект или нет.
+      refract: 0.3,
       // Вертикальная составляющая. Полностью не гасим: без неё стекло плоское.
       // Но и не единица: линза широкая, под ней одна строка, и сильный
       // вертикальный сдвиг её двоит.
       // Подпись стоит низко в кнопке и попадает как раз в полосу сильной
       // работы у нижней кромки: вертикальную составляющую держим маленькой,
       // иначе низ букв размазывает. Красоту даёт горизонтальный выгиб.
-      axisY: 0.28,
+      axisY: 0.38,
       // Насколько сильнее гнёт прижатая линза.
       pressRefract: 0.5,
       // Расслоение цвета: разбег силы смещения между каналами в долях.
@@ -3365,7 +3372,7 @@
 
     var el = null;      // ссылки на узлы
     var geo = null;     // измеренная геометрия
-    var fx = null;      // { defs, filter, id, disp[], ratios[], w, h, version }
+    var fx = null;      // { defs, filter, id, disp[], w, h, version }
     var path = 'mirror';
     var tabs = [];
     var onSelect = null;
@@ -3495,9 +3502,106 @@
       return canvas.toDataURL();
     }
 
-    /* --- цепочка фильтра ---------------------------------------------- */
-    /* Расслоение цвета делается тремя проходами смещения с чуть разной силой,
-       и вся сложность — в альфе. Прошлая попытка складывала проходы через
+    /* --- карта смещения из собственной альфы --------------------------- */
+    /* Способ, который реально работает в WebKit. Проверен на устройстве
+       пользователя: `feImage` с data-URL там мёртв — картинка не доезжает до
+       фильтра, и линза гнёт пустоту, — а вот сам `feDisplacementMap` на
+       обычном HTML живой.
+
+       Поэтому карта не рисуется вовсе, а выводится из формы самой линзы.
+       Размываем её альфу: получается плавная ступенька, единица внутри, ноль
+       снаружи, у кромки переход. Производная этой ступеньки и есть поле
+       смещения — ноль в глубине, где ступенька ровная, наибольшее у кромки,
+       где она растёт, и снова ноль снаружи. Ровно тот профиль, который
+       раньше считался на canvas, только даром и без единой картинки.
+
+       Направление получается внутрь само собой: у левой кромки ступенька
+       растёт вправо, значит красный канал больше половины, значит пиксель
+       берётся правее — из глубины. Это и есть выпуклое стекло, оно увеличивает.
+
+       Побочная выгода крупная: карта подстраивается под любой размер линзы
+       сама. Вместе с картинкой уходит и ловушка WebKit «не перестраивай карту
+       на ходу» — перестраивать больше нечего.
+
+       Обязательное условие: у элемента с фильтром должна быть форма линзы,
+       то есть обрезка по скруглению. Из неё берётся альфа, а из альфы — всё
+       остальное. Обрезка ДО фильтра здесь безопасна, потому что смещение
+       смотрит внутрь и наружных пикселей ему не нужно. */
+    function buildAlphaFilter(id, blur, step, scale) {
+      var filter = svgNode('filter', {
+        id: id,
+        primitiveUnits: 'userSpaceOnUse',
+        'color-interpolation-filters': 'sRGB',
+        x: '-30%', y: '-30%', width: '160%', height: '160%'
+      });
+
+      filter.appendChild(svgNode('feGaussianBlur', {
+        'in': 'SourceAlpha', stdDeviation: blur, result: 'blur'
+      }));
+      // Альфа переезжает в цвет, сама альфа становится единицей: дальше можно
+      // считать разности, не думая о предумножении.
+      filter.appendChild(svgNode('feColorMatrix', {
+        'in': 'blur', type: 'matrix', result: 'field',
+        values: '0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 0 1'
+      }));
+
+      // Производная как разность двух сдвигов. Складывать их через feComposite
+      // arithmetic со смещением k4 нельзя: k4 прибавляется и к альфе, та
+      // становится 0.5, следующий примитив делит цвет на неё обратно, и всё
+      // вылетает в единицу. Поэтому один сдвиг инвертируется цветовой
+      // матрицей, а дальше берётся честное полусреднее: 0.5*cR + 0.5*(1-cL)
+      // даёт то же 0.5 + 0.5*(cR-cL), но альфа честно остаётся единицей.
+      var INV = '-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 0 1';
+
+      filter.appendChild(svgNode('feOffset', { 'in': 'field', dx: -step, dy: 0, result: 'xR' }));
+      filter.appendChild(svgNode('feOffset', { 'in': 'field', dx: step, dy: 0, result: 'xLraw' }));
+      filter.appendChild(svgNode('feColorMatrix', {
+        'in': 'xLraw', type: 'matrix', values: INV, result: 'xL'
+      }));
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'xR', in2: 'xL', operator: 'arithmetic',
+        k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gx'
+      }));
+
+      filter.appendChild(svgNode('feOffset', { 'in': 'field', dx: 0, dy: -step, result: 'yD' }));
+      filter.appendChild(svgNode('feOffset', { 'in': 'field', dx: 0, dy: step, result: 'yUraw' }));
+      filter.appendChild(svgNode('feColorMatrix', {
+        'in': 'yUraw', type: 'matrix', values: INV, result: 'yU'
+      }));
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'yD', in2: 'yU', operator: 'arithmetic',
+        k1: 0, k2: 0.5, k3: 0.5, k4: 0, result: 'gy'
+      }));
+
+      // Сборка карты: сдвиг по X в красный канал, по Y в зелёный. Альфа у
+      // обоих слагаемых принудительно единица, поэтому сумма её не ломает.
+      filter.appendChild(svgNode('feColorMatrix', {
+        'in': 'gx', type: 'matrix', result: 'mR',
+        values: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1'
+      }));
+      // Вертикальная составляющая гасится здесь же, множителем в матрице:
+      // G = axisY*G + 0.5*(1-axisY), то есть значение поджимается к середине,
+      // где сдвиг нулевой. Отдельным примитивом это делать нельзя — любое
+      // слагаемое через k4 портит альфу. Гасить нужно: линза широкая, под ней
+      // одна строка, и сильный вертикальный сдвиг просто смазывает подпись.
+      var ay = GLASS.axisY;
+      filter.appendChild(svgNode('feColorMatrix', {
+        'in': 'gy', type: 'matrix', result: 'mG',
+        values: '0 0 0 0 0  0 ' + ay + ' 0 0 ' + (0.5 * (1 - ay))
+          + '  0 0 0 0 0  0 0 0 0 1'
+      }));
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'mR', in2: 'mG', operator: 'arithmetic',
+        k1: 0, k2: 1, k3: 1, k4: 0, result: 'map'
+      }));
+
+      return { node: filter, disp: addDisplacement(filter, scale) };
+    }
+
+    /* --- цепочка смещения и расслоение цвета --------------------------- */
+    /* Общая часть обоих путей: берёт готовый результат `map` и гонит через
+       него исходник. Расслоение цвета — три прохода с чуть разной силой, и
+       вся сложность в альфе. Прошлая попытка складывала проходы через
        feComposite arithmetic, не тронув альфу: она набегала до трёх,
        обрезалась в единицу, а цвет, поделённый обратно на меньшую альфу,
        уходил в белое — линза выбеливалась.
@@ -3508,7 +3612,61 @@
        операция, цвет при сложении не пересчитывается, а суммарная альфа
        упирается в ту же единицу. Обнулять альфу нельзя: композиция идёт в
        предумноженном виде, и вместе с альфой обнулился бы цвет. */
-    function buildFilter(id, href, w, h, scale) {
+    function addDisplacement(filter, scale) {
+      var ab = GLASS.aberration;
+      var disp = [];
+
+      if (ab <= 0) {
+        var one = svgNode('feDisplacementMap', {
+          'in': 'SourceGraphic', in2: 'map', scale: scale,
+          xChannelSelector: 'R', yChannelSelector: 'G'
+        });
+        filter.appendChild(one);
+        disp.push({ node: one, k: 1 });
+        return disp;
+      }
+
+      var channels = [
+        { key: 'R', k: 1 - ab, m: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1' },
+        { key: 'G', k: 1,      m: '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 0 1' },
+        { key: 'B', k: 1 + ab, m: '0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 0 1' }
+      ];
+      var prev = null;
+      for (var n = 0; n < channels.length; n++) {
+        var ch = channels[n];
+        var node = svgNode('feDisplacementMap', {
+          'in': 'SourceGraphic', in2: 'map', scale: scale * ch.k,
+          xChannelSelector: 'R', yChannelSelector: 'G', result: 'd' + ch.key
+        });
+        filter.appendChild(node);
+        disp.push({ node: node, k: ch.k });
+
+        filter.appendChild(svgNode('feColorMatrix', {
+          'in': 'd' + ch.key, type: 'matrix', values: ch.m, result: 'c' + ch.key
+        }));
+
+        if (prev === null) {
+          prev = 'c' + ch.key;
+        } else {
+          var last = n === channels.length - 1;
+          var add = {
+            'in': 'c' + ch.key, in2: prev, operator: 'arithmetic',
+            k1: 0, k2: 1, k3: 1, k4: 0
+          };
+          if (!last) add.result = 'sum' + n;
+          filter.appendChild(svgNode('feComposite', add));
+          prev = last ? null : 'sum' + n;
+        }
+      }
+      return disp;
+    }
+
+    /* --- карта картинкой: только для Chromium --------------------------- */
+    /* В режиме backdrop-filter трюк с альфой не работает: фильтру достаётся
+       фон, а он непрозрачный целиком, и производная его альфы всюду ноль.
+       Формы линзы там взять неоткуда, поэтому карта остаётся нарисованной на
+       canvas и подаётся через feImage. В Chromium он живой — проверено. */
+    function buildImageFilter(id, href, w, h, scale) {
       var filter = svgNode('filter', {
         id: id,
         // Область шире самой линзы: feDisplacementMap берёт пиксели только
@@ -3534,80 +3692,40 @@
         'in': 'rawMap', in2: 'mapBg', operator: 'over', result: 'map'
       }));
 
-      var disp = [];
-      var ratios = [];
-      var ab = GLASS.aberration;
-
-      if (ab <= 0) {
-        var one = svgNode('feDisplacementMap', {
-          'in': 'SourceGraphic', in2: 'map', scale: scale,
-          xChannelSelector: 'R', yChannelSelector: 'G'
-        });
-        filter.appendChild(one);
-        disp.push(one);
-        ratios.push(1);
-        return { node: filter, disp: disp, ratios: ratios };
-      }
-
-      var channels = [
-        { key: 'R', k: 1 - ab, m: '1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1' },
-        { key: 'G', k: 1,      m: '0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 0 1' },
-        { key: 'B', k: 1 + ab, m: '0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 0 1' }
-      ];
-      var prev = null;
-      for (var n = 0; n < channels.length; n++) {
-        var ch = channels[n];
-        var node = svgNode('feDisplacementMap', {
-          'in': 'SourceGraphic', in2: 'map', scale: scale * ch.k,
-          xChannelSelector: 'R', yChannelSelector: 'G', result: 'd' + ch.key
-        });
-        filter.appendChild(node);
-        disp.push(node);
-        ratios.push(ch.k);
-
-        filter.appendChild(svgNode('feColorMatrix', {
-          'in': 'd' + ch.key, type: 'matrix', values: ch.m, result: 'c' + ch.key
-        }));
-
-        if (prev === null) {
-          prev = 'c' + ch.key;
-        } else {
-          var last = n === channels.length - 1;
-          var add = {
-            'in': 'c' + ch.key, in2: prev, operator: 'arithmetic',
-            k1: 0, k2: 1, k3: 1, k4: 0
-          };
-          if (!last) add.result = 'sum' + n;
-          filter.appendChild(svgNode('feComposite', add));
-          prev = last ? null : 'sum' + n;
-        }
-      }
-      return { node: filter, disp: disp, ratios: ratios };
+      return { node: filter, disp: addDisplacement(filter, scale) };
     }
 
-    /** Перестраивает карту и фильтр. Только при смене РАЗМЕРА линзы: менять их
-     *  на ходу нельзя — WebKit душит фильтр, и преломление пропадает. */
+    /** Базовая сила смещения для линзы высотой h, в пикселях. */
+    function baseScale(h) { return GLASS.refract * h; }
+
+    /** Пересобирает фильтр под размер линзы. В режиме зеркала это нужно
+     *  только чтобы пересчитать размытие и шаг в пикселях: сама карта
+     *  подстраивается под форму сама и перестроения не требует. */
     function rebuild(w, h) {
       var iw = Math.round(w);
       var ih = Math.round(h);
       if (iw < 8 || ih < 8) return;
       if (fx.w === iw && fx.h === ih) return;
 
-      var href = buildMap(iw, ih);
-      if (!href) return;
-
-      dispScale = 2 * GLASS.refract * ih;
-      // Новый id при каждой перестройке: WebKit кэширует результат по id, и
-      // без смены линза замерзает на прежней карте.
+      dispScale = baseScale(ih);
+      // Новый id при каждой пересборке: WebKit кэширует результат фильтра по
+      // id, и без смены линза замерзает на прежнем.
       fx.version += 1;
       var id = 'tabbar-lens-' + fx.version;
-      var built = buildFilter(id, href, iw, ih, dispScale);
+      var built;
+
+      if (path === 'backdrop') {
+        var href = buildMap(iw, ih);
+        if (!href) return;
+        built = buildImageFilter(id, href, iw, ih, dispScale);
+      } else {
+        built = buildAlphaFilter(id, GLASS.reach * ih, GLASS.gradStep * ih, dispScale);
+      }
 
       if (fx.filter) fx.defs.removeChild(fx.filter);
       fx.defs.appendChild(built.node);
       fx.filter = built.node;
       fx.disp = built.disp;
-      fx.ratios = built.ratios;
       fx.id = id;
       fx.w = iw;
       fx.h = ih;
@@ -3625,11 +3743,11 @@
      *  только когда оно ощутимо изменилось: SVG в кадре трогать дорого. */
     function applyRefraction() {
       if (!fx || !fx.disp.length || !fx.h) return;
-      var want = 2 * GLASS.refract * fx.h * (1 + sim.press * GLASS.pressRefract);
+      var want = baseScale(fx.h) * (1 + sim.press * GLASS.pressRefract);
       if (Math.abs(want - dispScale) < 0.3) return;
       dispScale = want;
       for (var i = 0; i < fx.disp.length; i++) {
-        fx.disp[i].setAttribute('scale', String(want * fx.ratios[i]));
+        fx.disp[i].node.setAttribute('scale', String(want * fx.disp[i].k));
       }
     }
 
@@ -4009,7 +4127,7 @@
       var defs = svgNode('defs', {});
       svg.appendChild(defs);
       document.body.appendChild(svg);
-      fx = { defs: defs, filter: null, id: null, disp: [], ratios: [], w: 0, h: 0, version: 0 };
+      fx = { defs: defs, filter: null, id: null, disp: [], w: 0, h: 0, version: 0 };
 
       if (path === 'mirror') { syncMirror(); watchMirror(); }
       measure();
