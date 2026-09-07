@@ -3318,6 +3318,27 @@
       // примитива в цепочке. Только для пути зеркала: в режиме Chromium
       // маску кромки взять неоткуда, там фильтру достаётся непрозрачный фон.
       edgeBlur: 0.05,
+
+      /* --- текстура кривого зеркала --- */
+      // Сила ряби. Ноль полностью убирает турбулентность и четыре
+      // сопутствующих примитива, возвращая прежнюю оптику один в один.
+      textureStrength: 2.2,
+      // Частота шума по осям. Вдоль X густо, вдоль Y редко — отсюда вытянутые
+      // вертикальные валы вместо равномерных пятен.
+      textureFreqX: 0.05,
+      textureFreqY: 0.006,
+      // Октавы: одна даёт гладкую зыбь, две добавляют неровность помельче.
+      // Каждая октава стоит денег, три уже превращают стекло в грязь.
+      textureOctaves: 2,
+      // Как быстро текстура нарастает к краю. 2 — плавно от середины,
+      // 4 — почти вся деформация в последней четверти радиуса.
+      // 2 — плавно нарастает от середины к краю (середина чистая, у кромки
+      // сильно). 4 — почти вся деформация в последней четверти радиуса, но на
+      // нашей узкой полосе это уже почти не видно.
+      textureEdgePow: 2,
+      // Вертикальная составляющая ряби. Держим маленькой: линза низкая, и
+      // вертикальный сдвиг смазывает подпись.
+      textureAxisY: 0.12,
       // Насколько туго полоса размазывания прижата к контуру. Единица —
       // широкая полоса на пол-линзы, размазывает и подпись тоже; больше —
       // теснее к краю. Ноль в профиле приходится на (k-1)/k, всё ниже
@@ -3654,11 +3675,111 @@
       return finish(filter, scale, h);
     }
 
+    /* --- накладная текстура кривого зеркала ------------------------------
+       Кривое зеркало — это НЕРОВНАЯ поверхность, а не увеличение. Ровное поле,
+       каким бы сильным оно ни было, даёт только «крупнее» или «мутнее»; чтобы
+       содержимое плыло и меняло форму, поле должно гулять само по себе.
+
+       Неровность берёт feTurbulence: он порождает шум Перлина прямо внутри
+       фильтра. Картинку сюда подать нельзя ни в каком виде — feImage в этом
+       WebView мёртв, проверено на устройстве, — и это не обход, а штатное
+       применение примитива: волнистое стекло и вода в спецификации SVG
+       сделаны именно им.
+
+       Шум идёт НЕ поверх картинки, а В КАРТУ СМЕЩЕНИЯ: он прибавляется к
+       готовой карте, и дальше feDisplacementMap двигает по ней живой DOM.
+       То есть рябь физически искажает содержимое, а не рисуется сверху.
+
+       Частота по осям разная: вдоль X густо, вдоль Y редко. Получаются
+       вытянутые вертикальные валы — так и выглядит кривое зеркало в комнате
+       смеха, и это хорошо ложится на наше горизонтальное смещение.
+
+       Краевая маска отдельная и своя. У полосы размазывания горб сидит НА
+       контуре и гаснет в обе стороны, а здесь нужно другое: ноль в середине
+       линзы и рост к краю. Берём (2*(1-a))^2 от размытой альфы — в середине
+       альфа единица и маска ноль, на контуре альфа половина и маска единица.
+       Ещё одно возведение в квадрат сгоняет почти всю деформацию в последнюю
+       четверть радиуса.
+
+       Цена честная: feTurbulence самый дорогой примитив из всех здешних, и
+       считается он каждый кадр — линзу нельзя вынести в отдельный слой.
+       textureStrength = 0 убирает его вместе со всеми сопутствующими
+       примитивами и возвращает ровно прежнюю оптику. */
+    function addTexture(filter) {
+      var amp = GLASS.textureStrength;
+      if (amp <= 0) return 'map';
+
+      /* Краевая маска: ноль в середине линзы, единица на контуре.
+         (2*(1-a))^2 = 4a^2 - 8a + 4 — ровно один arithmetic по альфе.
+
+         А дальше обязательный шаг, на котором я уже споткнулся: значение надо
+         перенести из АЛЬФЫ В ЦВЕТ. feComposite перемножает по цветовым
+         каналам, а у результата первого шага цвет всюду единица (SourceAlpha
+         приходит с нулевым цветом, и k4 задирает его в потолок). Если подать
+         такую маску как есть, множитель всюду равен единице: текстура ляжет
+         равномерно по всей линзе, а показатель края не будет значить ничего. */
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'blur', in2: 'blur', operator: 'arithmetic',
+        k1: 4, k2: -4, k3: -4, k4: 4, result: 'edgeA'
+      }));
+      filter.appendChild(svgNode('feColorMatrix', {
+        'in': 'edgeA', type: 'matrix', result: 'edge0',
+        values: '0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 0 1'
+      }));
+      var edge = 'edge0';
+      if (GLASS.textureEdgePow >= 4) {
+        // Ещё квадрат: почти вся деформация уходит в последнюю четверть радиуса.
+        filter.appendChild(svgNode('feComposite', {
+          'in': 'edge0', in2: 'edge0', operator: 'arithmetic',
+          k1: 1, k2: 0, k3: 0, k4: 0, result: 'edge1'
+        }));
+        edge = 'edge1';
+      }
+
+      filter.appendChild(svgNode('feTurbulence', {
+        type: 'fractalNoise',
+        baseFrequency: GLASS.textureFreqX + ' ' + GLASS.textureFreqY,
+        numOctaves: Math.max(1, GLASS.textureOctaves | 0),
+        seed: 5, stitchTiles: 'noStitch', result: 'noiseRaw'
+      }));
+
+      // Сила и распределение по осям. Горизонталь основная, вертикаль почти
+      // погашена: линза низкая, и вертикальный сдвиг просто смазывает подпись.
+      // Альфа принудительно единица: дальше всё считается на предумноженных
+      // значениях, и неполная альфа их испортила бы.
+      var ay = GLASS.textureAxisY;
+      filter.appendChild(svgNode('feColorMatrix', {
+        'in': 'noiseRaw', type: 'matrix', result: 'noise',
+        values: amp + ' 0 0 0 ' + (0.5 * (1 - amp))
+          + '  0 ' + (amp * ay) + ' 0 0 ' + (0.5 * (1 - amp * ay))
+          + '  0 0 0 0 0  0 0 0 0 1'
+      }));
+
+      // Прижимаем шум маской: tex = 0.5 + edge*(noise - 0.5).
+      // Альфа выходит единицей сама: 1 - 0.5 + 0.5.
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'noise', in2: edge, operator: 'arithmetic',
+        k1: 1, k2: 0, k3: -0.5, k4: 0.5, result: 'tex'
+      }));
+
+      // И прибавляем к готовой карте: map + tex - 0.5.
+      filter.appendChild(svgNode('feComposite', {
+        'in': 'map', in2: 'tex', operator: 'arithmetic',
+        k1: 0, k2: 1, k3: 1, k4: -0.5, result: 'mapTex'
+      }));
+      return 'mapTex';
+    }
+
     /** Хвост цепочки: смещение, а за ним, если включено, размазывание кромки. */
     function finish(filter, scale, h) {
+      // Текстура подмешивается В КАРТУ, до смещения: она должна искажать DOM,
+      // а не лежать поверх него.
+      var mapName = addTexture(filter);
       var radius = GLASS.edgeBlur * h;
-      if (radius <= 0) return { node: filter, disp: addDisplacement(filter, scale) };
-      var disp = addDisplacement(filter, scale, 'disp');
+      if (radius <= 0) {
+        return { node: filter, disp: addDisplacement(filter, scale, null, mapName) };
+      }
+      var disp = addDisplacement(filter, scale, 'disp', mapName);
       addEdgeBlur(filter, radius);
       return { node: filter, disp: disp };
     }
@@ -3677,13 +3798,14 @@
        операция, цвет при сложении не пересчитывается, а суммарная альфа
        упирается в ту же единицу. Обнулять альфу нельзя: композиция идёт в
        предумноженном виде, и вместе с альфой обнулился бы цвет. */
-    function addDisplacement(filter, scale, out) {
+    function addDisplacement(filter, scale, out, mapName) {
+      var MAP = mapName || 'map';
       var ab = GLASS.aberration;
       var disp = [];
 
       if (ab <= 0) {
         var one = svgNode('feDisplacementMap', {
-          'in': 'SourceGraphic', in2: 'map', scale: scale,
+          'in': 'SourceGraphic', in2: MAP, scale: scale,
           xChannelSelector: 'R', yChannelSelector: 'G'
         });
         if (out) one.setAttribute('result', out);
@@ -3701,7 +3823,7 @@
       for (var n = 0; n < channels.length; n++) {
         var ch = channels[n];
         var node = svgNode('feDisplacementMap', {
-          'in': 'SourceGraphic', in2: 'map', scale: scale * ch.k,
+          'in': 'SourceGraphic', in2: MAP, scale: scale * ch.k,
           xChannelSelector: 'R', yChannelSelector: 'G', result: 'd' + ch.key
         });
         filter.appendChild(node);
@@ -3780,6 +3902,7 @@
         'in': 'softRim', in2: 'disp', operator: 'over'
       }));
     }
+
 
     /* --- карта картинкой: только для Chromium --------------------------- */
     /* В режиме backdrop-filter трюк с альфой не работает: фильтру достаётся
