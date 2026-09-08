@@ -4376,6 +4376,15 @@
       el.lens.style.width = geo.w + 'px';
       el.lens.style.height = geo.h + 'px';
       el.lens.style.borderRadius = (geo.h / 2) + 'px';
+      // Белая капсула под кнопками повторяет линзу один в один: и размер, и
+      // ход. Иначе в покое заливка осталась бы на прежней вкладке.
+      if (el.pill) {
+        el.pill.style.left = geo.left + 'px';
+        el.pill.style.top = geo.top + 'px';
+        el.pill.style.width = geo.w + 'px';
+        el.pill.style.height = geo.h + 'px';
+        el.pill.style.borderRadius = (geo.h / 2) + 'px';
+      }
       el.mirror.style.width = geo.rowW + 'px';
       el.mirror.style.height = geo.rowH + 'px';
       el.mirror.style.borderWidth = geo.pad + 'px';
@@ -4398,8 +4407,12 @@
       // Только двумерные трансформации: translate3d вынес бы линзу в
       // отдельный слой композитора, а WebKit внутри такого слоя выбрасывает
       // SVG-фильтр вместе со всем преломлением.
-      el.lens.style.transform = 'translate(' + tx.toFixed(2) + 'px,0) scale('
+      var lensT = 'translate(' + tx.toFixed(2) + 'px,0) scale('
         + sx.toFixed(4) + ',' + sy.toFixed(4) + ')';
+      el.lens.style.transform = lensT;
+      // Белая капсула идёт тем же ходом. Прятать её под стеклом не нужно:
+      // зеркало того же цвета и той же формы накрывает её целиком.
+      if (el.pill) el.pill.style.transform = lensT;
 
       // Обратная трансформация: стекло тянется, а содержимое под ним остаётся
       // на месте. Иначе копия разъезжается с оригиналом, и сразу видно, что
@@ -4700,6 +4713,7 @@
         tabbar: tabbar,
         plate: tabbar.querySelector('.tabbar__plate'),
         row: tabbar.querySelector('.tabbar__row'),
+        pill: tabbar.querySelector('.tabbar__pill'),
         lens: tabbar.querySelector('.tabbar__lens'),
         fx: tabbar.querySelector('.tabbar__fx'),
         mirror: tabbar.querySelector('.tabbar__mirror')

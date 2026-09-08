@@ -43,6 +43,10 @@
          прямоугольникам кнопок — в разметке нет ни одной координаты. -->
     <nav id="tabbar" class="tabbar">
       <div class="tabbar__plate">
+        <!-- Белая капсула активного раздела. Лежит ПОД кнопками: заливка
+             сплошная, а подпись поверх неё остаётся настоящей и чёткой.
+             Геометрию и ход считает app.js, ровно те же, что у линзы. -->
+        <div class="tabbar__pill" aria-hidden="true"></div>
         <div class="tabbar__row">
           <button class="tab" type="button" data-tab="trainer">
             <span class="tab__icon tab__icon--grid"><i></i><i></i><i></i><i></i></span>
