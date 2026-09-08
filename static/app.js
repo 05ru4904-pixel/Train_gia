@@ -3027,93 +3027,6 @@
     ]);
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Панель подбора стекла                                              */
-  /* ------------------------------------------------------------------ */
-  /* Судить линзу может только устройство: в Chromium она ведёт себя иначе, а
-     цену кадра там измерить нельзя вовсе. Раньше это значило деплой за каждое
-     число. Панель убирает деплой из круга: ползунок зовёт TabBar.tune, тот
-     пересобирает фильтр сразу, и набор ложится в localStorage — подбор
-     переживает перезапуск приложения.
-
-     Висит СВЕРХУ намеренно: таббар внизу должен оставаться на виду, иначе
-     крутить нечего. Это временный инструмент для одного человека; когда стекло
-     будет принято, панель и кнопка в профиле убираются одним коммитом. */
-
-  var TUNE_KNOBS = [
-    { key: 'refract', title: 'Сила преломления', min: 0.05, max: 0.7, step: 0.005 },
-    { key: 'textureDepth', title: 'Глубина ряби', min: 0, max: 1, step: 0.01 },
-    { key: 'textureRings', title: 'Колец ряби', min: 1, max: 6, step: 1 },
-    { key: 'reach', title: 'Размытие альфы', min: 0.04, max: 0.3, step: 0.005 },
-    { key: 'gradStep', title: 'Плечо производной', min: 0.03, max: 0.25, step: 0.005 },
-    { key: 'pressRefract', title: 'Прибавка при нажатии', min: 0, max: 1.5, step: 0.05 }
-  ];
-
-  var tunePanel = null;
-
-  function closeGlassTune() {
-    if (tunePanel && tunePanel.parentNode) tunePanel.parentNode.removeChild(tunePanel);
-    tunePanel = null;
-  }
-
-  function openGlassTune() {
-    if (tunePanel) { closeGlassTune(); return; }
-    var keys = TUNE_KNOBS.map(function (knob) { return knob.key; });
-    var dump = h('div', { class: 'tune__dump' });
-
-    function refreshDump() {
-      var now = TabBar.settings(keys);
-      dump.textContent = JSON.stringify(now);
-    }
-
-    var rows = TUNE_KNOBS.map(function (knob) {
-      var current = TabBar.settings([knob.key])[knob.key];
-      var value = h('span', { class: 'tune__value', text: String(current) });
-      var input = h('input', {
-        type: 'range', min: knob.min, max: knob.max, step: knob.step,
-        value: current,
-        // input, а не change: значение должно меняться прямо под пальцем,
-        // иначе подбор превращается в угадывание.
-        onInput: function () {
-          var next = parseFloat(input.value);
-          value.textContent = String(next);
-          var patch = {};
-          patch[knob.key] = next;
-          TabBar.tune(patch);
-          refreshDump();
-        }
-      });
-      return h('div', { class: 'tune__row' }, [
-        h('div', { class: 'tune__head' }, [
-          h('span', { class: 'tune__title', text: knob.title }), value
-        ]),
-        input
-      ]);
-    });
-
-    refreshDump();
-
-    tunePanel = h('div', { class: 'tune' }, [
-      h('div', { class: 'tune__bar' }, [
-        h('span', { class: 'tune__name', text: 'Стекло таббара' }),
-        h('button', {
-          class: 'tune__x', type: 'button', onClick: closeGlassTune
-        }, 'Закрыть')
-      ]),
-      h('div', { class: 'tune__body' }, rows.concat([
-        dump,
-        h('button', {
-          class: 'btn btn--ghost', type: 'button',
-          onClick: function () {
-            TabBar.resetTune();
-            location.reload();
-          }
-        }, 'Сбросить к значениям из кода')
-      ]))
-    ]);
-    dom.dialogRoot.appendChild(tunePanel);
-  }
-
   function screenProfile() {
     var profile = S.profile;
     if (!profile) return screenLoading();
@@ -3152,13 +3065,7 @@
         h('button', {
           class: 'btn btn--ghost', type: 'button',
           onClick: function () { toast('Тарифы появятся в следующем обновлении.'); }
-        }, 'Тарифы'),
-        // Временная кнопка на время подбора стекла. Учеников в проде нет,
-        // прятать не за чем; уйдёт вместе с панелью.
-        h('button', {
-          class: 'btn btn--ghost', type: 'button',
-          onClick: openGlassTune
-        }, 'Стекло таббара')
+        }, 'Тарифы')
       ])
     ]);
   }
@@ -4784,58 +4691,7 @@
       run();
     }
 
-    /* --- подбор на живом устройстве -------------------------------------
-       Единственный судья этому эффекту — телефон: ни headless, ни Chromium не
-       показывают ни настоящей силы преломления, ни цены кадра. Поэтому ручки
-       должны крутиться пальцем и без деплоя.
-
-       Меняет только числовые поля, которые уже есть в GLASS, кладёт набор в
-       тот же ключ localStorage, что читает readOverrides, и пересобирает
-       фильтр целиком. Именно целиком: править атрибуты живого фильтра в WebKit
-       бесполезно (ловушка №4), а результат там кэшируется по id — поэтому
-       rebuild и меняет id при каждой пересборке. */
-    var tuned = {};
-
-    function tune(patch) {
-      var changed = false;
-      for (var key in patch) {
-        if (Object.prototype.hasOwnProperty.call(patch, key)
-          && Object.prototype.hasOwnProperty.call(GLASS, key)
-          && typeof patch[key] === 'number' && isFinite(patch[key])) {
-          GLASS[key] = patch[key];
-          tuned[key] = patch[key];
-          changed = true;
-        }
-      }
-      if (!changed) return;
-      try {
-        localStorage.setItem('tabbarGlass', JSON.stringify(tuned));
-      } catch (e) { /* приватный режим */ }
-      if (!geo || !fx) return;
-      // Обнуляем запомненный размер: иначе rebuild сочтёт, что пересобирать
-      // нечего, и вернётся сразу.
-      fx.w = 0;
-      fx.h = 0;
-      rebuild(geo.w, geo.h);
-    }
-
-    /** Текущие значения ручек — для панели подбора. */
-    function settings(keys) {
-      var out = {};
-      for (var i = 0; i < keys.length; i++) out[keys[i]] = GLASS[keys[i]];
-      return out;
-    }
-
-    /** Забыть подобранное и вернуться к значениям из кода. */
-    function resetTune() {
-      try { localStorage.removeItem('tabbarGlass'); } catch (e) { /* пусто */ }
-      tuned = {};
-    }
-
-    return {
-      init: init, select: select,
-      tune: tune, settings: settings, resetTune: resetTune
-    };
+    return { init: init, select: select };
   })();
 
   /* ------------------------------------------------------------------ */
