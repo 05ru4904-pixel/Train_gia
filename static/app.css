@@ -1697,3 +1697,65 @@ button {
   color: var(--ink-strong);
   text-align: center;
 }
+
+/* --- панель подбора стекла ---------------------------------------------- */
+/* Временный инструмент: крутить ручки линзы пальцем на живом устройстве.
+   Висит сверху, потому что судить надо таббар внизу — он должен оставаться
+   на виду. Уйдёт вместе с кнопкой в профиле, когда стекло будет принято. */
+.tune {
+  position: fixed;
+  left: 8px; right: 8px; top: 8px;
+  z-index: 60;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px oklch(0.35 0.03 45 / 0.18);
+  overflow: hidden;
+}
+.tune__bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-soft);
+}
+.tune__name { font-size: 14px; font-weight: 600; color: var(--ink-strong); }
+.tune__x {
+  border: 0; background: none; padding: 4px 2px;
+  font: inherit; font-size: 13px; color: var(--accent); cursor: pointer;
+}
+.tune__body { padding: 8px 12px 12px; }
+.tune__row { padding: 6px 0; }
+.tune__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin-bottom: 2px;
+}
+.tune__title { font-size: 13px; color: var(--ink-soft); }
+.tune__value {
+  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent-ink);
+}
+/* Ползунок делаем крупным намеренно: его крутят пальцем на телефоне. */
+.tune__row input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  display: block; width: 100%; height: 22px; margin: 0;
+  background: none;
+}
+.tune__row input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px; background: var(--track);
+}
+.tune__row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 22px; height: 22px; margin-top: -9px;
+  border-radius: 50%; border: 1px solid var(--accent-border);
+  background: var(--accent);
+}
+.tune__dump {
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft); border-radius: 10px;
+  background: var(--surface-2);
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink-dim);
+  word-break: break-all;
+  -webkit-user-select: text; user-select: text;
+}
