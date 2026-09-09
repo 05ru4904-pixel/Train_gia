@@ -84,9 +84,19 @@
   --green-strong: var(--green-ink);
   --red-strong: var(--red-ink);
 
-  --radius-card: 18px;
-  --radius: 14px;
-  --radius-sm: 12px;
+  /* Шкала скруглений. Пять ступеней на всё приложение, и каждый компонент
+     берёт свою по РОЛИ, а не по размеру на глаз: кнопка всегда --radius,
+     карточка всегда --radius-card. Отдельных чисел в компонентах быть не
+     должно — иначе система расползается, что здесь уже случалось (20, 22, 7 и
+     6 px жили сами по себе и сведены сюда).
+
+     Эта же шкала задаёт --sq в блоке суперэллипса внизу файла: форма угла одна
+     на всё приложение, меняется только его величина. */
+  --radius-lg: 22px;    /* модальные и крупные карточки: диалог, карточка слова */
+  --radius-card: 18px;  /* карточки, панели, блоки */
+  --radius: 14px;       /* кнопки, строки списков, поля, плитки */
+  --radius-sm: 12px;    /* мелкие плашки: плитки иконок, клетки, поля-мелочи */
+  --radius-xs: 7px;     /* маркеры выбора и прочая мелочь внутри компонентов */
   --pad: 16px;
 
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -845,7 +855,7 @@ button {
   font-size: 11px;
   font-weight: 800;
 }
-.option--multi .option__mark { border-radius: 6px; }
+.option--multi .option__mark { border-radius: var(--radius-xs); }
 .option__letter {
   font-size: 13px;
   font-weight: 800;
@@ -1274,7 +1284,7 @@ button {
   margin-top: 16px;
   min-height: 210px;
   padding: 24px 18px;
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-soft);
   background: var(--surface);
   display: flex;
@@ -1490,7 +1500,7 @@ button {
   width: 22px;
   height: 22px;
   flex: none;
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -1597,7 +1607,7 @@ button {
   width: 100%;
   max-width: 420px;
   background: var(--surface);
-  border-radius: 22px;
+  border-radius: var(--radius-lg);
   padding: 22px 20px 18px;
   box-shadow: var(--shadow-lift);
   animation: rise 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
@@ -1742,7 +1752,7 @@ button {
 .means-quote {
   margin-top: 16px;
   padding: 22px 18px;
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-soft);
   background: var(--surface);
   font-size: 18px;
@@ -1754,23 +1764,30 @@ button {
 
 
 /* ==========================================================================
-   Углы по суперэллипсу («как у Apple»)
+   Углы: одна кривая и одна шкала на всё приложение
    ==========================================================================
    Обычный border-radius ведёт угол дугой окружности: дуга упирается в прямую
    сторону под изломом, и угол выглядит надутым. У Apple угол идёт по
-   суперэллипсу — начинается раньше и вливается в сторону без стыка. Показатель
-   4.14, шесть отрезков на угол.
+   суперэллипсу — загибаться начинает раньше и вливается в сторону без стыка.
+
+   ГЛАВНОЕ ПРАВИЛО ЭТОГО БЛОКА: кривая одна, и никто не рисует себе свою.
+   Меняется только величина, и берётся она из общей шкалы (--radius-* наверху
+   файла) по РОЛИ компонента: кнопка всегда --radius, карточка всегда
+   --radius-card, диалог всегда --radius-lg. Отдельных чисел здесь нет ни
+   одного, и появляться они не должны — иначе система расползётся ровно так,
+   как расползлась до этого.
+
+   Показатель суперэллипса 3, 8 отрезков на угол. Один на всё.
 
    Свойства corner-shape в этом WebView нет (проверено на устройстве), поэтому
    форму рисуем обрезкой. Хитрость в том, КАК записан многоугольник: координаты
    угла линейны по радиусу, поэтому идут в пикселях через calc и НЕ ТЯНУТСЯ, а
    стороны идут в процентах и тянутся свободно. Одна запись работает на элементе
-   любого размера и любой пропорции — ни JS, ни пересчёта на resize. Радиус
-   задаёт --sq на самом элементе.
+   любого размера и любой пропорции — ни JS, ни пересчёта на resize.
 
    Почему правило, а не токен в :root: подстановка var() происходит там, где
    значение объявлено. На корне переменной --sq нет, поэтому токен схлопывался
-   в пустоту и наследовался уже пустым.
+   бы в пустоту и наследовался уже пустым.
 
    Три вещи выяснены замером и стоили отдельного круга:
    · обрезка поверх border-radius не делает НИЧЕГО: суперэллипс шире дуги, дуга
@@ -1783,157 +1800,116 @@ button {
 
    Линзе таббара и её слою обрезку вешать НЕЛЬЗЯ: она создаёт композитный слой,
    а WebKit внутри такого слоя выбрасывает SVG-фильтр (ловушка №2). Таббар и так
-   капсула, а на капсуле дуга и суперэллипс неразличимы.
-
-   Радиусы подняты примерно в 1.2 раза не для красоты: суперэллипс шире дуги, и
-   при том же числе угол читается менее круглым, чем был. */
+   капсула, а на капсуле дуга и суперэллипс неразличимы. */
 @supports (clip-path: polygon(evenodd, 0px 0px, 1px 1px, 0px 1px)) {
 
-  /* --- форма ------------------------------------------------------------ */
-  .card__icon, .empty__icon, .task-row__num, .match-option, .q-passage,
-  .skeleton div, .btn, .dialog, .toast,
-  .card, .rows, .flashcard, .means-quote, .pick-item, .tile, .score-card,
-  .stat, .option, .review-option {
+  /* --- форма: одна на всех ---------------------------------------------- */
+  .card__icon, .empty__icon, .task-row__num, .match-option, .nav-cell,
+  .filter__input, .md-note, .match-pick, .btn, .toast, .q-passage,
+  .pick-item, .tile, .score-card, .stat, .option, .review-option, .count,
+  .verdict, .mistake-row, .banner, .answer-line, .stat-row, .history-row,
+  .deck-stat, .word-row, .sheet-row, .empty__action, .error__action,
+  .answer-input, .match-row, .means-group, .card, .rows, .skeleton div,
+  .resume, .filter, .summary, .flashcard, .means-quote, .dialog {
     border-radius: 0;
-    clip-path: polygon(0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1));
+    clip-path: polygon(0px calc(var(--sq) * 1), calc(var(--sq) * 0.0129) calc(var(--sq) * 0.6636), calc(var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(100% - var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(100% - var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(100% - var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(100% - var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(100% - var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(100% - var(--sq) * 0.0129) calc(var(--sq) * 0.6636), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), calc(100% - var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(100% - var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(100% - var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(100% - var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(100% - var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(100% - var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), 0px calc(100% - var(--sq) * 1));
   }
 
-  /* --- радиусы ---------------------------------------------------------- */
-  .card__icon, .empty__icon, .task-row__num, .match-option { --sq: 14px; }
-  .btn, .toast, .q-passage, .pick-item, .tile, .score-card, .stat,
-  .option, .review-option                                   { --sq: 17px; }
-  .card, .rows, .skeleton div                               { --sq: 22px; }
-  .flashcard, .means-quote                                  { --sq: 24px; }
-  .dialog                                                   { --sq: 26px; }
+  /* --- величина: по роли, из общей шкалы --------------------------------- */
+  .card__icon, .empty__icon, .task-row__num, .match-option, .nav-cell,
+  .filter__input, .md-note, .match-pick { --sq: var(--radius-sm); }
+
+  .btn, .toast, .q-passage, .pick-item, .tile, .score-card, .stat, .option,
+  .review-option, .count, .verdict, .mistake-row, .banner, .answer-line,
+  .stat-row, .history-row, .deck-stat, .word-row, .sheet-row,
+  .empty__action, .error__action, .answer-input, .match-row, .means-group { --sq: var(--radius); }
+
+  .card, .rows, .skeleton div, .resume, .filter, .summary { --sq: var(--radius-card); }
+
+  .flashcard, .means-quote, .dialog { --sq: var(--radius-lg); }
 
   /* --- рамка отдельным кольцом ------------------------------------------
-     Кольцо — один многоугольник из двух контуров с evenodd: внешний по
-     границе элемента, внутренний со сдвигом на толщину рамки. Оба контура
-     замыкаются ЯВНО, повтором первой точки: иначе между ними остаются два
-     соединительных отрезка вдоль левой кромки, evenodd считает их пересечения
-     и кольцо разрывается щелью ровно там.
+     Кольцо — один многоугольник из двух контуров с evenodd: внешний по границе
+     элемента, внутренний со сдвигом на толщину рамки. Оба контура замыкаются
+     ЯВНО, повтором первой точки: иначе между ними остаются два соединительных
+     отрезка вдоль левой кромки, evenodd считает их пересечения и кольцо
+     разрывается щелью ровно там.
 
-     Псевдоэлемент сдвинут наружу на толщину рамки: у абсолютного потомка
-     точкой отсчёта служит padding box, а накрыть надо border box. Настоящая
-     рамка элемента при этом остаётся на месте и ничего не портит — по прямым
-     сторонам кольцо ложится ровно на неё, а в углах, где обрезка её срезала,
-     кольцо рисует угол само. Поэтому существующие правила с border-color
-     переписывать не пришлось: цвет кольца берётся из --bc ниже. */
+     Псевдоэлемент сдвинут наружу на толщину рамки: у абсолютного потомка точкой
+     отсчёта служит padding box, а накрыть надо border box. Настоящая рамка
+     элемента остаётся на месте и ничего не портит — по прямым сторонам кольцо
+     ложится ровно на неё, а в углах, где обрезка её срезала, кольцо рисует угол
+     само. Поэтому правила компонентов переписывать не пришлось: цвет кольца
+     собран отдельным списком ниже. */
   .card::after, .rows::after, .flashcard::after, .means-quote::after,
   .pick-item::after, .tile::after, .score-card::after, .stat::after,
-  .btn--ghost::after, .btn--danger::after,
-  .option::after, .review-option::after {
+  .btn--ghost::after, .btn--danger::after, .resume::after, .count::after,
+  .mistake-row::after, .nav-cell::after, .filter::after,
+  .filter__input::after, .summary::after, .stat-row::after,
+  .history-row::after, .deck-stat::after, .word-row::after,
+  .sheet-row::after, .match-pick::after, .means-group::after,
+  .option::after, .review-option::after, .answer-input::after,
+  .match-row::after {
     content: '';
     position: absolute;
     pointer-events: none;
     background: var(--bc, var(--border));
   }
   .card, .rows, .flashcard, .means-quote, .pick-item, .tile, .score-card,
-  .stat, .btn--ghost, .btn--danger, .option, .review-option { position: relative; }
+  .stat, .btn--ghost, .btn--danger, .resume, .count, .mistake-row,
+  .nav-cell, .filter, .filter__input, .summary, .stat-row, .history-row,
+  .deck-stat, .word-row, .sheet-row, .match-pick, .means-group, .option,
+  .review-option, .answer-input, .match-row { position: relative; }
 
   .card::after, .rows::after, .flashcard::after, .means-quote::after,
   .pick-item::after, .tile::after, .score-card::after, .stat::after,
-  .btn--ghost::after, .btn--danger::after {
+  .btn--ghost::after, .btn--danger::after, .resume::after, .count::after,
+  .mistake-row::after, .nav-cell::after, .filter::after,
+  .filter__input::after, .summary::after, .stat-row::after,
+  .history-row::after, .deck-stat::after, .word-row::after,
+  .sheet-row::after, .match-pick::after, .means-group::after {
     inset: -1px;
-    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 1px calc(1px + (var(--sq) - 1px) * 1), calc(1px + (var(--sq) - 1px) * 0.0166) calc(1px + (var(--sq) - 1px) * 0.4795), calc(1px + (var(--sq) - 1px) * 0.0671) calc(1px + (var(--sq) - 1px) * 0.2846), calc(1px + (var(--sq) - 1px) * 0.1542) calc(1px + (var(--sq) - 1px) * 0.1542), calc(1px + (var(--sq) - 1px) * 0.2846) calc(1px + (var(--sq) - 1px) * 0.0671), calc(1px + (var(--sq) - 1px) * 0.4795) calc(1px + (var(--sq) - 1px) * 0.0166), calc(1px + (var(--sq) - 1px) * 1) 1px, calc(100% - 1px - (var(--sq) - 1px) * 1) 1px, calc(100% - 1px - (var(--sq) - 1px) * 0.4795) calc(1px + (var(--sq) - 1px) * 0.0166), calc(100% - 1px - (var(--sq) - 1px) * 0.2846) calc(1px + (var(--sq) - 1px) * 0.0671), calc(100% - 1px - (var(--sq) - 1px) * 0.1542) calc(1px + (var(--sq) - 1px) * 0.1542), calc(100% - 1px - (var(--sq) - 1px) * 0.0671) calc(1px + (var(--sq) - 1px) * 0.2846), calc(100% - 1px - (var(--sq) - 1px) * 0.0166) calc(1px + (var(--sq) - 1px) * 0.4795), calc(100% - 1px) calc(1px + (var(--sq) - 1px) * 1), calc(100% - 1px) calc(100% - 1px - (var(--sq) - 1px) * 1), calc(100% - 1px - (var(--sq) - 1px) * 0.0166) calc(100% - 1px - (var(--sq) - 1px) * 0.4795), calc(100% - 1px - (var(--sq) - 1px) * 0.0671) calc(100% - 1px - (var(--sq) - 1px) * 0.2846), calc(100% - 1px - (var(--sq) - 1px) * 0.1542) calc(100% - 1px - (var(--sq) - 1px) * 0.1542), calc(100% - 1px - (var(--sq) - 1px) * 0.2846) calc(100% - 1px - (var(--sq) - 1px) * 0.0671), calc(100% - 1px - (var(--sq) - 1px) * 0.4795) calc(100% - 1px - (var(--sq) - 1px) * 0.0166), calc(100% - 1px - (var(--sq) - 1px) * 1) calc(100% - 1px), calc(1px + (var(--sq) - 1px) * 1) calc(100% - 1px), calc(1px + (var(--sq) - 1px) * 0.4795) calc(100% - 1px - (var(--sq) - 1px) * 0.0166), calc(1px + (var(--sq) - 1px) * 0.2846) calc(100% - 1px - (var(--sq) - 1px) * 0.0671), calc(1px + (var(--sq) - 1px) * 0.1542) calc(100% - 1px - (var(--sq) - 1px) * 0.1542), calc(1px + (var(--sq) - 1px) * 0.0671) calc(100% - 1px - (var(--sq) - 1px) * 0.2846), calc(1px + (var(--sq) - 1px) * 0.0166) calc(100% - 1px - (var(--sq) - 1px) * 0.4795), 1px calc(100% - 1px - (var(--sq) - 1px) * 1), 1px calc(1px + (var(--sq) - 1px) * 1));
+    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0129) calc(var(--sq) * 0.6636), calc(var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(100% - var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(100% - var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(100% - var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(100% - var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(100% - var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(100% - var(--sq) * 0.0129) calc(var(--sq) * 0.6636), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), calc(100% - var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(100% - var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(100% - var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(100% - var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(100% - var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(100% - var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 1px calc(1px + (var(--sq) - 1px) * 1), calc(1px + (var(--sq) - 1px) * 0.0129) calc(1px + (var(--sq) - 1px) * 0.6636), calc(1px + (var(--sq) - 1px) * 0.0514) calc(1px + (var(--sq) - 1px) * 0.4729), calc(1px + (var(--sq) - 1px) * 0.1158) calc(1px + (var(--sq) - 1px) * 0.3242), calc(1px + (var(--sq) - 1px) * 0.2063) calc(1px + (var(--sq) - 1px) * 0.2063), calc(1px + (var(--sq) - 1px) * 0.3242) calc(1px + (var(--sq) - 1px) * 0.1158), calc(1px + (var(--sq) - 1px) * 0.4729) calc(1px + (var(--sq) - 1px) * 0.0514), calc(1px + (var(--sq) - 1px) * 0.6636) calc(1px + (var(--sq) - 1px) * 0.0129), calc(1px + (var(--sq) - 1px) * 1) 1px, calc(100% - 1px - (var(--sq) - 1px) * 1) 1px, calc(100% - 1px - (var(--sq) - 1px) * 0.6636) calc(1px + (var(--sq) - 1px) * 0.0129), calc(100% - 1px - (var(--sq) - 1px) * 0.4729) calc(1px + (var(--sq) - 1px) * 0.0514), calc(100% - 1px - (var(--sq) - 1px) * 0.3242) calc(1px + (var(--sq) - 1px) * 0.1158), calc(100% - 1px - (var(--sq) - 1px) * 0.2063) calc(1px + (var(--sq) - 1px) * 0.2063), calc(100% - 1px - (var(--sq) - 1px) * 0.1158) calc(1px + (var(--sq) - 1px) * 0.3242), calc(100% - 1px - (var(--sq) - 1px) * 0.0514) calc(1px + (var(--sq) - 1px) * 0.4729), calc(100% - 1px - (var(--sq) - 1px) * 0.0129) calc(1px + (var(--sq) - 1px) * 0.6636), calc(100% - 1px) calc(1px + (var(--sq) - 1px) * 1), calc(100% - 1px) calc(100% - 1px - (var(--sq) - 1px) * 1), calc(100% - 1px - (var(--sq) - 1px) * 0.0129) calc(100% - 1px - (var(--sq) - 1px) * 0.6636), calc(100% - 1px - (var(--sq) - 1px) * 0.0514) calc(100% - 1px - (var(--sq) - 1px) * 0.4729), calc(100% - 1px - (var(--sq) - 1px) * 0.1158) calc(100% - 1px - (var(--sq) - 1px) * 0.3242), calc(100% - 1px - (var(--sq) - 1px) * 0.2063) calc(100% - 1px - (var(--sq) - 1px) * 0.2063), calc(100% - 1px - (var(--sq) - 1px) * 0.3242) calc(100% - 1px - (var(--sq) - 1px) * 0.1158), calc(100% - 1px - (var(--sq) - 1px) * 0.4729) calc(100% - 1px - (var(--sq) - 1px) * 0.0514), calc(100% - 1px - (var(--sq) - 1px) * 0.6636) calc(100% - 1px - (var(--sq) - 1px) * 0.0129), calc(100% - 1px - (var(--sq) - 1px) * 1) calc(100% - 1px), calc(1px + (var(--sq) - 1px) * 1) calc(100% - 1px), calc(1px + (var(--sq) - 1px) * 0.6636) calc(100% - 1px - (var(--sq) - 1px) * 0.0129), calc(1px + (var(--sq) - 1px) * 0.4729) calc(100% - 1px - (var(--sq) - 1px) * 0.0514), calc(1px + (var(--sq) - 1px) * 0.3242) calc(100% - 1px - (var(--sq) - 1px) * 0.1158), calc(1px + (var(--sq) - 1px) * 0.2063) calc(100% - 1px - (var(--sq) - 1px) * 0.2063), calc(1px + (var(--sq) - 1px) * 0.1158) calc(100% - 1px - (var(--sq) - 1px) * 0.3242), calc(1px + (var(--sq) - 1px) * 0.0514) calc(100% - 1px - (var(--sq) - 1px) * 0.4729), calc(1px + (var(--sq) - 1px) * 0.0129) calc(100% - 1px - (var(--sq) - 1px) * 0.6636), 1px calc(100% - 1px - (var(--sq) - 1px) * 1), 1px calc(1px + (var(--sq) - 1px) * 1));
   }
-  .option::after, .review-option::after {
+  .option::after, .review-option::after, .answer-input::after,
+  .match-row::after {
     inset: -1.5px;
-    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 1.5px calc(1.5px + (var(--sq) - 1.5px) * 1), calc(1.5px + (var(--sq) - 1.5px) * 0.0166) calc(1.5px + (var(--sq) - 1.5px) * 0.4795), calc(1.5px + (var(--sq) - 1.5px) * 0.0671) calc(1.5px + (var(--sq) - 1.5px) * 0.2846), calc(1.5px + (var(--sq) - 1.5px) * 0.1542) calc(1.5px + (var(--sq) - 1.5px) * 0.1542), calc(1.5px + (var(--sq) - 1.5px) * 0.2846) calc(1.5px + (var(--sq) - 1.5px) * 0.0671), calc(1.5px + (var(--sq) - 1.5px) * 0.4795) calc(1.5px + (var(--sq) - 1.5px) * 0.0166), calc(1.5px + (var(--sq) - 1.5px) * 1) 1.5px, calc(100% - 1.5px - (var(--sq) - 1.5px) * 1) 1.5px, calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795) calc(1.5px + (var(--sq) - 1.5px) * 0.0166), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846) calc(1.5px + (var(--sq) - 1.5px) * 0.0671), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542) calc(1.5px + (var(--sq) - 1.5px) * 0.1542), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671) calc(1.5px + (var(--sq) - 1.5px) * 0.2846), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166) calc(1.5px + (var(--sq) - 1.5px) * 0.4795), calc(100% - 1.5px) calc(1.5px + (var(--sq) - 1.5px) * 1), calc(100% - 1.5px) calc(100% - 1.5px - (var(--sq) - 1.5px) * 1), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166), calc(100% - 1.5px - (var(--sq) - 1.5px) * 1) calc(100% - 1.5px), calc(1.5px + (var(--sq) - 1.5px) * 1) calc(100% - 1.5px), calc(1.5px + (var(--sq) - 1.5px) * 0.4795) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166), calc(1.5px + (var(--sq) - 1.5px) * 0.2846) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671), calc(1.5px + (var(--sq) - 1.5px) * 0.1542) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542), calc(1.5px + (var(--sq) - 1.5px) * 0.0671) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846), calc(1.5px + (var(--sq) - 1.5px) * 0.0166) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795), 1.5px calc(100% - 1.5px - (var(--sq) - 1.5px) * 1), 1.5px calc(1.5px + (var(--sq) - 1.5px) * 1));
-  }
-
-  /* --- цвет кольца ------------------------------------------------------
-     Собран здесь, а не размазан по правилам компонентов: так весь эффект
-     живёт в одном месте и снимается одним куском. Порядок важен — состояния
-     идут после базовых. */
-  .card, .rows, .flashcard, .means-quote, .pick-item, .btn--ghost,
-  .option                        { --bc: var(--border); }
-  .tile, .score-card             { --bc: var(--chrome-panel-border); }
-  .stat, .review-option          { --bc: var(--border-soft); }
-  .btn--danger                   { --bc: var(--red-border); }
-  .btn[disabled]                 { --bc: transparent; }
-  .tile--green                   { --bc: var(--green-border); }
-  .tile--red                     { --bc: var(--red-border); }
-  .score-card--accent            { --bc: var(--accent-border); }
-  .option.is-picked              { --bc: var(--accent); }
-  .option.is-correct,
-  .review-option.is-correct      { --bc: var(--green-border); }
-  .option.is-wrong,
-  .review-option.is-yours        { --bc: var(--red-border); }
-
-  /* --- тень --------------------------------------------------------------
-     box-shadow при обрезке пропадает целиком, drop-shadow строится по альфе и
-     повторяет контур. Значения те же, что в --shadow-lift. */
-  .dialog, .toast {
-    box-shadow: none;
-    filter: drop-shadow(0 8px 28px oklch(0.35 0.03 45 / 0.12));
-  }
-
-  /* --- вторая волна ------------------------------------------------------
-     Первый заход накрыл главные компоненты, но с дугой осталось два десятка
-     блоков — и на экране это читалось как разнобой: карточки главной уже с
-     новым углом, а «Продолжить» под ними со старым. Здесь добираем остальное:
-     тренажёр, разбор ошибок, статистика, шпаргалки, карточки слов, №22. */
-  .resume, .count, .verdict, .mistake-row, .banner, .answer-line, .nav-cell,
-  .filter, .filter__input, .summary, .stat-row, .history-row, .deck-stat,
-  .word-row, .sheet-row, .md-note, .empty__action, .error__action,
-  .answer-input, .match-row, .match-pick, .means-group {
-    border-radius: 0;
-    clip-path: polygon(0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1));
-  }
-
-  .nav-cell, .filter__input, .md-note, .match-pick        { --sq: 14px; }
-  .count, .verdict, .mistake-row, .banner, .answer-line,
-  .stat-row, .history-row, .deck-stat, .word-row, .sheet-row,
-  .empty__action, .error__action, .answer-input, .match-row,
-  .means-group                                            { --sq: 17px; }
-  .resume, .filter, .summary                              { --sq: 22px; }
-
-  .resume::after, .count::after, .mistake-row::after, .nav-cell::after,
-  .filter::after, .filter__input::after, .summary::after, .stat-row::after,
-  .history-row::after, .deck-stat::after, .word-row::after, .sheet-row::after,
-  .match-pick::after, .means-group::after,
-  .answer-input::after, .match-row::after {
-    content: '';
-    position: absolute;
-    pointer-events: none;
-    background: var(--bc, var(--border));
-  }
-  .resume, .count, .mistake-row, .nav-cell, .filter, .filter__input, .summary,
-  .stat-row, .history-row, .deck-stat, .word-row, .sheet-row, .match-pick,
-  .means-group, .answer-input, .match-row { position: relative; }
-
-  .resume::after, .count::after, .mistake-row::after, .nav-cell::after,
-  .filter::after, .filter__input::after, .summary::after, .stat-row::after,
-  .history-row::after, .deck-stat::after, .word-row::after, .sheet-row::after,
-  .match-pick::after, .means-group::after {
-    inset: -1px;
-    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 1px calc(1px + (var(--sq) - 1px) * 1), calc(1px + (var(--sq) - 1px) * 0.0166) calc(1px + (var(--sq) - 1px) * 0.4795), calc(1px + (var(--sq) - 1px) * 0.0671) calc(1px + (var(--sq) - 1px) * 0.2846), calc(1px + (var(--sq) - 1px) * 0.1542) calc(1px + (var(--sq) - 1px) * 0.1542), calc(1px + (var(--sq) - 1px) * 0.2846) calc(1px + (var(--sq) - 1px) * 0.0671), calc(1px + (var(--sq) - 1px) * 0.4795) calc(1px + (var(--sq) - 1px) * 0.0166), calc(1px + (var(--sq) - 1px) * 1) 1px, calc(100% - 1px - (var(--sq) - 1px) * 1) 1px, calc(100% - 1px - (var(--sq) - 1px) * 0.4795) calc(1px + (var(--sq) - 1px) * 0.0166), calc(100% - 1px - (var(--sq) - 1px) * 0.2846) calc(1px + (var(--sq) - 1px) * 0.0671), calc(100% - 1px - (var(--sq) - 1px) * 0.1542) calc(1px + (var(--sq) - 1px) * 0.1542), calc(100% - 1px - (var(--sq) - 1px) * 0.0671) calc(1px + (var(--sq) - 1px) * 0.2846), calc(100% - 1px - (var(--sq) - 1px) * 0.0166) calc(1px + (var(--sq) - 1px) * 0.4795), calc(100% - 1px) calc(1px + (var(--sq) - 1px) * 1), calc(100% - 1px) calc(100% - 1px - (var(--sq) - 1px) * 1), calc(100% - 1px - (var(--sq) - 1px) * 0.0166) calc(100% - 1px - (var(--sq) - 1px) * 0.4795), calc(100% - 1px - (var(--sq) - 1px) * 0.0671) calc(100% - 1px - (var(--sq) - 1px) * 0.2846), calc(100% - 1px - (var(--sq) - 1px) * 0.1542) calc(100% - 1px - (var(--sq) - 1px) * 0.1542), calc(100% - 1px - (var(--sq) - 1px) * 0.2846) calc(100% - 1px - (var(--sq) - 1px) * 0.0671), calc(100% - 1px - (var(--sq) - 1px) * 0.4795) calc(100% - 1px - (var(--sq) - 1px) * 0.0166), calc(100% - 1px - (var(--sq) - 1px) * 1) calc(100% - 1px), calc(1px + (var(--sq) - 1px) * 1) calc(100% - 1px), calc(1px + (var(--sq) - 1px) * 0.4795) calc(100% - 1px - (var(--sq) - 1px) * 0.0166), calc(1px + (var(--sq) - 1px) * 0.2846) calc(100% - 1px - (var(--sq) - 1px) * 0.0671), calc(1px + (var(--sq) - 1px) * 0.1542) calc(100% - 1px - (var(--sq) - 1px) * 0.1542), calc(1px + (var(--sq) - 1px) * 0.0671) calc(100% - 1px - (var(--sq) - 1px) * 0.2846), calc(1px + (var(--sq) - 1px) * 0.0166) calc(100% - 1px - (var(--sq) - 1px) * 0.4795), 1px calc(100% - 1px - (var(--sq) - 1px) * 1), 1px calc(1px + (var(--sq) - 1px) * 1));
-  }
-  .answer-input::after, .match-row::after {
-    inset: -1.5px;
-    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 1.5px calc(1.5px + (var(--sq) - 1.5px) * 1), calc(1.5px + (var(--sq) - 1.5px) * 0.0166) calc(1.5px + (var(--sq) - 1.5px) * 0.4795), calc(1.5px + (var(--sq) - 1.5px) * 0.0671) calc(1.5px + (var(--sq) - 1.5px) * 0.2846), calc(1.5px + (var(--sq) - 1.5px) * 0.1542) calc(1.5px + (var(--sq) - 1.5px) * 0.1542), calc(1.5px + (var(--sq) - 1.5px) * 0.2846) calc(1.5px + (var(--sq) - 1.5px) * 0.0671), calc(1.5px + (var(--sq) - 1.5px) * 0.4795) calc(1.5px + (var(--sq) - 1.5px) * 0.0166), calc(1.5px + (var(--sq) - 1.5px) * 1) 1.5px, calc(100% - 1.5px - (var(--sq) - 1.5px) * 1) 1.5px, calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795) calc(1.5px + (var(--sq) - 1.5px) * 0.0166), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846) calc(1.5px + (var(--sq) - 1.5px) * 0.0671), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542) calc(1.5px + (var(--sq) - 1.5px) * 0.1542), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671) calc(1.5px + (var(--sq) - 1.5px) * 0.2846), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166) calc(1.5px + (var(--sq) - 1.5px) * 0.4795), calc(100% - 1.5px) calc(1.5px + (var(--sq) - 1.5px) * 1), calc(100% - 1.5px) calc(100% - 1.5px - (var(--sq) - 1.5px) * 1), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166), calc(100% - 1.5px - (var(--sq) - 1.5px) * 1) calc(100% - 1.5px), calc(1.5px + (var(--sq) - 1.5px) * 1) calc(100% - 1.5px), calc(1.5px + (var(--sq) - 1.5px) * 0.4795) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166), calc(1.5px + (var(--sq) - 1.5px) * 0.2846) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671), calc(1.5px + (var(--sq) - 1.5px) * 0.1542) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542), calc(1.5px + (var(--sq) - 1.5px) * 0.0671) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846), calc(1.5px + (var(--sq) - 1.5px) * 0.0166) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795), 1.5px calc(100% - 1.5px - (var(--sq) - 1.5px) * 1), 1.5px calc(1.5px + (var(--sq) - 1.5px) * 1));
+    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0129) calc(var(--sq) * 0.6636), calc(var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(100% - var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(100% - var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(100% - var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(100% - var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(100% - var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(100% - var(--sq) * 0.0129) calc(var(--sq) * 0.6636), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), calc(100% - var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(100% - var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(100% - var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(100% - var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(100% - var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(100% - var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 1.5px calc(1.5px + (var(--sq) - 1.5px) * 1), calc(1.5px + (var(--sq) - 1.5px) * 0.0129) calc(1.5px + (var(--sq) - 1.5px) * 0.6636), calc(1.5px + (var(--sq) - 1.5px) * 0.0514) calc(1.5px + (var(--sq) - 1.5px) * 0.4729), calc(1.5px + (var(--sq) - 1.5px) * 0.1158) calc(1.5px + (var(--sq) - 1.5px) * 0.3242), calc(1.5px + (var(--sq) - 1.5px) * 0.2063) calc(1.5px + (var(--sq) - 1.5px) * 0.2063), calc(1.5px + (var(--sq) - 1.5px) * 0.3242) calc(1.5px + (var(--sq) - 1.5px) * 0.1158), calc(1.5px + (var(--sq) - 1.5px) * 0.4729) calc(1.5px + (var(--sq) - 1.5px) * 0.0514), calc(1.5px + (var(--sq) - 1.5px) * 0.6636) calc(1.5px + (var(--sq) - 1.5px) * 0.0129), calc(1.5px + (var(--sq) - 1.5px) * 1) 1.5px, calc(100% - 1.5px - (var(--sq) - 1.5px) * 1) 1.5px, calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.6636) calc(1.5px + (var(--sq) - 1.5px) * 0.0129), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4729) calc(1.5px + (var(--sq) - 1.5px) * 0.0514), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.3242) calc(1.5px + (var(--sq) - 1.5px) * 0.1158), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2063) calc(1.5px + (var(--sq) - 1.5px) * 0.2063), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1158) calc(1.5px + (var(--sq) - 1.5px) * 0.3242), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0514) calc(1.5px + (var(--sq) - 1.5px) * 0.4729), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0129) calc(1.5px + (var(--sq) - 1.5px) * 0.6636), calc(100% - 1.5px) calc(1.5px + (var(--sq) - 1.5px) * 1), calc(100% - 1.5px) calc(100% - 1.5px - (var(--sq) - 1.5px) * 1), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0129) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.6636), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0514) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4729), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1158) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.3242), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2063) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2063), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.3242) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1158), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4729) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0514), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.6636) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0129), calc(100% - 1.5px - (var(--sq) - 1.5px) * 1) calc(100% - 1.5px), calc(1.5px + (var(--sq) - 1.5px) * 1) calc(100% - 1.5px), calc(1.5px + (var(--sq) - 1.5px) * 0.6636) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0129), calc(1.5px + (var(--sq) - 1.5px) * 0.4729) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0514), calc(1.5px + (var(--sq) - 1.5px) * 0.3242) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1158), calc(1.5px + (var(--sq) - 1.5px) * 0.2063) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2063), calc(1.5px + (var(--sq) - 1.5px) * 0.1158) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.3242), calc(1.5px + (var(--sq) - 1.5px) * 0.0514) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4729), calc(1.5px + (var(--sq) - 1.5px) * 0.0129) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.6636), 1.5px calc(100% - 1.5px - (var(--sq) - 1.5px) * 1), 1.5px calc(1.5px + (var(--sq) - 1.5px) * 1));
   }
   /* Текущая клетка навигатора обведена вдвое толще — своё кольцо. */
   .nav-cell.is-current::after {
     inset: -2px;
-    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 2px calc(2px + (var(--sq) - 2px) * 1), calc(2px + (var(--sq) - 2px) * 0.0166) calc(2px + (var(--sq) - 2px) * 0.4795), calc(2px + (var(--sq) - 2px) * 0.0671) calc(2px + (var(--sq) - 2px) * 0.2846), calc(2px + (var(--sq) - 2px) * 0.1542) calc(2px + (var(--sq) - 2px) * 0.1542), calc(2px + (var(--sq) - 2px) * 0.2846) calc(2px + (var(--sq) - 2px) * 0.0671), calc(2px + (var(--sq) - 2px) * 0.4795) calc(2px + (var(--sq) - 2px) * 0.0166), calc(2px + (var(--sq) - 2px) * 1) 2px, calc(100% - 2px - (var(--sq) - 2px) * 1) 2px, calc(100% - 2px - (var(--sq) - 2px) * 0.4795) calc(2px + (var(--sq) - 2px) * 0.0166), calc(100% - 2px - (var(--sq) - 2px) * 0.2846) calc(2px + (var(--sq) - 2px) * 0.0671), calc(100% - 2px - (var(--sq) - 2px) * 0.1542) calc(2px + (var(--sq) - 2px) * 0.1542), calc(100% - 2px - (var(--sq) - 2px) * 0.0671) calc(2px + (var(--sq) - 2px) * 0.2846), calc(100% - 2px - (var(--sq) - 2px) * 0.0166) calc(2px + (var(--sq) - 2px) * 0.4795), calc(100% - 2px) calc(2px + (var(--sq) - 2px) * 1), calc(100% - 2px) calc(100% - 2px - (var(--sq) - 2px) * 1), calc(100% - 2px - (var(--sq) - 2px) * 0.0166) calc(100% - 2px - (var(--sq) - 2px) * 0.4795), calc(100% - 2px - (var(--sq) - 2px) * 0.0671) calc(100% - 2px - (var(--sq) - 2px) * 0.2846), calc(100% - 2px - (var(--sq) - 2px) * 0.1542) calc(100% - 2px - (var(--sq) - 2px) * 0.1542), calc(100% - 2px - (var(--sq) - 2px) * 0.2846) calc(100% - 2px - (var(--sq) - 2px) * 0.0671), calc(100% - 2px - (var(--sq) - 2px) * 0.4795) calc(100% - 2px - (var(--sq) - 2px) * 0.0166), calc(100% - 2px - (var(--sq) - 2px) * 1) calc(100% - 2px), calc(2px + (var(--sq) - 2px) * 1) calc(100% - 2px), calc(2px + (var(--sq) - 2px) * 0.4795) calc(100% - 2px - (var(--sq) - 2px) * 0.0166), calc(2px + (var(--sq) - 2px) * 0.2846) calc(100% - 2px - (var(--sq) - 2px) * 0.0671), calc(2px + (var(--sq) - 2px) * 0.1542) calc(100% - 2px - (var(--sq) - 2px) * 0.1542), calc(2px + (var(--sq) - 2px) * 0.0671) calc(100% - 2px - (var(--sq) - 2px) * 0.2846), calc(2px + (var(--sq) - 2px) * 0.0166) calc(100% - 2px - (var(--sq) - 2px) * 0.4795), 2px calc(100% - 2px - (var(--sq) - 2px) * 1), 2px calc(2px + (var(--sq) - 2px) * 1));
+    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0129) calc(var(--sq) * 0.6636), calc(var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(100% - var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(100% - var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(100% - var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(100% - var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(100% - var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(100% - var(--sq) * 0.0129) calc(var(--sq) * 0.6636), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), calc(100% - var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(100% - var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(100% - var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(100% - var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(100% - var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(100% - var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 2px calc(2px + (var(--sq) - 2px) * 1), calc(2px + (var(--sq) - 2px) * 0.0129) calc(2px + (var(--sq) - 2px) * 0.6636), calc(2px + (var(--sq) - 2px) * 0.0514) calc(2px + (var(--sq) - 2px) * 0.4729), calc(2px + (var(--sq) - 2px) * 0.1158) calc(2px + (var(--sq) - 2px) * 0.3242), calc(2px + (var(--sq) - 2px) * 0.2063) calc(2px + (var(--sq) - 2px) * 0.2063), calc(2px + (var(--sq) - 2px) * 0.3242) calc(2px + (var(--sq) - 2px) * 0.1158), calc(2px + (var(--sq) - 2px) * 0.4729) calc(2px + (var(--sq) - 2px) * 0.0514), calc(2px + (var(--sq) - 2px) * 0.6636) calc(2px + (var(--sq) - 2px) * 0.0129), calc(2px + (var(--sq) - 2px) * 1) 2px, calc(100% - 2px - (var(--sq) - 2px) * 1) 2px, calc(100% - 2px - (var(--sq) - 2px) * 0.6636) calc(2px + (var(--sq) - 2px) * 0.0129), calc(100% - 2px - (var(--sq) - 2px) * 0.4729) calc(2px + (var(--sq) - 2px) * 0.0514), calc(100% - 2px - (var(--sq) - 2px) * 0.3242) calc(2px + (var(--sq) - 2px) * 0.1158), calc(100% - 2px - (var(--sq) - 2px) * 0.2063) calc(2px + (var(--sq) - 2px) * 0.2063), calc(100% - 2px - (var(--sq) - 2px) * 0.1158) calc(2px + (var(--sq) - 2px) * 0.3242), calc(100% - 2px - (var(--sq) - 2px) * 0.0514) calc(2px + (var(--sq) - 2px) * 0.4729), calc(100% - 2px - (var(--sq) - 2px) * 0.0129) calc(2px + (var(--sq) - 2px) * 0.6636), calc(100% - 2px) calc(2px + (var(--sq) - 2px) * 1), calc(100% - 2px) calc(100% - 2px - (var(--sq) - 2px) * 1), calc(100% - 2px - (var(--sq) - 2px) * 0.0129) calc(100% - 2px - (var(--sq) - 2px) * 0.6636), calc(100% - 2px - (var(--sq) - 2px) * 0.0514) calc(100% - 2px - (var(--sq) - 2px) * 0.4729), calc(100% - 2px - (var(--sq) - 2px) * 0.1158) calc(100% - 2px - (var(--sq) - 2px) * 0.3242), calc(100% - 2px - (var(--sq) - 2px) * 0.2063) calc(100% - 2px - (var(--sq) - 2px) * 0.2063), calc(100% - 2px - (var(--sq) - 2px) * 0.3242) calc(100% - 2px - (var(--sq) - 2px) * 0.1158), calc(100% - 2px - (var(--sq) - 2px) * 0.4729) calc(100% - 2px - (var(--sq) - 2px) * 0.0514), calc(100% - 2px - (var(--sq) - 2px) * 0.6636) calc(100% - 2px - (var(--sq) - 2px) * 0.0129), calc(100% - 2px - (var(--sq) - 2px) * 1) calc(100% - 2px), calc(2px + (var(--sq) - 2px) * 1) calc(100% - 2px), calc(2px + (var(--sq) - 2px) * 0.6636) calc(100% - 2px - (var(--sq) - 2px) * 0.0129), calc(2px + (var(--sq) - 2px) * 0.4729) calc(100% - 2px - (var(--sq) - 2px) * 0.0514), calc(2px + (var(--sq) - 2px) * 0.3242) calc(100% - 2px - (var(--sq) - 2px) * 0.1158), calc(2px + (var(--sq) - 2px) * 0.2063) calc(100% - 2px - (var(--sq) - 2px) * 0.2063), calc(2px + (var(--sq) - 2px) * 0.1158) calc(100% - 2px - (var(--sq) - 2px) * 0.3242), calc(2px + (var(--sq) - 2px) * 0.0514) calc(100% - 2px - (var(--sq) - 2px) * 0.4729), calc(2px + (var(--sq) - 2px) * 0.0129) calc(100% - 2px - (var(--sq) - 2px) * 0.6636), 2px calc(100% - 2px - (var(--sq) - 2px) * 1), 2px calc(2px + (var(--sq) - 2px) * 1));
   }
 
+  /* --- цвет кольца: тоже одним списком ----------------------------------- */
+  .card, .rows, .flashcard, .means-quote, .pick-item, .btn--ghost, .option,
   .count, .filter__input, .nav-cell, .match-pick, .answer-input,
-  .match-row                     { --bc: var(--border); }
-  .mistake-row, .filter, .stat-row, .history-row, .word-row,
-  .sheet-row                     { --bc: var(--border-soft); }
-  .summary, .deck-stat, .means-group { --bc: var(--chrome-panel-border); }
-  .resume                        { --bc: var(--accent-border); }
-  .nav-cell.is-answered,
-  .nav-cell.is-correct,
-  .answer-input.is-correct,
-  .match-row.is-correct          { --bc: var(--green-border); }
-  .nav-cell.is-wrong,
-  .answer-input.is-wrong,
-  .match-row.is-wrong            { --bc: var(--red-border); }
-  .nav-cell.is-current,
-  .match-pick.is-picked          { --bc: var(--accent); }
+  .match-row                          { --bc: var(--border); }
+  .stat, .review-option, .mistake-row, .filter, .stat-row, .history-row,
+  .word-row, .sheet-row               { --bc: var(--border-soft); }
+  .tile, .score-card, .summary, .deck-stat, .means-group
+                                      { --bc: var(--chrome-panel-border); }
+  .resume                             { --bc: var(--accent-border); }
+  .btn--danger                        { --bc: var(--red-border); }
+  .btn[disabled]                      { --bc: transparent; }
+  .tile--green                        { --bc: var(--green-border); }
+  .tile--red                          { --bc: var(--red-border); }
+  .score-card--accent                 { --bc: var(--accent-border); }
+  .option.is-picked, .match-pick.is-picked,
+  .nav-cell.is-current                { --bc: var(--accent); }
+  .option.is-correct, .review-option.is-correct, .nav-cell.is-answered,
+  .nav-cell.is-correct, .answer-input.is-correct,
+  .match-row.is-correct               { --bc: var(--green-border); }
+  .option.is-wrong, .review-option.is-yours, .nav-cell.is-wrong,
+  .answer-input.is-wrong, .match-row.is-wrong
+                                      { --bc: var(--red-border); }
 
+  /* --- тень --------------------------------------------------------------
+     box-shadow при обрезке пропадает целиком, drop-shadow строится по альфе и
+     повторяет контур. Значение то же, что в --shadow-lift. */
+  .dialog, .toast {
+    box-shadow: none;
+    filter: drop-shadow(0 8px 28px oklch(0.35 0.03 45 / 0.12));
+  }
 }
