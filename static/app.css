@@ -1753,56 +1753,119 @@ button {
 }
 
 
-/* --- углы по суперэллипсу («как у Apple») --------------------------------
+/* ==========================================================================
+   Углы по суперэллипсу («как у Apple»)
+   ==========================================================================
    Обычный border-radius ведёт угол дугой окружности: дуга упирается в прямую
    сторону под изломом, и угол выглядит надутым. У Apple угол идёт по
-   суперэллипсу — начинается раньше и вливается в сторону без стыка.
+   суперэллипсу — начинается раньше и вливается в сторону без стыка. Показатель
+   4.14, шесть отрезков на угол.
 
    Свойства corner-shape в этом WebView нет (проверено на устройстве), поэтому
    форму рисуем обрезкой. Хитрость в том, КАК записан многоугольник: координаты
    угла линейны по радиусу, поэтому идут в пикселях через calc и НЕ ТЯНУТСЯ, а
    стороны идут в процентах и тянутся свободно. Одна запись работает на элементе
-   любого размера и любой пропорции — ни JS, ни пересчёта на resize.
+   любого размера и любой пропорции — ни JS, ни пересчёта на resize. Радиус
+   задаёт --sq на самом элементе.
 
-   28 точек, показатель суперэллипса 5. Радиус задаёт --sq на самом элементе.
-
-   Почему это правило, а НЕ токен в :root: подстановка var() происходит там, где
+   Почему правило, а не токен в :root: подстановка var() происходит там, где
    значение объявлено. На корне переменной --sq нет, поэтому токен схлопывался
-   в пустоту и наследовался уже пустым. Многоугольник обязан стоять в том же
-   правиле, что и элемент, у которого задан --sq.
+   в пустоту и наследовался уже пустым.
 
-   Чего обрезка не умеет, и это надо помнить:
-   · рамку по прямым сторонам сохраняет, а вокруг угла срезает. Поэтому вешаем
-     только на сплошные заливки без border;
-   · box-shadow при обрезке исчезает совсем. Нужна тень — filter: drop-shadow;
-   · поверх border-radius бесполезна: суперэллипс ШИРЕ дуги, дуга целиком внутри
-     него, и клип ничего не отрезает. Радиус обязан быть нулевым, а форму задаёт
-     клип. Отсюда @supports: без поддержки обрезки радиус остаётся на месте,
-     иначе углы стали бы острыми — хуже, чем сейчас;
-   · линзе таббара и её слою НЕЛЬЗЯ: обрезка создаёт композитный слой, а WebKit
-     внутри такого слоя выбрасывает SVG-фильтр (ловушка №2).
+   Три вещи выяснены замером и стоили отдельного круга:
+   · обрезка поверх border-radius не делает НИЧЕГО: суперэллипс шире дуги, дуга
+     целиком внутри него. Радиус приходится занулять, а форму отдавать клипу —
+     значит без поддержки клипа углы стали бы острыми. Отсюда @supports;
+   · рамку обрезка сохраняет по прямым сторонам и срезает вокруг угла. Поэтому
+     рамка рисуется отдельным кольцом, см. ниже;
+   · box-shadow при обрезке исчезает совсем. Тень заменена на filter:
+     drop-shadow — он строится по альфе, то есть повторяет любой контур.
 
-   Первый шаг — только заливки без рамки и тени. Карточки с рамкой, кнопки с
-   рамкой и диалог с тенью ждут очереди: им нужен двойной слой и замена
-   box-shadow на filter: drop-shadow.
+   Линзе таббара и её слою обрезку вешать НЕЛЬЗЯ: она создаёт композитный слой,
+   а WebKit внутри такого слоя выбрасывает SVG-фильтр (ловушка №2). Таббар и так
+   капсула, а на капсуле дуга и суперэллипс неразличимы.
 
    Радиусы подняты примерно в 1.2 раза не для красоты: суперэллипс шире дуги, и
    при том же числе угол читается менее круглым, чем был. */
-@supports (clip-path: polygon(0px 0px, 1px 1px, 0px 1px)) {
-  .card__icon,
-  .empty__icon,
-  .task-row__num,
-  .match-option,
-  .q-passage,
-  .skeleton div {
+@supports (clip-path: polygon(evenodd, 0px 0px, 1px 1px, 0px 1px)) {
+
+  /* --- форма ------------------------------------------------------------ */
+  .card__icon, .empty__icon, .task-row__num, .match-option, .q-passage,
+  .skeleton div, .btn, .dialog, .toast,
+  .card, .rows, .flashcard, .means-quote, .pick-item, .tile, .score-card,
+  .stat, .option, .review-option {
     border-radius: 0;
-    clip-path: polygon(0px calc(var(--sq) * 1), calc(var(--sq) * 0.0138) calc(var(--sq) * 0.4176), calc(var(--sq) * 0.0559) calc(var(--sq) * 0.2421), calc(var(--sq) * 0.1294) calc(var(--sq) * 0.1294), calc(var(--sq) * 0.2421) calc(var(--sq) * 0.0559), calc(var(--sq) * 0.4176) calc(var(--sq) * 0.0138), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4176) calc(var(--sq) * 0.0138), calc(100% - var(--sq) * 0.2421) calc(var(--sq) * 0.0559), calc(100% - var(--sq) * 0.1294) calc(var(--sq) * 0.1294), calc(100% - var(--sq) * 0.0559) calc(var(--sq) * 0.2421), calc(100% - var(--sq) * 0.0138) calc(var(--sq) * 0.4176), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0138) calc(100% - var(--sq) * 0.4176), calc(100% - var(--sq) * 0.0559) calc(100% - var(--sq) * 0.2421), calc(100% - var(--sq) * 0.1294) calc(100% - var(--sq) * 0.1294), calc(100% - var(--sq) * 0.2421) calc(100% - var(--sq) * 0.0559), calc(100% - var(--sq) * 0.4176) calc(100% - var(--sq) * 0.0138), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4176) calc(100% - var(--sq) * 0.0138), calc(var(--sq) * 0.2421) calc(100% - var(--sq) * 0.0559), calc(var(--sq) * 0.1294) calc(100% - var(--sq) * 0.1294), calc(var(--sq) * 0.0559) calc(100% - var(--sq) * 0.2421), calc(var(--sq) * 0.0138) calc(100% - var(--sq) * 0.4176), 0px calc(100% - var(--sq) * 1));
+    clip-path: polygon(0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1));
   }
 
-  .card__icon,
-  .empty__icon,
-  .task-row__num,
-  .match-option { --sq: 14px; }   /* было 12 */
-  .q-passage    { --sq: 17px; }   /* было 14 */
-  .skeleton div { --sq: 22px; }   /* было 18 */
+  /* --- радиусы ---------------------------------------------------------- */
+  .card__icon, .empty__icon, .task-row__num, .match-option { --sq: 14px; }
+  .btn, .toast, .q-passage, .pick-item, .tile, .score-card, .stat,
+  .option, .review-option                                   { --sq: 17px; }
+  .card, .rows, .skeleton div                               { --sq: 22px; }
+  .flashcard, .means-quote                                  { --sq: 24px; }
+  .dialog                                                   { --sq: 26px; }
+
+  /* --- рамка отдельным кольцом ------------------------------------------
+     Кольцо — один многоугольник из двух контуров с evenodd: внешний по
+     границе элемента, внутренний со сдвигом на толщину рамки. Оба контура
+     замыкаются ЯВНО, повтором первой точки: иначе между ними остаются два
+     соединительных отрезка вдоль левой кромки, evenodd считает их пересечения
+     и кольцо разрывается щелью ровно там.
+
+     Псевдоэлемент сдвинут наружу на толщину рамки: у абсолютного потомка
+     точкой отсчёта служит padding box, а накрыть надо border box. Настоящая
+     рамка элемента при этом остаётся на месте и ничего не портит — по прямым
+     сторонам кольцо ложится ровно на неё, а в углах, где обрезка её срезала,
+     кольцо рисует угол само. Поэтому существующие правила с border-color
+     переписывать не пришлось: цвет кольца берётся из --bc ниже. */
+  .card::after, .rows::after, .flashcard::after, .means-quote::after,
+  .pick-item::after, .tile::after, .score-card::after, .stat::after,
+  .btn--ghost::after, .btn--danger::after,
+  .option::after, .review-option::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    background: var(--bc, var(--border));
+  }
+  .card, .rows, .flashcard, .means-quote, .pick-item, .tile, .score-card,
+  .stat, .btn--ghost, .btn--danger, .option, .review-option { position: relative; }
+
+  .card::after, .rows::after, .flashcard::after, .means-quote::after,
+  .pick-item::after, .tile::after, .score-card::after, .stat::after,
+  .btn--ghost::after, .btn--danger::after {
+    inset: -1px;
+    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 1px calc(1px + (var(--sq) - 1px) * 1), calc(1px + (var(--sq) - 1px) * 0.0166) calc(1px + (var(--sq) - 1px) * 0.4795), calc(1px + (var(--sq) - 1px) * 0.0671) calc(1px + (var(--sq) - 1px) * 0.2846), calc(1px + (var(--sq) - 1px) * 0.1542) calc(1px + (var(--sq) - 1px) * 0.1542), calc(1px + (var(--sq) - 1px) * 0.2846) calc(1px + (var(--sq) - 1px) * 0.0671), calc(1px + (var(--sq) - 1px) * 0.4795) calc(1px + (var(--sq) - 1px) * 0.0166), calc(1px + (var(--sq) - 1px) * 1) 1px, calc(100% - 1px - (var(--sq) - 1px) * 1) 1px, calc(100% - 1px - (var(--sq) - 1px) * 0.4795) calc(1px + (var(--sq) - 1px) * 0.0166), calc(100% - 1px - (var(--sq) - 1px) * 0.2846) calc(1px + (var(--sq) - 1px) * 0.0671), calc(100% - 1px - (var(--sq) - 1px) * 0.1542) calc(1px + (var(--sq) - 1px) * 0.1542), calc(100% - 1px - (var(--sq) - 1px) * 0.0671) calc(1px + (var(--sq) - 1px) * 0.2846), calc(100% - 1px - (var(--sq) - 1px) * 0.0166) calc(1px + (var(--sq) - 1px) * 0.4795), calc(100% - 1px) calc(1px + (var(--sq) - 1px) * 1), calc(100% - 1px) calc(100% - 1px - (var(--sq) - 1px) * 1), calc(100% - 1px - (var(--sq) - 1px) * 0.0166) calc(100% - 1px - (var(--sq) - 1px) * 0.4795), calc(100% - 1px - (var(--sq) - 1px) * 0.0671) calc(100% - 1px - (var(--sq) - 1px) * 0.2846), calc(100% - 1px - (var(--sq) - 1px) * 0.1542) calc(100% - 1px - (var(--sq) - 1px) * 0.1542), calc(100% - 1px - (var(--sq) - 1px) * 0.2846) calc(100% - 1px - (var(--sq) - 1px) * 0.0671), calc(100% - 1px - (var(--sq) - 1px) * 0.4795) calc(100% - 1px - (var(--sq) - 1px) * 0.0166), calc(100% - 1px - (var(--sq) - 1px) * 1) calc(100% - 1px), calc(1px + (var(--sq) - 1px) * 1) calc(100% - 1px), calc(1px + (var(--sq) - 1px) * 0.4795) calc(100% - 1px - (var(--sq) - 1px) * 0.0166), calc(1px + (var(--sq) - 1px) * 0.2846) calc(100% - 1px - (var(--sq) - 1px) * 0.0671), calc(1px + (var(--sq) - 1px) * 0.1542) calc(100% - 1px - (var(--sq) - 1px) * 0.1542), calc(1px + (var(--sq) - 1px) * 0.0671) calc(100% - 1px - (var(--sq) - 1px) * 0.2846), calc(1px + (var(--sq) - 1px) * 0.0166) calc(100% - 1px - (var(--sq) - 1px) * 0.4795), 1px calc(100% - 1px - (var(--sq) - 1px) * 1), 1px calc(1px + (var(--sq) - 1px) * 1));
+  }
+  .option::after, .review-option::after {
+    inset: -1.5px;
+    clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0166) calc(var(--sq) * 0.4795), calc(var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.4795) calc(var(--sq) * 0.0166), calc(100% - var(--sq) * 0.2846) calc(var(--sq) * 0.0671), calc(100% - var(--sq) * 0.1542) calc(var(--sq) * 0.1542), calc(100% - var(--sq) * 0.0671) calc(var(--sq) * 0.2846), calc(100% - var(--sq) * 0.0166) calc(var(--sq) * 0.4795), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), calc(100% - var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(100% - var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(100% - var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(100% - var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.4795) calc(100% - var(--sq) * 0.0166), calc(var(--sq) * 0.2846) calc(100% - var(--sq) * 0.0671), calc(var(--sq) * 0.1542) calc(100% - var(--sq) * 0.1542), calc(var(--sq) * 0.0671) calc(100% - var(--sq) * 0.2846), calc(var(--sq) * 0.0166) calc(100% - var(--sq) * 0.4795), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 1.5px calc(1.5px + (var(--sq) - 1.5px) * 1), calc(1.5px + (var(--sq) - 1.5px) * 0.0166) calc(1.5px + (var(--sq) - 1.5px) * 0.4795), calc(1.5px + (var(--sq) - 1.5px) * 0.0671) calc(1.5px + (var(--sq) - 1.5px) * 0.2846), calc(1.5px + (var(--sq) - 1.5px) * 0.1542) calc(1.5px + (var(--sq) - 1.5px) * 0.1542), calc(1.5px + (var(--sq) - 1.5px) * 0.2846) calc(1.5px + (var(--sq) - 1.5px) * 0.0671), calc(1.5px + (var(--sq) - 1.5px) * 0.4795) calc(1.5px + (var(--sq) - 1.5px) * 0.0166), calc(1.5px + (var(--sq) - 1.5px) * 1) 1.5px, calc(100% - 1.5px - (var(--sq) - 1.5px) * 1) 1.5px, calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795) calc(1.5px + (var(--sq) - 1.5px) * 0.0166), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846) calc(1.5px + (var(--sq) - 1.5px) * 0.0671), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542) calc(1.5px + (var(--sq) - 1.5px) * 0.1542), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671) calc(1.5px + (var(--sq) - 1.5px) * 0.2846), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166) calc(1.5px + (var(--sq) - 1.5px) * 0.4795), calc(100% - 1.5px) calc(1.5px + (var(--sq) - 1.5px) * 1), calc(100% - 1.5px) calc(100% - 1.5px - (var(--sq) - 1.5px) * 1), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671), calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166), calc(100% - 1.5px - (var(--sq) - 1.5px) * 1) calc(100% - 1.5px), calc(1.5px + (var(--sq) - 1.5px) * 1) calc(100% - 1.5px), calc(1.5px + (var(--sq) - 1.5px) * 0.4795) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0166), calc(1.5px + (var(--sq) - 1.5px) * 0.2846) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.0671), calc(1.5px + (var(--sq) - 1.5px) * 0.1542) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.1542), calc(1.5px + (var(--sq) - 1.5px) * 0.0671) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.2846), calc(1.5px + (var(--sq) - 1.5px) * 0.0166) calc(100% - 1.5px - (var(--sq) - 1.5px) * 0.4795), 1.5px calc(100% - 1.5px - (var(--sq) - 1.5px) * 1), 1.5px calc(1.5px + (var(--sq) - 1.5px) * 1));
+  }
+
+  /* --- цвет кольца ------------------------------------------------------
+     Собран здесь, а не размазан по правилам компонентов: так весь эффект
+     живёт в одном месте и снимается одним куском. Порядок важен — состояния
+     идут после базовых. */
+  .card, .rows, .flashcard, .means-quote, .pick-item, .btn--ghost,
+  .option                        { --bc: var(--border); }
+  .tile, .score-card             { --bc: var(--chrome-panel-border); }
+  .stat, .review-option          { --bc: var(--border-soft); }
+  .btn--danger                   { --bc: var(--red-border); }
+  .btn[disabled]                 { --bc: transparent; }
+  .tile--green                   { --bc: var(--green-border); }
+  .tile--red                     { --bc: var(--red-border); }
+  .score-card--accent            { --bc: var(--accent-border); }
+  .option.is-picked              { --bc: var(--accent); }
+  .option.is-correct,
+  .review-option.is-correct      { --bc: var(--green-border); }
+  .option.is-wrong,
+  .review-option.is-yours        { --bc: var(--red-border); }
+
+  /* --- тень --------------------------------------------------------------
+     box-shadow при обрезке пропадает целиком, drop-shadow строится по альфе и
+     повторяет контур. Значения те же, что в --shadow-lift. */
+  .dialog, .toast {
+    box-shadow: none;
+    filter: drop-shadow(0 8px 28px oklch(0.35 0.03 45 / 0.12));
+  }
 }
