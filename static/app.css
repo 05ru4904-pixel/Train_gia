@@ -97,6 +97,13 @@
   --radius: 14px;       /* кнопки, строки списков, поля, плитки */
   --radius-sm: 12px;    /* мелкие плашки: плитки иконок, клетки, поля-мелочи */
   --radius-xs: 7px;     /* маркеры выбора и прочая мелочь внутри компонентов */
+  /* Шестая роль — КАПСУЛА (999px), и она не ступень шкалы, а отдельная форма.
+     Её получают удлинённые элементы управления: кнопки, счётчики подхода,
+     полосы прогресса, всплывающее сообщение, чипы. У Apple капсула строится
+     дугой окружности (в SwiftUI Capsule — отдельная фигура, не то же, что
+     RoundedRectangle со сглаженным углом), поэтому обрезка суперэллипса с них
+     СНЯТА: прямого участка у капсулы нет, вливаться кривой некуда, а клип
+     превратил бы её в скруглённый прямоугольник. */
   --pad: 16px;
 
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -667,7 +674,7 @@ button {
   display: block;
   width: 100%;
   padding: 15px;
-  border-radius: var(--radius);
+  border-radius: 999px;
   font-size: 16px;
   font-weight: 700;
   text-align: center;
@@ -747,14 +754,14 @@ button {
 /* --- прогресс ---------------------------------------------------------- */
 .bar {
   height: 5px;
-  border-radius: 3px;
+  border-radius: 999px;
   background: var(--track);
   overflow: hidden;
 }
 .bar--thick { height: 8px; border-radius: 4px; }
 .bar__fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: 999px;
   background: var(--accent);
   transition: width 0.3s ease;
 }
@@ -794,7 +801,7 @@ button {
 .count-grid { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .count {
   padding: 22px 0;
-  border-radius: var(--radius);
+  border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
   text-align: center;
@@ -1247,8 +1254,8 @@ button {
 .card__icon--cards i:nth-child(1) { left: 2px; top: 3px; transform: rotate(-8deg); opacity: 0.45; }
 .card__icon--cards i:nth-child(2) { left: 7px; top: 2px; }
 
-.deck-bar { margin-top: 20px; height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
-.deck-bar__fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.3s ease; }
+.deck-bar { margin-top: 20px; height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.deck-bar__fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.3s ease; }
 
 .deck-stats { margin-top: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .deck-stat {
@@ -1549,7 +1556,7 @@ button {
   margin-top: 20px;
   display: inline-block;
   padding: 12px 24px;
-  border-radius: var(--radius);
+  border-radius: 999px;
   background: var(--accent);
   color: var(--accent-on);
   font-size: 15px;
@@ -1575,7 +1582,7 @@ button {
   margin-top: 22px;
   display: inline-block;
   padding: 12px 28px;
-  border-radius: var(--radius);
+  border-radius: 999px;
   background: var(--accent);
   color: var(--accent-on);
   font-size: 15px;
@@ -1628,7 +1635,7 @@ button {
   bottom: calc(84px + var(--safe-bottom));
   z-index: 60;
   padding: 13px 16px;
-  border-radius: var(--radius);
+  border-radius: 999px;
   background: var(--ink-strong);
   color: var(--page);
   font-size: 14px;
@@ -1805,12 +1812,12 @@ button {
 
   /* --- форма: одна на всех ---------------------------------------------- */
   .card__icon, .empty__icon, .task-row__num, .match-option, .nav-cell,
-  .filter__input, .md-note, .match-pick, .btn, .toast, .q-passage,
-  .pick-item, .tile, .score-card, .stat, .option, .review-option, .count,
-  .verdict, .mistake-row, .banner, .answer-line, .stat-row, .history-row,
-  .deck-stat, .word-row, .sheet-row, .empty__action, .error__action,
-  .answer-input, .match-row, .means-group, .card, .rows, .skeleton div,
-  .resume, .filter, .summary, .flashcard, .means-quote, .dialog {
+  .filter__input, .md-note, .match-pick, .q-passage, .pick-item, .tile,
+  .score-card, .stat, .option, .review-option, .verdict, .mistake-row,
+  .banner, .answer-line, .stat-row, .history-row, .deck-stat, .word-row,
+  .sheet-row, .answer-input, .match-row, .means-group, .card, .rows,
+  .skeleton div, .resume, .filter, .summary, .flashcard, .means-quote,
+  .dialog {
     border-radius: 0;
     clip-path: polygon(0px calc(var(--sq) * 1), calc(var(--sq) * 0.0129) calc(var(--sq) * 0.6636), calc(var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(100% - var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(100% - var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(100% - var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(100% - var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(100% - var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(100% - var(--sq) * 0.0129) calc(var(--sq) * 0.6636), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), calc(100% - var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(100% - var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(100% - var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(100% - var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(100% - var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(100% - var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), 0px calc(100% - var(--sq) * 1));
   }
@@ -1819,10 +1826,10 @@ button {
   .card__icon, .empty__icon, .task-row__num, .match-option, .nav-cell,
   .filter__input, .md-note, .match-pick { --sq: var(--radius-sm); }
 
-  .btn, .toast, .q-passage, .pick-item, .tile, .score-card, .stat, .option,
-  .review-option, .count, .verdict, .mistake-row, .banner, .answer-line,
-  .stat-row, .history-row, .deck-stat, .word-row, .sheet-row,
-  .empty__action, .error__action, .answer-input, .match-row, .means-group { --sq: var(--radius); }
+  .q-passage, .pick-item, .tile, .score-card, .stat, .option,
+  .review-option, .verdict, .mistake-row, .banner, .answer-line, .stat-row,
+  .history-row, .deck-stat, .word-row, .sheet-row, .answer-input,
+  .match-row, .means-group { --sq: var(--radius); }
 
   .card, .rows, .skeleton div, .resume, .filter, .summary { --sq: var(--radius-card); }
 
@@ -1843,8 +1850,7 @@ button {
      собран отдельным списком ниже. */
   .card::after, .rows::after, .flashcard::after, .means-quote::after,
   .pick-item::after, .tile::after, .score-card::after, .stat::after,
-  .btn--ghost::after, .btn--danger::after, .resume::after, .count::after,
-  .mistake-row::after, .nav-cell::after, .filter::after,
+  .resume::after, .mistake-row::after, .nav-cell::after, .filter::after,
   .filter__input::after, .summary::after, .stat-row::after,
   .history-row::after, .deck-stat::after, .word-row::after,
   .sheet-row::after, .match-pick::after, .means-group::after,
@@ -1856,15 +1862,14 @@ button {
     background: var(--bc, var(--border));
   }
   .card, .rows, .flashcard, .means-quote, .pick-item, .tile, .score-card,
-  .stat, .btn--ghost, .btn--danger, .resume, .count, .mistake-row,
-  .nav-cell, .filter, .filter__input, .summary, .stat-row, .history-row,
-  .deck-stat, .word-row, .sheet-row, .match-pick, .means-group, .option,
-  .review-option, .answer-input, .match-row { position: relative; }
+  .stat, .resume, .mistake-row, .nav-cell, .filter, .filter__input,
+  .summary, .stat-row, .history-row, .deck-stat, .word-row, .sheet-row,
+  .match-pick, .means-group, .option, .review-option, .answer-input,
+  .match-row { position: relative; }
 
   .card::after, .rows::after, .flashcard::after, .means-quote::after,
   .pick-item::after, .tile::after, .score-card::after, .stat::after,
-  .btn--ghost::after, .btn--danger::after, .resume::after, .count::after,
-  .mistake-row::after, .nav-cell::after, .filter::after,
+  .resume::after, .mistake-row::after, .nav-cell::after, .filter::after,
   .filter__input::after, .summary::after, .stat-row::after,
   .history-row::after, .deck-stat::after, .word-row::after,
   .sheet-row::after, .match-pick::after, .means-group::after {
@@ -1883,16 +1888,14 @@ button {
   }
 
   /* --- цвет кольца: тоже одним списком ----------------------------------- */
-  .card, .rows, .flashcard, .means-quote, .pick-item, .btn--ghost, .option,
-  .count, .filter__input, .nav-cell, .match-pick, .answer-input,
+  .card, .rows, .flashcard, .means-quote, .pick-item, .option,
+  .filter__input, .nav-cell, .match-pick, .answer-input,
   .match-row                          { --bc: var(--border); }
   .stat, .review-option, .mistake-row, .filter, .stat-row, .history-row,
   .word-row, .sheet-row               { --bc: var(--border-soft); }
   .tile, .score-card, .summary, .deck-stat, .means-group
                                       { --bc: var(--chrome-panel-border); }
   .resume                             { --bc: var(--accent-border); }
-  .btn--danger                        { --bc: var(--red-border); }
-  .btn[disabled]                      { --bc: transparent; }
   .tile--green                        { --bc: var(--green-border); }
   .tile--red                          { --bc: var(--red-border); }
   .score-card--accent                 { --bc: var(--accent-border); }
@@ -1908,7 +1911,7 @@ button {
   /* --- тень --------------------------------------------------------------
      box-shadow при обрезке пропадает целиком, drop-shadow строится по альфе и
      повторяет контур. Значение то же, что в --shadow-lift. */
-  .dialog, .toast {
+  .dialog {
     box-shadow: none;
     filter: drop-shadow(0 8px 28px oklch(0.35 0.03 45 / 0.12));
   }
