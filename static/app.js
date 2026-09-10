@@ -3143,6 +3143,9 @@
   };
 
   var lastViewKey = null;
+  // На каком из трёх разделов плашки стоит линза. Профиль в строке не лежит,
+  // поэтому пока он открыт, вести её некуда — она остаётся здесь.
+  var lastPlateTab = 0;
 
   /** Что считается «тем же самым видом» для сохранения прокрутки. */
   function viewKey() {
@@ -3195,11 +3198,17 @@
     // Активный раздел отмечает линза. Класс `is-active` на строке ставит сам
     // таббар и только он: снаружи стекла вкладка горит, лишь когда линза на
     // ней остановилась. Здесь считаем только, куда её вести.
-    var activeTab = 0;
+    //
+    // Профиль сюда не попадает: он вынесен из строки в отдельную кнопку, и
+    // линзе на него ехать некуда. Пока он открыт, она стоит на том разделе, с
+    // которого ушли. Гасить её на это время было бы честнее по смыслу, но она
+    // мигала бы на каждом заходе в профиль и обратно.
     Array.prototype.forEach.call(dom.tabs, function (tab, index) {
-      if (tab.getAttribute('data-tab') === S.tab) activeTab = index;
+      if (tab.getAttribute('data-tab') === S.tab) lastPlateTab = index;
     });
-    TabBar.select(activeTab);
+    TabBar.select(lastPlateTab);
+    // Своя подсветка у кнопки профиля: линза до неё не достаёт.
+    if (dom.tabSide) dom.tabSide.classList.toggle('is-active', S.tab === 'profile');
 
     // Прокрутку сбрасываем только при переходе на другой экран или к другому
     // заданию. Иначе выбор варианта — он тоже вызывает перерисовку — отбрасывал
@@ -4788,6 +4797,9 @@
     // Только прямые потомки строки: у зеркала внутри линзы лежат клоны с теми
     // же классами, и без этого уточнения они попали бы в выборку.
     dom.tabs = dom.tabbar.querySelectorAll('.tabbar__plate > .tabbar__row > .tab');
+    // Профиль живёт вне плашки и в выборку разделов не входит намеренно: по её
+    // длине таббар считает шаг линзы, и лишняя кнопка сдвинула бы весь расчёт.
+    dom.tabSide = dom.tabbar.querySelector('.tabbar__side');
     dom.dialogRoot = document.getElementById('dialog-root');
     dom.toast = document.getElementById('toast');
 
@@ -4795,6 +4807,9 @@
     Array.prototype.forEach.call(dom.tabs, function (tab) {
       tab.addEventListener('click', function () { setTab(tab.getAttribute('data-tab')); });
     });
+    if (dom.tabSide) {
+      dom.tabSide.addEventListener('click', function () { setTab('profile'); });
+    }
     TabBar.init(dom.tabbar, dom.tabs, function (index) {
       var tab = dom.tabs[index];
       if (tab) setTab(tab.getAttribute('data-tab'));
