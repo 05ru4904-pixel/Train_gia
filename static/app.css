@@ -1930,8 +1930,19 @@ button {
     /* Заливка уезжает на слой: сам элемент не обрезан, и его фон рисовался бы
        прямоугольником с острыми углами. */
     background: transparent;
-    filter: var(--plate-shadow);
     position: relative;
+  }
+
+  /* Тень получают только КРУПНЫЕ поверхности. Строки списков — нет, и это не
+     экономия на спичках: список выученных слов рисует до 187 строк разом, и
+     каждая тень — это два прохода размытия плюс свой слой композитора. На
+     главной таких поверхностей четыре, на итоге варианта шесть.
+
+     Заодно так правильнее по виду: в списках iOS тень несёт вся группа, а не
+     каждая строка. Белая заливка на сером фоне и так отделяет строку. */
+  .card, .rows, .resume, .summary, .filter, .flashcard, .means-quote,
+  .tile, .score-card, .deck-stat, .means-group {
+    filter: var(--plate-shadow);
   }
   .card::before, .rows::before, .resume::before, .summary::before,
   .filter::before, .flashcard::before, .means-quote::before, .pick-item::before,
