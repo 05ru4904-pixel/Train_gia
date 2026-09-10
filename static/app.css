@@ -84,8 +84,11 @@
      текста. Светлота выбрана пользователем по виду, и это его решение; если на
      устройстве подпись окажется вязкой, лечится сдвигом сюда, к 0.55. */
   --lens-body: oklch(0.60 0.004 60);
-  /* Подпись и иконка активного раздела, пока он под тёмной линзой. */
+  /* Подпись и иконка активного раздела, пока он под линзой. Два значения,
+     потому что линзу подбирают вручную: на тёмной читается белое, на светлой
+     оно пропадает. Какое из них взять, решает app.js по светлоте линзы. */
   --lens-ink: oklch(1 0 0);
+  --lens-ink-alt: oklch(0.32 0.015 60);
   /* Контур прижатой линзы: чистый белый, без перелива. */
   --lens-ring: oklch(1 0 0);
 
@@ -193,6 +196,7 @@
   /* Линза светлее подложки, иначе на тёмном фоне её просто не видно. */
   --lens-body: oklch(0.52 0.008 60);
   --lens-ink: oklch(1 0 0);
+  --lens-ink-alt: oklch(0.24 0.010 60);
   --lens-ring: oklch(1 0 0 / 0.75);
 
   --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4);
@@ -252,6 +256,7 @@
   --tabbar-edge: oklch(1 0 0 / 0.55);
   --lens-body: oklch(0.42 0.14 35);
   --lens-ink: oklch(1 0 0);
+  --lens-ink-alt: oklch(0.30 0.10 35);
   --lens-ring: oklch(1 0 0);
 
   --shadow-card: none;
@@ -584,6 +589,11 @@ button {
    вообще», а читаемый на том, что под ним сейчас.
    В покое линза тёмно-серая, и подпись на ней белая. */
 .tab.is-active { color: var(--lens-ink); opacity: 1; }
+/* Линзу подбирают вручную, и на светлой белая подпись пропадает. Класс ставит
+   app.js по светлоте выбранного оттенка — порог в самом коде, здесь только
+   следствие. Правило обязано стоять ДО правила живого стекла: у них одинаковая
+   специфичность, и побеждает последнее. */
+.tabbar.is-lens-light .tab.is-active { color: var(--lens-ink-alt); }
 /* Живое стекло — линза белая, и белая подпись на ней пропала бы начисто.
    Возвращаем акцент. Перехода здесь нет и быть не может: анимация цвета рядом
    с фильтром выносит слой в композитор и гасит преломление (ловушка №3).
@@ -2181,4 +2191,79 @@ button {
     box-shadow: none;
     filter: drop-shadow(0 10px 30px oklch(0.35 0.03 45 / 0.22));
   }
+}
+
+/* --- панель подбора оттенка линзы --------------------------------------- */
+/* Временный инструмент: крутить оттенок линзы пальцем на живом устройстве.
+   Экран телефона и рендер показывают разный серый, а судить должен телефон —
+   до сих пор это значило деплой за каждое число.
+
+   Висит СВЕРХУ намеренно: подбирают таббар внизу, и он должен оставаться на
+   виду. Уйдёт вместе с кнопкой в профиле, когда оттенок будет принят. Панель
+   для стекла делалась так же и так же была снята — см. историю. */
+.tint {
+  position: fixed;
+  left: 8px; right: 8px; top: 8px;
+  z-index: 60;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px oklch(0.35 0.03 45 / 0.18);
+  overflow: hidden;
+}
+.tint__bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-soft);
+}
+.tint__name { font-size: 14px; font-weight: 600; color: var(--ink-strong); }
+.tint__x {
+  border: 0; background: none; padding: 4px 2px;
+  font: inherit; font-size: 13px; color: var(--accent); cursor: pointer;
+}
+.tint__body { padding: 8px 12px 12px; }
+.tint__row { padding: 6px 0; }
+.tint__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin-bottom: 2px;
+}
+.tint__title { font-size: 13px; color: var(--ink-soft); }
+.tint__value {
+  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent-ink);
+}
+/* Ползунок крупный намеренно: его крутят пальцем на телефоне. */
+.tint__row input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  display: block; width: 100%; height: 22px; margin: 0;
+  background: none;
+}
+.tint__row input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px; background: var(--track);
+}
+.tint__row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 22px; height: 22px; margin-top: -9px;
+  border-radius: 50%; border: 1px solid var(--accent-border);
+  background: var(--accent);
+}
+/* Образец рядом со строкой значения: подпись на нём того же цвета, каким её
+   покажет таббар, — видно не только оттенок, но и читаемость. */
+.tint__swatch {
+  margin: 8px 0 0;
+  height: 44px;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 700;
+}
+.tint__dump {
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft); border-radius: 10px;
+  background: var(--surface-2);
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink-dim);
+  word-break: break-all;
+  -webkit-user-select: text; user-select: text;
 }

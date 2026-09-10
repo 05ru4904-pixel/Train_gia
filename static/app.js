@@ -3027,6 +3027,145 @@
     ]);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Подбор оттенка линзы                                               */
+  /* ------------------------------------------------------------------ */
+  /* Серый на экране телефона и серый на рендере — разные серые, а судить
+     должен телефон. До сих пор это значило деплой за каждое число: оттенок
+     правился в app.css и уезжал в прод целиком.
+
+     Панель убирает деплой из круга. Ползунок пишет прямо в --lens-body, набор
+     ложится в localStorage и переживает перезапуск приложения. Такая же панель
+     делалась 08.09.2026 под стекло таббара и была снята, когда значения
+     приняли; эту ждёт то же самое.
+
+     Правит только ЦВЕТ — переменную, к фильтру отношения не имеющую. Поэтому
+     ни одна из ловушек WebKit тут не при чём: фильтр не трогается вовсе. */
+
+  var LENS_TINT_KEY = 'lensTint';
+  // Значения из кода — те же, что стоят в --lens-body в app.css. Копия здесь
+  // нужна для кнопки сброса: прочитать переменную разобранной на числа нельзя.
+  var LENS_TINT_CODE = { l: 0.60, c: 0.004, h: 60 };
+  // Выше этой светлоты белая подпись на линзе теряется, и таббар переходит на
+  // тёмную. Порог не на глаз: около 0.59 белое и тёмное дают одинаковый
+  // контраст, дальше тёмное выигрывает. Небольшой запас вверх — на то, что
+  // подпись жирная и мелкая, а такой белый держится чуть дольше.
+  var LENS_INK_SWITCH = 0.62;
+
+  var LENS_KNOBS = [
+    { key: 'l', title: 'Светлота', min: 0.2, max: 1, step: 0.01 },
+    { key: 'c', title: 'Насыщенность', min: 0, max: 0.12, step: 0.002 },
+    { key: 'h', title: 'Тон', min: 0, max: 360, step: 1 }
+  ];
+
+  var lensTint = null;
+  var tintPanel = null;
+
+  function lensTintNow() {
+    if (lensTint) return lensTint;
+    lensTint = { l: LENS_TINT_CODE.l, c: LENS_TINT_CODE.c, h: LENS_TINT_CODE.h };
+    try {
+      var raw = window.localStorage && localStorage.getItem(LENS_TINT_KEY);
+      var saved = raw ? JSON.parse(raw) : null;
+      if (saved) {
+        LENS_KNOBS.forEach(function (knob) {
+          var value = saved[knob.key];
+          if (typeof value === 'number' && isFinite(value)) lensTint[knob.key] = value;
+        });
+      }
+    } catch (e) { /* приватный режим или испорченный JSON */ }
+    return lensTint;
+  }
+
+  function lensTintCss(tint) {
+    return 'oklch(' + tint.l.toFixed(3) + ' ' + tint.c.toFixed(3) + ' '
+      + Math.round(tint.h) + ')';
+  }
+
+  /** Кладёт выбранный оттенок в переменную и решает, каким цветом писать
+   *  подпись поверх линзы. Цвета остаются в CSS — здесь только выбор между
+   *  двумя готовыми токенами классом на таббаре. */
+  function applyLensTint() {
+    var tint = lensTintNow();
+    document.documentElement.style.setProperty('--lens-body', lensTintCss(tint));
+    if (dom.tabbar) {
+      dom.tabbar.classList.toggle('is-lens-light', tint.l > LENS_INK_SWITCH);
+    }
+  }
+
+  function closeLensTint() {
+    if (tintPanel && tintPanel.parentNode) tintPanel.parentNode.removeChild(tintPanel);
+    tintPanel = null;
+  }
+
+  function openLensTint() {
+    if (tintPanel) { closeLensTint(); return; }
+    var tint = lensTintNow();
+    var dump = h('div', { class: 'tint__dump' });
+    // Образец подписан тем же словом и тем же кеглем, что вкладка: подбирать
+    // надо не цвет сам по себе, а цвет, на котором читается подпись.
+    var swatch = h('div', { class: 'tint__swatch', text: 'Тренажёр' });
+
+    function refresh() {
+      applyLensTint();
+      var css = lensTintCss(tint);
+      dump.textContent = '--lens-body: ' + css + ';';
+      swatch.style.background = css;
+      swatch.style.color = tint.l > LENS_INK_SWITCH
+        ? 'var(--lens-ink-alt)' : 'var(--lens-ink)';
+      try {
+        localStorage.setItem(LENS_TINT_KEY, JSON.stringify(tint));
+      } catch (e) { /* приватный режим */ }
+    }
+
+    var rows = LENS_KNOBS.map(function (knob) {
+      var value = h('span', { class: 'tint__value', text: String(tint[knob.key]) });
+      var input = h('input', {
+        type: 'range', min: knob.min, max: knob.max, step: knob.step,
+        value: tint[knob.key],
+        // input, а не change: оттенок должен меняться прямо под пальцем, иначе
+        // подбор превращается в угадывание.
+        onInput: function () {
+          tint[knob.key] = parseFloat(input.value);
+          value.textContent = String(tint[knob.key]);
+          refresh();
+        }
+      });
+      return h('div', { class: 'tint__row' }, [
+        h('div', { class: 'tint__head' }, [
+          h('span', { class: 'tint__title', text: knob.title }), value
+        ]),
+        input
+      ]);
+    });
+
+    refresh();
+
+    tintPanel = h('div', { class: 'tint' }, [
+      h('div', { class: 'tint__bar' }, [
+        h('span', { class: 'tint__name', text: 'Оттенок линзы' }),
+        h('button', {
+          class: 'tint__x', type: 'button', onClick: closeLensTint
+        }, 'Закрыть')
+      ]),
+      h('div', { class: 'tint__body' }, rows.concat([
+        swatch,
+        dump,
+        h('button', {
+          class: 'btn btn--ghost', type: 'button',
+          onClick: function () {
+            try { localStorage.removeItem(LENS_TINT_KEY); } catch (e) { /* пусто */ }
+            lensTint = null;
+            // Перезагрузкой, а не пересчётом: так видно ровно то, что придёт
+            // ученику из кода, без остатков подобранного в памяти страницы.
+            location.reload();
+          }
+        }, 'Сбросить к значениям из кода')
+      ]))
+    ]);
+    dom.dialogRoot.appendChild(tintPanel);
+  }
+
   function screenProfile() {
     var profile = S.profile;
     if (!profile) return screenLoading();
@@ -3065,7 +3204,13 @@
         h('button', {
           class: 'btn btn--ghost', type: 'button',
           onClick: function () { toast('Тарифы появятся в следующем обновлении.'); }
-        }, 'Тарифы')
+        }, 'Тарифы'),
+        // Временная кнопка на время подбора оттенка. Учеников в проде нет,
+        // прятать не за чем; уйдёт вместе с панелью одним коммитом.
+        h('button', {
+          class: 'btn btn--ghost', type: 'button',
+          onClick: openLensTint
+        }, 'Оттенок линзы')
       ])
     ]);
   }
@@ -4854,6 +4999,9 @@
     dom.tabSide = dom.tabbar.querySelector('.tabbar__side');
     dom.dialogRoot = document.getElementById('dialog-root');
     dom.toast = document.getElementById('toast');
+    // Подобранный оттенок линзы применяем до первого кадра таббара: иначе на
+    // старте мелькнёт значение из кода.
+    applyLensTint();
 
     dom.back.addEventListener('click', goBack);
     Array.prototype.forEach.call(dom.tabs, function (tab) {
