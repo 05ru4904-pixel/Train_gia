@@ -14,9 +14,12 @@
 [data-theme="light"] {
   /* Фон страницы серый, а поверхности белые — это и даёт эффект «карточек на
      подложке», как в приложениях iOS. Раньше и фон, и поверхность были белыми,
-     и плашки держались только на рамке. Оттенок тёплый (hue 60), как весь
-     нейтральный ряд системы. */
-  --page: oklch(0.965 0.004 60);
+     и плашки держались только на рамке.
+
+     Оттенок НЕЙТРАЛЬНЫЙ, hue 250 — тот же, что у хром-градиента. Тёплый ряд
+     системы (hue 60) на такой светлоте читается бежевым, это проверено на
+     устройстве: пользователь увидел бежевый и попросил серый. */
+  --page: oklch(0.955 0.004 250);
   --surface: #fff;
   --surface-2: oklch(0.97 0.006 60);
   --surface-3: oklch(0.95 0.010 60);
@@ -1830,11 +1833,10 @@ button {
   /* --- форма: одна на всех ---------------------------------------------- */
   .card__icon, .empty__icon, .task-row__num, .match-option, .nav-cell,
   .filter__input, .md-note, .match-pick, .q-passage, .pick-item, .tile,
-  .score-card, .stat, .option, .review-option, .verdict, .mistake-row,
-  .banner, .answer-line, .stat-row, .history-row, .deck-stat, .word-row,
-  .sheet-row, .answer-input, .match-row, .means-group, .card, .rows,
-  .skeleton div, .resume, .filter, .summary, .flashcard, .means-quote,
-  .dialog {
+  .score-card, .option, .review-option, .verdict, .mistake-row, .banner,
+  .answer-line, .stat-row, .history-row, .deck-stat, .word-row, .sheet-row,
+  .answer-input, .match-row, .means-group, .card, .rows, .skeleton div,
+  .resume, .filter, .summary, .flashcard, .means-quote, .dialog {
     border-radius: 0;
     clip-path: polygon(0px calc(var(--sq) * 1), calc(var(--sq) * 0.0129) calc(var(--sq) * 0.6636), calc(var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(100% - var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(100% - var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(100% - var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(100% - var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(100% - var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(100% - var(--sq) * 0.0129) calc(var(--sq) * 0.6636), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), calc(100% - var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(100% - var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(100% - var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(100% - var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(100% - var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(100% - var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), 0px calc(100% - var(--sq) * 1));
   }
@@ -1843,10 +1845,9 @@ button {
   .card__icon, .empty__icon, .task-row__num, .match-option, .nav-cell,
   .filter__input, .md-note, .match-pick { --sq: var(--radius-sm); }
 
-  .q-passage, .pick-item, .tile, .score-card, .stat, .option,
-  .review-option, .verdict, .mistake-row, .banner, .answer-line, .stat-row,
-  .history-row, .deck-stat, .word-row, .sheet-row, .answer-input,
-  .match-row, .means-group { --sq: var(--radius); }
+  .q-passage, .pick-item, .tile, .score-card, .option, .review-option,
+  .verdict, .mistake-row, .banner, .answer-line, .stat-row, .history-row,
+  .deck-stat, .word-row, .sheet-row, .answer-input, .match-row, .means-group { --sq: var(--radius); }
 
   .card, .rows, .skeleton div, .resume, .filter, .summary { --sq: var(--radius-card); }
 
@@ -1866,8 +1867,8 @@ button {
      само. Поэтому правила компонентов переписывать не пришлось: цвет кольца
      собран отдельным списком ниже. */
   .card::after, .rows::after, .flashcard::after, .means-quote::after,
-  .pick-item::after, .tile::after, .score-card::after, .stat::after,
-  .resume::after, .mistake-row::after, .nav-cell::after, .filter::after,
+  .pick-item::after, .tile::after, .score-card::after, .resume::after,
+  .mistake-row::after, .nav-cell::after, .filter::after,
   .filter__input::after, .summary::after, .stat-row::after,
   .history-row::after, .deck-stat::after, .word-row::after,
   .sheet-row::after, .match-pick::after, .means-group::after,
@@ -1879,14 +1880,13 @@ button {
     background: var(--bc, var(--border));
   }
   .card, .rows, .flashcard, .means-quote, .pick-item, .tile, .score-card,
-  .stat, .resume, .mistake-row, .nav-cell, .filter, .filter__input,
-  .summary, .stat-row, .history-row, .deck-stat, .word-row, .sheet-row,
-  .match-pick, .means-group, .option, .review-option, .answer-input,
-  .match-row { position: relative; }
+  .resume, .mistake-row, .nav-cell, .filter, .filter__input, .summary,
+  .stat-row, .history-row, .deck-stat, .word-row, .sheet-row, .match-pick,
+  .means-group, .option, .review-option, .answer-input, .match-row { position: relative; }
 
   .card::after, .rows::after, .flashcard::after, .means-quote::after,
-  .pick-item::after, .tile::after, .score-card::after, .stat::after,
-  .resume::after, .mistake-row::after, .nav-cell::after, .filter::after,
+  .pick-item::after, .tile::after, .score-card::after, .resume::after,
+  .mistake-row::after, .nav-cell::after, .filter::after,
   .filter__input::after, .summary::after, .stat-row::after,
   .history-row::after, .deck-stat::after, .word-row::after,
   .sheet-row::after, .match-pick::after, .means-group::after {
@@ -1917,12 +1917,45 @@ button {
      Список идёт ДО цветов колец: у состояний (верно, неверно, выбрано) рамка
      несёт смысл, и они возвращают себе цвет ниже по каскаду. */
   .card, .rows, .resume, .summary, .filter, .flashcard, .means-quote,
-  .pick-item, .tile, .score-card, .stat, .deck-stat, .means-group,
-  .mistake-row, .stat-row, .history-row, .word-row, .sheet-row {
+  .pick-item, .tile, .score-card, .deck-stat, .means-group,
+  .mistake-row, .stat-row, .history-row, .word-row, .sheet-row, .dialog {
     border-color: transparent;
     --bc: transparent;
+    /* Обрезка снята С САМОГО ЭЛЕМЕНТА и переехала на слой заливки ниже.
+       Причина замерена: clip-path применяется ПОСЛЕ filter, поэтому тень,
+       нарисованная на обрезанном элементе, обрезкой же и съедается — под
+       карточкой не темнеет ни на единицу яркости. Тень обязана идти с
+       НЕОБРЕЗАННОГО узла, а форму держит его потомок. */
+    clip-path: none;
+    /* Заливка уезжает на слой: сам элемент не обрезан, и его фон рисовался бы
+       прямоугольником с острыми углами. */
+    background: transparent;
     filter: var(--plate-shadow);
+    position: relative;
   }
+  .card::before, .rows::before, .resume::before, .summary::before,
+  .filter::before, .flashcard::before, .means-quote::before, .pick-item::before,
+  .tile::before, .score-card::before, .deck-stat::before,
+  .means-group::before, .mistake-row::before, .stat-row::before,
+  .history-row::before, .word-row::before, .sheet-row::before, .dialog::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    /* Заливка кладётся двумя слоями и НЕПРОЗРАЧНАЯ снизу намеренно: тень
+       строится по альфе всего элемента, и сквозь полупрозрачную заливку в неё
+       попали бы буквы — каждая со своим ореолом. */
+    background-color: var(--fill, var(--surface));
+    background-image: var(--fill-image, none);
+    clip-path: polygon(0px calc(var(--sq) * 1), calc(var(--sq) * 0.0129) calc(var(--sq) * 0.6636), calc(var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(100% - var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(100% - var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(100% - var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(100% - var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(100% - var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(100% - var(--sq) * 0.0129) calc(var(--sq) * 0.6636), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), calc(100% - var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(100% - var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(100% - var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(100% - var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(100% - var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(100% - var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), 0px calc(100% - var(--sq) * 1));
+  }
+  /* Заливка каждой роли. Сюда она переехала из самих правил — там фон снят. */
+  .resume, .summary, .tile, .score-card, .deck-stat, .means-group {
+    --fill-image: var(--chrome-panel);
+  }
+  .tile--green        { --fill: var(--green-bg); --fill-image: none; }
+  .tile--red          { --fill: var(--red-bg);   --fill-image: none; }
+  .score-card--accent { --fill: var(--accent-bg); --fill-image: none; }
 
   /* --- цвет кольца: тоже одним списком ----------------------------------- */
   /* ВАЖНО: здесь перечислены только те, у кого рамка осталась. Контентные
@@ -1946,11 +1979,10 @@ button {
   .answer-input.is-wrong, .match-row.is-wrong
                                       { --bc: var(--red-border); }
 
-  /* --- тень --------------------------------------------------------------
-     box-shadow при обрезке пропадает целиком, drop-shadow строится по альфе и
-     повторяет контур. Значение то же, что в --shadow-lift. */
+  /* Диалог идёт в том же списке, что и плашки, но тень ему нужна заметнее:
+     он висит над затемнением. box-shadow под обрезкой не работает вовсе. */
   .dialog {
     box-shadow: none;
-    filter: drop-shadow(0 8px 28px oklch(0.35 0.03 45 / 0.12));
+    filter: drop-shadow(0 10px 30px oklch(0.35 0.03 45 / 0.22));
   }
 }
