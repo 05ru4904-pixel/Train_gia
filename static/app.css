@@ -12,7 +12,11 @@
 
 :root,
 [data-theme="light"] {
-  --page: #fff;
+  /* Фон страницы серый, а поверхности белые — это и даёт эффект «карточек на
+     подложке», как в приложениях iOS. Раньше и фон, и поверхность были белыми,
+     и плашки держались только на рамке. Оттенок тёплый (hue 60), как весь
+     нейтральный ряд системы. */
+  --page: oklch(0.965 0.004 60);
   --surface: #fff;
   --surface-2: oklch(0.97 0.006 60);
   --surface-3: oklch(0.95 0.010 60);
@@ -68,6 +72,11 @@
 
   --shadow-card: 0 1px 2px oklch(0.4 0.02 60 / 0.05);
   --shadow-lift: 0 8px 28px oklch(0.35 0.03 45 / 0.12);
+  /* Тень контентных плашек. Это filter, а не box-shadow, и по-другому нельзя:
+     плашки обрезаны по суперэллипсу, а под обрезкой box-shadow пропадает
+     целиком. drop-shadow строится по альфе и повторяет любой контур. */
+  --plate-shadow: drop-shadow(0 1px 2px oklch(0.35 0.03 45 / 0.06))
+                  drop-shadow(0 6px 16px oklch(0.35 0.03 45 / 0.08));
   --shadow-glass: 0 6px 24px oklch(0.35 0.03 45 / 0.14);
   --overlay: oklch(0.24 0.02 45 / 0.38);
 
@@ -1892,6 +1901,26 @@ button {
     clip-path: polygon(evenodd, 0px calc(var(--sq) * 1), calc(var(--sq) * 0.0129) calc(var(--sq) * 0.6636), calc(var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(var(--sq) * 1) 0px, calc(100% - var(--sq) * 1) 0px, calc(100% - var(--sq) * 0.6636) calc(var(--sq) * 0.0129), calc(100% - var(--sq) * 0.4729) calc(var(--sq) * 0.0514), calc(100% - var(--sq) * 0.3242) calc(var(--sq) * 0.1158), calc(100% - var(--sq) * 0.2063) calc(var(--sq) * 0.2063), calc(100% - var(--sq) * 0.1158) calc(var(--sq) * 0.3242), calc(100% - var(--sq) * 0.0514) calc(var(--sq) * 0.4729), calc(100% - var(--sq) * 0.0129) calc(var(--sq) * 0.6636), 100% calc(var(--sq) * 1), 100% calc(100% - var(--sq) * 1), calc(100% - var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), calc(100% - var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(100% - var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(100% - var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(100% - var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(100% - var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(100% - var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(100% - var(--sq) * 1) 100%, calc(var(--sq) * 1) 100%, calc(var(--sq) * 0.6636) calc(100% - var(--sq) * 0.0129), calc(var(--sq) * 0.4729) calc(100% - var(--sq) * 0.0514), calc(var(--sq) * 0.3242) calc(100% - var(--sq) * 0.1158), calc(var(--sq) * 0.2063) calc(100% - var(--sq) * 0.2063), calc(var(--sq) * 0.1158) calc(100% - var(--sq) * 0.3242), calc(var(--sq) * 0.0514) calc(100% - var(--sq) * 0.4729), calc(var(--sq) * 0.0129) calc(100% - var(--sq) * 0.6636), 0px calc(100% - var(--sq) * 1), 0px calc(var(--sq) * 1), 2px calc(2px + (var(--sq) - 2px) * 1), calc(2px + (var(--sq) - 2px) * 0.0129) calc(2px + (var(--sq) - 2px) * 0.6636), calc(2px + (var(--sq) - 2px) * 0.0514) calc(2px + (var(--sq) - 2px) * 0.4729), calc(2px + (var(--sq) - 2px) * 0.1158) calc(2px + (var(--sq) - 2px) * 0.3242), calc(2px + (var(--sq) - 2px) * 0.2063) calc(2px + (var(--sq) - 2px) * 0.2063), calc(2px + (var(--sq) - 2px) * 0.3242) calc(2px + (var(--sq) - 2px) * 0.1158), calc(2px + (var(--sq) - 2px) * 0.4729) calc(2px + (var(--sq) - 2px) * 0.0514), calc(2px + (var(--sq) - 2px) * 0.6636) calc(2px + (var(--sq) - 2px) * 0.0129), calc(2px + (var(--sq) - 2px) * 1) 2px, calc(100% - 2px - (var(--sq) - 2px) * 1) 2px, calc(100% - 2px - (var(--sq) - 2px) * 0.6636) calc(2px + (var(--sq) - 2px) * 0.0129), calc(100% - 2px - (var(--sq) - 2px) * 0.4729) calc(2px + (var(--sq) - 2px) * 0.0514), calc(100% - 2px - (var(--sq) - 2px) * 0.3242) calc(2px + (var(--sq) - 2px) * 0.1158), calc(100% - 2px - (var(--sq) - 2px) * 0.2063) calc(2px + (var(--sq) - 2px) * 0.2063), calc(100% - 2px - (var(--sq) - 2px) * 0.1158) calc(2px + (var(--sq) - 2px) * 0.3242), calc(100% - 2px - (var(--sq) - 2px) * 0.0514) calc(2px + (var(--sq) - 2px) * 0.4729), calc(100% - 2px - (var(--sq) - 2px) * 0.0129) calc(2px + (var(--sq) - 2px) * 0.6636), calc(100% - 2px) calc(2px + (var(--sq) - 2px) * 1), calc(100% - 2px) calc(100% - 2px - (var(--sq) - 2px) * 1), calc(100% - 2px - (var(--sq) - 2px) * 0.0129) calc(100% - 2px - (var(--sq) - 2px) * 0.6636), calc(100% - 2px - (var(--sq) - 2px) * 0.0514) calc(100% - 2px - (var(--sq) - 2px) * 0.4729), calc(100% - 2px - (var(--sq) - 2px) * 0.1158) calc(100% - 2px - (var(--sq) - 2px) * 0.3242), calc(100% - 2px - (var(--sq) - 2px) * 0.2063) calc(100% - 2px - (var(--sq) - 2px) * 0.2063), calc(100% - 2px - (var(--sq) - 2px) * 0.3242) calc(100% - 2px - (var(--sq) - 2px) * 0.1158), calc(100% - 2px - (var(--sq) - 2px) * 0.4729) calc(100% - 2px - (var(--sq) - 2px) * 0.0514), calc(100% - 2px - (var(--sq) - 2px) * 0.6636) calc(100% - 2px - (var(--sq) - 2px) * 0.0129), calc(100% - 2px - (var(--sq) - 2px) * 1) calc(100% - 2px), calc(2px + (var(--sq) - 2px) * 1) calc(100% - 2px), calc(2px + (var(--sq) - 2px) * 0.6636) calc(100% - 2px - (var(--sq) - 2px) * 0.0129), calc(2px + (var(--sq) - 2px) * 0.4729) calc(100% - 2px - (var(--sq) - 2px) * 0.0514), calc(2px + (var(--sq) - 2px) * 0.3242) calc(100% - 2px - (var(--sq) - 2px) * 0.1158), calc(2px + (var(--sq) - 2px) * 0.2063) calc(100% - 2px - (var(--sq) - 2px) * 0.2063), calc(2px + (var(--sq) - 2px) * 0.1158) calc(100% - 2px - (var(--sq) - 2px) * 0.3242), calc(2px + (var(--sq) - 2px) * 0.0514) calc(100% - 2px - (var(--sq) - 2px) * 0.4729), calc(2px + (var(--sq) - 2px) * 0.0129) calc(100% - 2px - (var(--sq) - 2px) * 0.6636), 2px calc(100% - 2px - (var(--sq) - 2px) * 1), 2px calc(2px + (var(--sq) - 2px) * 1));
   }
 
+  /* --- контентные плашки: без рамки, с тенью ------------------------------
+     По просьбе пользователя (10.09.2026) поверхности отделяются от серого фона
+     не рамкой, а мягкой тенью — так устроены карточки в приложениях iOS. Это
+     осознанно расходится с правилом дизайн-системы «тени на контентных
+     карточках не ставим, только граница», и расхождение записано в CLAUDE.md.
+
+     Рамка гасится ЦВЕТОМ, а не удалением: `border-color: transparent` сохраняет
+     метрики коробки, и содержимое не съезжает на пиксель. Кольцо гасится тем же
+     способом — через --bc.
+
+     Список идёт ДО цветов колец: у состояний (верно, неверно, выбрано) рамка
+     несёт смысл, и они возвращают себе цвет ниже по каскаду. */
+  .card, .rows, .resume, .summary, .filter, .flashcard, .means-quote,
+  .pick-item, .tile, .score-card, .stat, .deck-stat, .means-group,
+  .mistake-row, .stat-row, .history-row, .word-row, .sheet-row {
+    border-color: transparent;
+    --bc: transparent;
+    filter: var(--plate-shadow);
+  }
+
   /* --- цвет кольца: тоже одним списком ----------------------------------- */
   .card, .rows, .flashcard, .means-quote, .pick-item, .option,
   .filter__input, .nav-cell, .match-pick, .answer-input,
@@ -1900,10 +1929,9 @@ button {
   .word-row, .sheet-row               { --bc: var(--border-soft); }
   .tile, .score-card, .summary, .deck-stat, .means-group
                                       { --bc: var(--chrome-panel-border); }
-  .resume                             { --bc: var(--accent-border); }
-  .tile--green                        { --bc: var(--green-border); }
-  .tile--red                          { --bc: var(--red-border); }
-  .score-card--accent                 { --bc: var(--accent-border); }
+  /* Плитки итога и счётные карточки цветную рамку тоже не возвращают: у них
+     есть цветная заливка, и контур на ней избыточен. Кольцо остаётся только у
+     того, где рамка — единственный сигнал: варианты ответа, поля, клетки. */
   .option.is-picked, .match-pick.is-picked,
   .nav-cell.is-current                { --bc: var(--accent); }
   .option.is-correct, .review-option.is-correct, .nav-cell.is-answered,
