@@ -75,8 +75,8 @@
   /* Тень контентных плашек. Это filter, а не box-shadow, и по-другому нельзя:
      плашки обрезаны по суперэллипсу, а под обрезкой box-shadow пропадает
      целиком. drop-shadow строится по альфе и повторяет любой контур. */
-  --plate-shadow: drop-shadow(0 1px 2px oklch(0.35 0.03 45 / 0.06))
-                  drop-shadow(0 6px 16px oklch(0.35 0.03 45 / 0.08));
+  --plate-shadow: drop-shadow(0 1px 2px oklch(0.35 0.03 45 / 0.07))
+                  drop-shadow(0 8px 20px oklch(0.35 0.03 45 / 0.10));
   --shadow-glass: 0 6px 24px oklch(0.35 0.03 45 / 0.14);
   --overlay: oklch(0.24 0.02 45 / 0.38);
 
@@ -753,7 +753,10 @@ button {
   margin-top: 20px;
   padding: 16px;
   border-radius: var(--radius-card);
-  background: var(--accent-bg);
+  /* Хром-стекло, как у плиток итога и плашки меню: цвет подложкой, градиент
+     картинкой. Было --accent-bg, то есть бледно-оранжевая заливка. */
+  background-color: var(--plate-veil);
+  background-image: var(--chrome-panel);
   border: 1px solid var(--accent-border);
 }
 .resume__label {
@@ -1922,13 +1925,15 @@ button {
   }
 
   /* --- цвет кольца: тоже одним списком ----------------------------------- */
-  .card, .rows, .flashcard, .means-quote, .pick-item, .option,
-  .filter__input, .nav-cell, .match-pick, .answer-input,
+  /* ВАЖНО: здесь перечислены только те, у кого рамка осталась. Контентные
+     плашки в этот список попадать НЕ должны — они идут выше с
+     --bc: transparent, а любая строка отсюда перебьёт его по каскаду и вернёт
+     серый контур. Ровно так и случилось в первой версии: карточки главной
+     стояли в обоих списках, кольцо возвращалось серым, и на его фоне тень не
+     читалась вовсе. */
+  .option, .filter__input, .nav-cell, .match-pick, .answer-input,
   .match-row                          { --bc: var(--border); }
-  .stat, .review-option, .mistake-row, .filter, .stat-row, .history-row,
-  .word-row, .sheet-row               { --bc: var(--border-soft); }
-  .tile, .score-card, .summary, .deck-stat, .means-group
-                                      { --bc: var(--chrome-panel-border); }
+  .review-option                      { --bc: var(--border-soft); }
   /* Плитки итога и счётные карточки цветную рамку тоже не возвращают: у них
      есть цветная заливка, и контур на ней избыточен. Кольцо остаётся только у
      того, где рамка — единственный сигнал: варианты ответа, поля, клетки. */
