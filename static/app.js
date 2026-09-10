@@ -3200,15 +3200,19 @@
     // ней остановилась. Здесь считаем только, куда её вести.
     //
     // Профиль сюда не попадает: он вынесен из строки в отдельную кнопку, и
-    // линзе на него ехать некуда. Пока он открыт, она стоит на том разделе, с
-    // которого ушли. Гасить её на это время было бы честнее по смыслу, но она
-    // мигала бы на каждом заходе в профиль и обратно.
-    Array.prototype.forEach.call(dom.tabs, function (tab, index) {
-      if (tab.getAttribute('data-tab') === S.tab) lastPlateTab = index;
-    });
-    TabBar.select(lastPlateTab);
+    // линзе на него ехать некуда. Пока он открыт, линза гаснет совсем, а
+    // подсветку несёт сам круг справа — со стороны это читается так, будто она
+    // на него и перешла.
+    var onSide = S.tab === 'profile';
+    TabBar.park(onSide);
+    if (!onSide) {
+      Array.prototype.forEach.call(dom.tabs, function (tab, index) {
+        if (tab.getAttribute('data-tab') === S.tab) lastPlateTab = index;
+      });
+      TabBar.select(lastPlateTab);
+    }
     // Своя подсветка у кнопки профиля: линза до неё не достаёт.
-    if (dom.tabSide) dom.tabSide.classList.toggle('is-active', S.tab === 'profile');
+    if (dom.tabSide) dom.tabSide.classList.toggle('is-active', onSide);
 
     // Прокрутку сбрасываем только при переходе на другой экран или к другому
     // заданию. Иначе выбор варианта — он тоже вызывает перерисовку — отбрасывал
@@ -3515,6 +3519,8 @@
     var frame = 0;
     var lastTime = 0;
     var booted = false;  // первый select() ставит линзу на место без проезда
+    var parked = false;  // линза убрана с глаз: выбран раздел вне строки
+    var sideSize = 0;    // сторона круга профиля, она же высота плашки
     var dragging = false;
     var dragPrev = 0;    // положение линзы в прошлом кадре ведения
     var dispScale = 0;   // последнее записанное значение, чтобы не дёргать SVG зря
@@ -4340,6 +4346,22 @@
     function measure() {
       if (!el || !tabs.length) return false;
       var plate = el.plate.getBoundingClientRect();
+
+      // Круг профиля: ширина равна высоте плашки. Считается здесь, а не в CSS,
+      // потому что там это не выражается — высота плашки зависит от кегля
+      // подписи, а он на устройстве свой. Ставится ДО остальных замеров: круг
+      // делит строку с плашкой, и его ширина меняет её ширину, а по ней
+      // считается шаг вкладки. Поэтому дальше прямоугольник плашки берётся
+      // заново.
+      if (el.side) {
+        var side = Math.round(plate.height);
+        if (side > 0 && side !== sideSize) {
+          sideSize = side;
+          el.tabbar.style.setProperty('--tabbar-h', side + 'px');
+          plate = el.plate.getBoundingClientRect();
+        }
+      }
+
       var first = tabs[0].getBoundingClientRect();
       if (!plate.width || !first.width) return false;
       var rowBox = el.row.getBoundingClientRect();
@@ -4472,6 +4494,10 @@
      *
      *  Под стеклом всё это ни на что не влияет: там активны все вкладки. */
     function rowActive() {
+      // Линза убрана — гореть нечему. Без этой строки подпись осталась бы
+      // белой (она рассчитана на тёмную линзу под собой) и на светлой плашке
+      // пропала бы начисто.
+      if (parked) return -1;
       if (dragging) return -1;
       // Смотрим только на движение и не трогаем пружину нажатия: иначе
       // простое касание линзы без ведения гасило бы вкладку и зажигало
@@ -4725,7 +4751,11 @@
         pill: tabbar.querySelector('.tabbar__pill'),
         lens: tabbar.querySelector('.tabbar__lens'),
         fx: tabbar.querySelector('.tabbar__fx'),
-        mirror: tabbar.querySelector('.tabbar__mirror')
+        mirror: tabbar.querySelector('.tabbar__mirror'),
+        // Кнопка профиля стоит вне плашки и в расчёт шага линзы не входит.
+        // Таббару она нужна ровно за одним: сделать её круглой по высоте
+        // плашки, в CSS это не выражается.
+        side: tabbar.querySelector('.tabbar__side')
       };
       if (!el.plate || !el.row || !el.lens || !el.fx || !el.mirror) { el = null; return; }
 
@@ -4780,7 +4810,29 @@
       run();
     }
 
-    return { init: init, select: select };
+    /** Убирает линзу с глаз, пока выбран раздел вне строки — сейчас это
+     *  профиль. Она не едет и не прячется «куда-то», а просто гаснет: вести её
+     *  некуда, кнопка профиля стоит вне плашки и своего места в шаге линзы не
+     *  имеет.
+     *
+     *  Заодно сбрасывается `booted`. Следующий выбор раздела после этого
+     *  считается первым и ставит линзу на место мгновенно, без полёта через
+     *  весь таббар: ученик всё равно не видел, откуда она поехала бы, и проезд
+     *  выглядел бы взявшимся ниоткуда. */
+    function park(on) {
+      if (!el) return;
+      on = !!on;
+      if (parked === on) return;
+      parked = on;
+      el.tabbar.classList.toggle('is-parked', on);
+      // Подпись под линзой белая — она рассчитана на тёмную заливку под собой.
+      // Снять активность надо тем же кадром, что и саму линзу, иначе слово
+      // остаётся белым на белой плашке и исчезает.
+      syncRowActive();
+      if (on) booted = false;
+    }
+
+    return { init: init, select: select, park: park };
   })();
 
   /* ------------------------------------------------------------------ */
