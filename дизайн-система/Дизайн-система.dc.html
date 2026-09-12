@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+[data-theme] { --page:#fff; --surface:#fff; --surface-2:oklch(0.97 0.006 60); --surface-3:oklch(0.95 0.010 60); --border:oklch(0.90 0.008 60); --border-soft:oklch(0.93 0.006 60); --track:oklch(0.92 0.008 60);
+  --ink-strong:oklch(0.22 0.010 60); --ink:oklch(0.26 0.010 60); --ink-dim:oklch(0.40 0.010 60); --muted:oklch(0.60 0.010 60); --faint:oklch(0.75 0.010 60);
+  --accent:oklch(0.58 0.19 41); --accent-on:#fff; --accent-ink:oklch(0.48 0.15 38); --accent-bg:oklch(0.97 0.03 45); --accent-border:oklch(0.88 0.07 45);
+  --green:oklch(0.52 0.12 150); --green-bg:oklch(0.97 0.02 150); --green-border:oklch(0.72 0.09 150); --green-ink:oklch(0.36 0.07 150);
+  --red:oklch(0.55 0.16 25); --red-bg:oklch(0.97 0.02 25); --red-border:oklch(0.76 0.11 25); --red-ink:oklch(0.42 0.09 25);
+  --amber:oklch(0.66 0.14 75); --amber-bg:oklch(0.97 0.03 80); --amber-ink:oklch(0.46 0.10 70);
+  --grad-accent:linear-gradient(155deg, oklch(0.68 0.19 55) 0%, oklch(0.56 0.20 38) 55%, oklch(0.46 0.17 30) 100%);
+  --chrome:linear-gradient(150deg, oklch(0.97 0.004 250) 0%, oklch(0.80 0.010 250) 32%, oklch(0.99 0.002 250) 52%, oklch(0.74 0.014 250) 74%, oklch(0.92 0.006 250) 100%);
+  --grad-spectrum:linear-gradient(100deg, oklch(0.72 0.20 45) 0%, oklch(0.65 0.24 20) 38%, oklch(0.58 0.27 345) 66%, oklch(0.52 0.29 300) 100%);
+  --grad-spectrum-ring:conic-gradient(from 210deg, oklch(0.72 0.20 45), oklch(0.65 0.24 20), oklch(0.58 0.27 345), oklch(0.52 0.29 300), oklch(0.72 0.20 45));
+  --chrome-panel:linear-gradient(150deg, oklch(1 0 0 / 0.70) 0%, oklch(0.88 0.008 250 / 0.45) 30%, oklch(1 0 0 / 0.78) 52%, oklch(0.84 0.012 250 / 0.40) 74%, oklch(0.97 0.004 250 / 0.65) 100%);
+  --chrome-panel-border:oklch(0.82 0.010 250 / 0.55);
+  --glass-bg:oklch(1 0 0 / 0.55); --glass-border:oklch(1 0 0 / 0.65); --glass-edge:oklch(0.80 0.01 60 / 0.35); --glass-blur:blur(20px) saturate(1.6); --glass-hi:linear-gradient(180deg, oklch(1 0 0 / 0.75), oklch(1 0 0 / 0) 60%);
+  --shadow-card:0 1px 2px oklch(0.4 0.02 60 / 0.05); --shadow-lift:0 8px 28px oklch(0.35 0.03 45 / 0.12); --shadow-glass:0 6px 24px oklch(0.35 0.03 45 / 0.14); --overlay:oklch(0.24 0.02 45 / 0.38); }
+[data-theme="dark"] { --page:oklch(0.17 0.008 60); --surface:oklch(0.21 0.009 60); --surface-2:oklch(0.25 0.010 60); --surface-3:oklch(0.29 0.012 60); --border:oklch(0.33 0.012 60); --border-soft:oklch(0.28 0.010 60); --track:oklch(0.31 0.012 60);
+  --ink-strong:oklch(0.98 0.004 60); --ink:oklch(0.94 0.005 60); --ink-dim:oklch(0.83 0.008 60); --muted:oklch(0.68 0.010 60); --faint:oklch(0.52 0.010 60);
+  --accent:oklch(0.70 0.18 48); --accent-on:oklch(0.20 0.05 35); --accent-ink:oklch(0.78 0.14 55); --accent-bg:oklch(0.28 0.06 40); --accent-border:oklch(0.42 0.10 42);
+  --green:oklch(0.72 0.15 150); --green-bg:oklch(0.27 0.05 150); --green-border:oklch(0.45 0.10 150); --green-ink:oklch(0.85 0.11 150);
+  --red:oklch(0.68 0.17 25); --red-bg:oklch(0.28 0.06 25); --red-border:oklch(0.45 0.12 25); --red-ink:oklch(0.86 0.09 25);
+  --amber:oklch(0.78 0.14 80); --amber-bg:oklch(0.30 0.06 75); --amber-ink:oklch(0.88 0.11 80);
+  --chrome-panel:linear-gradient(150deg, oklch(0.44 0.010 250 / 0.55) 0%, oklch(0.28 0.008 250 / 0.50) 30%, oklch(0.50 0.010 250 / 0.55) 52%, oklch(0.26 0.008 250 / 0.50) 74%, oklch(0.40 0.010 250 / 0.55) 100%);
+  --chrome-panel-border:oklch(1 0 0 / 0.13);
+  --glass-bg:oklch(0.30 0.012 60 / 0.55); --glass-border:oklch(1 0 0 / 0.16); --glass-edge:oklch(0 0 0 / 0.4); --glass-hi:linear-gradient(180deg, oklch(1 0 0 / 0.14), oklch(1 0 0 / 0) 60%);
+  --shadow-card:0 1px 2px oklch(0 0 0 / 0.4); --shadow-lift:0 10px 32px oklch(0 0 0 / 0.5); --shadow-glass:0 8px 28px oklch(0 0 0 / 0.45); --overlay:oklch(0.10 0.01 45 / 0.6); }
+[data-theme="orange"] { --page:oklch(0.55 0.20 38); --surface:oklch(1 0 0 / 0.13); --surface-2:oklch(1 0 0 / 0.09); --surface-3:oklch(1 0 0 / 0.18); --border:oklch(1 0 0 / 0.26); --border-soft:oklch(1 0 0 / 0.18); --track:oklch(1 0 0 / 0.22);
+  --ink-strong:#fff; --ink:oklch(0.98 0.01 45); --ink-dim:oklch(0.94 0.02 45); --muted:oklch(0.88 0.03 45); --faint:oklch(0.80 0.05 45);
+  --accent:#fff; --accent-on:oklch(0.47 0.18 34); --accent-ink:#fff; --accent-bg:oklch(1 0 0 / 0.16); --accent-border:oklch(1 0 0 / 0.40);
+  --green:oklch(0.90 0.14 150); --green-bg:oklch(0.55 0.12 150 / 0.35); --green-border:oklch(0.85 0.12 150 / 0.6); --green-ink:oklch(0.96 0.08 150);
+  --red:oklch(0.94 0.06 20); --red-bg:oklch(0.30 0.10 25 / 0.35); --red-border:oklch(0.90 0.06 20 / 0.55); --red-ink:#fff;
+  --amber:oklch(0.93 0.13 90); --amber-bg:oklch(0.75 0.14 85 / 0.28); --amber-ink:oklch(0.98 0.06 90);
+  --chrome-panel:linear-gradient(150deg, oklch(1 0 0 / 0.32) 0%, oklch(1 0 0 / 0.12) 30%, oklch(1 0 0 / 0.36) 52%, oklch(1 0 0 / 0.10) 74%, oklch(1 0 0 / 0.26) 100%);
+  --chrome-panel-border:oklch(1 0 0 / 0.36);
+  --glass-bg:oklch(1 0 0 / 0.18); --glass-border:oklch(1 0 0 / 0.34); --glass-edge:oklch(0.35 0.12 30 / 0.25); --glass-hi:linear-gradient(180deg, oklch(1 0 0 / 0.30), oklch(1 0 0 / 0) 60%);
+  --shadow-card:none; --shadow-lift:0 14px 40px oklch(0.30 0.12 30 / 0.35); --shadow-glass:0 10px 32px oklch(0.30 0.12 30 / 0.28); --overlay:oklch(0.30 0.12 30 / 0.5); }
+@keyframes ds-pulse { 0%,100% { opacity:.4; transform:scale(.85); } 50% { opacity:1; transform:scale(1); } }
+@keyframes ds-rise { from { transform:translateY(16px); opacity:0; } to { transform:none; opacity:1; } }
+body { margin:0; }
+a { color:var(--accent-ink); text-decoration:none; }
+a:hover { color:var(--accent); }
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="min-height:100%;background:var(--page,#fff);color:var(--ink,oklch(0.26 0.010 60));font-family:Manrope,'SF Pro Text',-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:0 0 96px;transition:background .25s ease,color .25s ease">
+
+  <div style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;padding:14px 40px;background:var(--page,#fff);border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))">
+    <div style="font-size:14px;font-weight:800;letter-spacing:-0.01em;color:var(--ink-strong,oklch(0.22 0.010 60))">Тренажёр ЕГЭ · Дизайн-система</div>
+    <div style="font-size:12px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">v1.0 · Manrope · Telegram Mini App</div>
+    <div style="flex:1"></div>
+    <div style="display:flex;gap:6px;padding:4px;border-radius:999px;background:var(--surface-2,oklch(0.97 0.006 60));border:1px solid var(--border-soft,oklch(0.93 0.006 60))">
+      <button type="button" onClick="{{ pickLight }}" style="{{ btnLight }}">Светлая</button>
+      <button type="button" onClick="{{ pickDark }}" style="{{ btnDark }}">Тёмная</button>
+      <button type="button" onClick="{{ pickOrange }}" style="{{ btnOrange }}">Оранжевая</button>
+    </div>
+  </div>
+
+  <div style="max-width:1120px;margin:0 auto;padding:0 40px;display:flex;flex-direction:column;gap:80px">
+
+    <section style="padding-top:56px;display:flex;flex-direction:column;gap:28px">
+      <div style="font-size:12.5px;font-weight:800;letter-spacing:0.10em;text-transform:uppercase;color:var(--accent,oklch(0.58 0.19 41))">Дизайн-система продукта</div>
+      <h1 style="margin:0;font-size:64px;line-height:1.02;font-weight:800;letter-spacing:-0.035em;color:var(--ink-strong,oklch(0.22 0.010 60));max-width:15ch;text-wrap:pretty">Собранно, но с драйвом</h1>
+      <p style="margin:0;max-width:60ch;font-size:17px;line-height:1.55;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60));text-wrap:pretty">Система выросла из текущего интерфейса mini app: та же плотность, те же радиусы и та же логика экранов. Поменялись акцент, три темы и правила, по которым система расширяется дальше.</p>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:12px">
+        <div style="position:relative;overflow:hidden;min-height:280px;border-radius:24px;background:var(--grad-accent,linear-gradient(155deg,oklch(0.68 0.19 55),oklch(0.46 0.17 30)));padding:32px;display:flex;flex-direction:column;justify-content:space-between">
+          <div style="font-size:13px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:oklch(1 0 0 / 0.75)">Акцентная плоскость</div>
+          <div style="font-size:40px;font-weight:800;letter-spacing:-0.03em;line-height:1.1;color:#fff;max-width:18ch">Оранжевый работает как событие, а не как фон</div>
+        </div>
+        <div style="border-radius:24px;background:var(--chrome,linear-gradient(150deg,#f6f6f7,#c9cbd0,#fff,#b9bcc2,#eaebed));min-height:280px;display:flex;align-items:flex-end;padding:22px">
+          <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;line-height:1.5;color:oklch(0.30 0.01 250);background:oklch(1 0 0 / 0.55);border-radius:8px;padding:8px 10px">хром-градиент<br>для 3D-объектов и медалей</div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">01</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Принципы</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Один вопрос на экран</div>
+          <div style="font-size:13.5px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Задание, ответ, вердикт. Всё остальное — уровнем ниже: списки, разборы, статистика.</div>
+        </div>
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Цвет = смысл</div>
+          <div style="font-size:13.5px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Оранжевый — выбор и путь. Зелёный — верно. Красный — ошибка. Жёлтый — ожидание. Декоративного цвета нет.</div>
+        </div>
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Плотность подростка</div>
+          <div style="font-size:13.5px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Крупный текст задания, компактные служебные строки, зона нажатия не меньше 44 px.</div>
+        </div>
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Прогресс виден всегда</div>
+          <div style="font-size:13.5px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Счётчик, полоса или кольцо на каждом экране тренировки. Ученик должен видеть, сколько осталось.</div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">02</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Цвет</h2>
+      </div>
+      <p style="margin:0;max-width:62ch;font-size:15px;line-height:1.55;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">Все цвета заданы токенами и переопределяются темой. В интерфейсе не должно быть ни одного цвета вне этого списка. Тема выбирается по клиенту Telegram, оранжевая — переключателем в профиле.</p>
+
+      <div style="font-size:12.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted,oklch(0.60 0.010 60))">Поверхности и границы</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px">
+        <div style="display:flex;flex-direction:column;gap:8px"><div style="height:74px;border-radius:14px;background:var(--page,#fff);border:1px solid var(--border,oklch(0.90 0.008 60))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--ink-dim,oklch(0.40 0.010 60))">--page</div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div style="height:74px;border-radius:14px;background:var(--surface,#fff);border:1px solid var(--border,oklch(0.90 0.008 60))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--ink-dim,oklch(0.40 0.010 60))">--surface</div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div style="height:74px;border-radius:14px;background:var(--surface-2,oklch(0.97 0.006 60));border:1px solid var(--border,oklch(0.90 0.008 60))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--ink-dim,oklch(0.40 0.010 60))">--surface-2</div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div style="height:74px;border-radius:14px;background:var(--surface-3,oklch(0.95 0.010 60));border:1px solid var(--border,oklch(0.90 0.008 60))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--ink-dim,oklch(0.40 0.010 60))">--surface-3</div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div style="height:74px;border-radius:14px;background:var(--border,oklch(0.90 0.008 60))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--ink-dim,oklch(0.40 0.010 60))">--border</div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div style="height:74px;border-radius:14px;background:var(--track,oklch(0.92 0.008 60))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--ink-dim,oklch(0.40 0.010 60))">--track</div></div>
+      </div>
+
+      <div style="font-size:12.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted,oklch(0.60 0.010 60));margin-top:8px">Текст</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+        <div style="padding:16px;border-radius:14px;background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:6px"><div style="font-size:19px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Заголовок</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">--ink-strong</div></div>
+        <div style="padding:16px;border-radius:14px;background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:6px"><div style="font-size:19px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Основной</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">--ink</div></div>
+        <div style="padding:16px;border-radius:14px;background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:6px"><div style="font-size:19px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Текст задания</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">--ink-dim</div></div>
+        <div style="padding:16px;border-radius:14px;background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:6px"><div style="font-size:19px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">Подпись</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">--muted</div></div>
+        <div style="padding:16px;border-radius:14px;background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:6px"><div style="font-size:19px;font-weight:600;color:var(--faint,oklch(0.75 0.010 60))">Неактивное</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">--faint</div></div>
+      </div>
+
+      <div style="font-size:12.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted,oklch(0.60 0.010 60));margin-top:8px">Акцент и семантика</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div style="border-radius:18px;overflow:hidden;border:1px solid var(--border,oklch(0.90 0.008 60))">
+          <div style="height:80px;background:var(--accent,oklch(0.58 0.19 41));color:var(--accent-on,#fff);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800">Акцент</div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding:14px;background:var(--accent-bg,oklch(0.97 0.03 45))">
+            <div style="font-size:13.5px;font-weight:700;color:var(--accent-ink,oklch(0.48 0.15 38))">Выбор, путь, прогресс</div>
+            <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">--accent · --accent-on<br>--accent-ink · --accent-bg</div>
+          </div>
+        </div>
+        <div style="border-radius:18px;overflow:hidden;border:1px solid var(--border,oklch(0.90 0.008 60))">
+          <div style="height:80px;background:var(--green,oklch(0.52 0.12 150));color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800">Верно</div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding:14px;background:var(--green-bg,oklch(0.97 0.02 150))">
+            <div style="font-size:13.5px;font-weight:700;color:var(--green-ink,oklch(0.36 0.07 150))">Правильный ответ, выучено</div>
+            <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">--green · --green-bg<br>--green-border · --green-ink</div>
+          </div>
+        </div>
+        <div style="border-radius:18px;overflow:hidden;border:1px solid var(--border,oklch(0.90 0.008 60))">
+          <div style="height:80px;background:var(--red,oklch(0.55 0.16 25));color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800">Ошибка</div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding:14px;background:var(--red-bg,oklch(0.97 0.02 25))">
+            <div style="font-size:13.5px;font-weight:700;color:var(--red-ink,oklch(0.42 0.09 25))">Неверно, сброс, удаление</div>
+            <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">--red · --red-bg<br>--red-border · --red-ink</div>
+          </div>
+        </div>
+        <div style="border-radius:18px;overflow:hidden;border:1px solid var(--border,oklch(0.90 0.008 60))">
+          <div style="height:80px;background:var(--amber,oklch(0.66 0.14 75));color:oklch(0.28 0.06 70);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800">Ожидание</div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding:14px;background:var(--amber-bg,oklch(0.97 0.03 80))">
+            <div style="font-size:13.5px;font-weight:700;color:var(--amber-ink,oklch(0.46 0.10 70))">Мало данных, скоро повтор</div>
+            <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">--amber · --amber-bg · --amber-ink</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px">
+        <div style="padding:18px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:12px">
+          <div style="height:64px;border-radius:12px;background:var(--grad-spectrum,linear-gradient(100deg,oklch(0.72 0.20 45),oklch(0.65 0.24 20),oklch(0.58 0.27 345),oklch(0.52 0.29 300)))"></div>
+          <div style="font-size:13.5px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">--grad-spectrum</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Второй градиент: стрик, достижения, аватар, премиум. Только маленькие плашки, цифры и кольца — не фон экрана.</div>
+        </div>
+        <div style="padding:18px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:12px">
+          <div style="height:64px;border-radius:12px;background:var(--grad-accent,linear-gradient(155deg,oklch(0.68 0.19 55),oklch(0.46 0.17 30)))"></div>
+          <div style="font-size:13.5px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">--grad-accent</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Только для событий: обложка результата, стрик, экран онбординга. Не для карточек и не для кнопок в списке.</div>
+        </div>
+        <div style="padding:18px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:12px">
+          <div style="height:64px;border-radius:12px;background:var(--chrome,linear-gradient(150deg,#f6f6f7,#c9cbd0,#fff,#b9bcc2,#eaebed))"></div>
+          <div style="font-size:13.5px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">--chrome</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Плотный металл для достижений и 3D-объектов. Максимум один элемент на экран.</div>
+        </div>
+        <div style="padding:18px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:12px">
+          <div style="height:64px;border-radius:12px;background:var(--chrome-panel,linear-gradient(150deg,oklch(1 0 0/0.70),oklch(0.88 0.008 250/0.45),oklch(1 0 0/0.78),oklch(0.84 0.012 250/0.40),oklch(0.97 0.004 250/0.65)));border:1px solid var(--chrome-panel-border,oklch(0.82 0.010 250 / 0.55));backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));-webkit-backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6))"></div>
+          <div style="font-size:13.5px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">--chrome-panel</div>
+          <div style="font-size:13px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Полупрозрачный хром со стеклом — материал информационных панелей: итоги, серия, плитки статистики.</div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">03</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Стекло и второй градиент</h2>
+      </div>
+      <p style="margin:0;max-width:62ch;font-size:15px;line-height:1.55;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">Стекло — материал плавающих слоёв: таббар, карточки поверх градиента, кнопки на цветном фоне. Второй градиент спектральный, от оранжевого к фиолетовому: им отмечают достижения и статус, но не обычные данные.</p>
+
+      <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:16px">
+        <div style="position:relative;overflow:hidden;border-radius:24px;padding:24px;min-height:400px;background:var(--grad-accent,linear-gradient(155deg,oklch(0.68 0.19 55),oklch(0.46 0.17 30)));display:flex;flex-direction:column;gap:16px;justify-content:space-between">
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(115deg, oklch(1 0 0 / 0.10) 0 22px, oklch(1 0 0 / 0) 22px 58px)"></div>
+          <div style="position:relative;padding:20px;border-radius:20px;background:var(--chrome-panel,linear-gradient(150deg,oklch(1 0 0/0.70),oklch(0.88 0.008 250/0.45),oklch(1 0 0/0.78),oklch(0.84 0.012 250/0.40),oklch(0.97 0.004 250/0.65)));backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));-webkit-backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));border:1px solid var(--chrome-panel-border,oklch(0.82 0.010 250 / 0.55));box-shadow:var(--shadow-glass,0 6px 24px oklch(0.35 0.03 45 / 0.14));display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:44px;height:44px;flex:none;border-radius:14px;background:var(--grad-spectrum,linear-gradient(100deg,oklch(0.72 0.20 45),oklch(0.65 0.24 20),oklch(0.58 0.27 345),oklch(0.52 0.29 300)));display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:800">7</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Серия 7 дней</div>
+                <div style="margin-top:2px;font-size:13px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Ещё 3 дня до значка «месяц»</div>
+              </div>
+            </div>
+            <div style="height:6px;border-radius:3px;background:oklch(0.5 0.02 60 / 0.18);overflow:hidden"><div style="width:70%;height:100%;border-radius:3px;background:var(--grad-spectrum,linear-gradient(100deg,oklch(0.72 0.20 45),oklch(0.52 0.29 300)))"></div></div>
+            <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10.5px;color:var(--ink-dim,oklch(0.40 0.010 60))">--chrome-panel + --grad-spectrum</div>
+          </div>
+          <div style="position:relative;display:flex;gap:10px">
+            <div style="flex:1;padding:15px;border-radius:16px;text-align:center;font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60));background:var(--glass-bg,oklch(1 0 0 / 0.55));backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));-webkit-backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));border:1px solid var(--glass-border,oklch(1 0 0 / 0.65))">Стеклянная кнопка</div>
+            <div style="flex:none;padding:15px 18px;border-radius:16px;font-size:15px;font-weight:800;color:#fff;background:var(--grad-spectrum,linear-gradient(100deg,oklch(0.72 0.20 45),oklch(0.65 0.24 20),oklch(0.58 0.27 345),oklch(0.52 0.29 300)))">Премиум</div>
+          </div>
+          <div style="position:relative;display:flex;padding:8px 0 10px;border-radius:22px;background:var(--glass-bg,oklch(1 0 0 / 0.55));backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));-webkit-backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));border:1px solid var(--glass-border,oklch(1 0 0 / 0.65));box-shadow:var(--shadow-glass,0 6px 24px oklch(0.35 0.03 45 / 0.14))">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--accent-ink,oklch(0.48 0.15 38))"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:800">Тренажёр</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--ink-dim,oklch(0.40 0.010 60));opacity:.65"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:700">Шпаргалки</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--ink-dim,oklch(0.40 0.010 60));opacity:.65"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:700">Статистика</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--ink-dim,oklch(0.40 0.010 60));opacity:.65"><div style="width:18px;height:18px;border-radius:50%;border:2px solid currentColor"></div><div style="font-size:10.5px;font-weight:700">Профиль</div></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Из чего состоит стекло</div>
+            <div style="display:flex;flex-direction:column;gap:9px;font-size:13px;line-height:1.5;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">
+              <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Размытие.</b> <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">--glass-blur: blur(20px) saturate(1.6)</span></div>
+              <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Подложка.</b> <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">--glass-bg</span> — 55% белого в светлой, 55% тёмного в тёмной, 18% белого в оранжевой.</div>
+              <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Кромка.</b> <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">--glass-border</span> в 1 px — без неё слой теряет край.</div>
+              <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Блик.</b> <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">--glass-hi</span> сверху вниз, только на крупных панелях.</div>
+              <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Тень.</b> <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">--shadow-glass</span> — стекло всегда над контентом.</div>
+            </div>
+          </div>
+          <div style="padding:22px;border-radius:18px;border:1px solid var(--accent-border,oklch(0.88 0.07 45));background:var(--accent-bg,oklch(0.97 0.03 45));display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:16px;font-weight:800;color:var(--accent-ink,oklch(0.48 0.15 38))">Правила стекла</div>
+            <div style="display:flex;flex-direction:column;gap:7px;font-size:13.5px;line-height:1.45;font-weight:600;color:var(--accent-ink,oklch(0.48 0.15 38))">
+              <div>— Не больше двух стеклянных слоёв на экране.</div>
+              <div>— Текст задания и варианты ответа — на плотной поверхности, не на стекле.</div>
+              <div>— Стекло только там, где под ним есть что размывать.</div>
+              <div>— Без поддержки <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">backdrop-filter</span> слой становится плотным: <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">--surface</span> плюс <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">--border</span>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div style="padding:20px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;align-items:center;gap:12px">
+          <div style="width:76px;height:76px;border-radius:50%;padding:3px;background:var(--grad-spectrum-ring,conic-gradient(from 210deg,oklch(0.72 0.20 45),oklch(0.65 0.24 20),oklch(0.58 0.27 345),oklch(0.52 0.29 300),oklch(0.72 0.20 45)))"><div style="width:100%;height:100%;border-radius:50%;background:var(--surface,#fff);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">А</div></div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60));text-align:center">Аватар · кольцо<br>--grad-spectrum-ring</div>
+        </div>
+        <div style="padding:20px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+          <div style="font-size:46px;font-weight:800;letter-spacing:-0.03em;line-height:1;background:var(--grad-spectrum,linear-gradient(100deg,oklch(0.72 0.20 45),oklch(0.65 0.24 20),oklch(0.58 0.27 345),oklch(0.52 0.29 300)));-webkit-background-clip:text;background-clip:text;color:transparent">21,4</div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60));text-align:center">Цифра достижения<br>background-clip: text</div>
+        </div>
+        <div style="padding:20px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+            <div style="padding:5px 11px;border-radius:999px;background:var(--grad-spectrum,linear-gradient(100deg,oklch(0.72 0.20 45),oklch(0.52 0.29 300)));color:#fff;font-size:11px;font-weight:800">14 дней подряд</div>
+            <div style="padding:5px 11px;border-radius:999px;background:var(--grad-spectrum,linear-gradient(100deg,oklch(0.72 0.20 45),oklch(0.52 0.29 300)));color:#fff;font-size:11px;font-weight:800">Премиум</div>
+          </div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60));text-align:center">Маленькие плашки<br>высота 22–26 px</div>
+        </div>
+        <div style="padding:20px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+          <div style="width:64px;height:64px;border-radius:18px;background:var(--grad-spectrum,linear-gradient(100deg,oklch(0.72 0.20 45),oklch(0.65 0.24 20),oklch(0.58 0.27 345),oklch(0.52 0.29 300)));display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:800">★</div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60));text-align:center">Значок достижения<br>радиус 18</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:16px">
+        <div style="position:relative;overflow:hidden;border-radius:24px;padding:28px 22px 22px;background:var(--grad-accent,linear-gradient(155deg,oklch(0.68 0.19 55),oklch(0.46 0.17 30)));display:flex;flex-direction:column;gap:18px;align-self:start">
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(115deg, oklch(1 0 0 / 0.10) 0 22px, oklch(1 0 0 / 0) 22px 58px)"></div>
+          <div style="position:relative;font-size:12.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:oklch(1 0 0 / 0.8)">Нажмите на раздел</div>
+          <div style="position:relative;display:flex;padding:6px 0;border-radius:26px;background:var(--glass-bg,oklch(1 0 0 / 0.55));backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));-webkit-backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));border:1px solid var(--glass-border,oklch(1 0 0 / 0.65));box-shadow:var(--shadow-glass,0 6px 24px oklch(0.35 0.03 45 / 0.14))">
+            <div style="{{ pill }}"><div style="width:100%;height:100%;border-radius:18px;background:var(--glass-hi,linear-gradient(180deg,oklch(1 0 0 / 0.75),oklch(1 0 0 / 0) 60%));border:1px solid var(--glass-border,oklch(1 0 0 / 0.65));box-shadow:0 2px 10px oklch(0.35 0.03 45 / 0.12)"></div></div>
+            <button type="button" onClick="{{ setTab0 }}" style="{{ tab0 }}"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:800">Тренажёр</div></button>
+            <button type="button" onClick="{{ setTab1 }}" style="{{ tab1 }}"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:800">Шпаргалки</div></button>
+            <button type="button" onClick="{{ setTab2 }}" style="{{ tab2 }}"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:800">Статистика</div></button>
+            <button type="button" onClick="{{ setTab3 }}" style="{{ tab3 }}"><div style="width:18px;height:18px;border-radius:50%;border:2px solid currentColor"></div><div style="font-size:10.5px;font-weight:800">Профиль</div></button>
+          </div>
+        </div>
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Переход между разделами</div>
+          <div style="display:flex;flex-direction:column;gap:9px;font-size:13px;line-height:1.5;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">
+            <div>Активный раздел отмечает не цвет иконки, а стеклянная капсула. При переключении она переезжает, а не появляется заново.</div>
+            <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Движение.</b> <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">transform: translateX(N * 100%)</span> · <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">460ms cubic-bezier(.32,.72,0,1)</span> — быстрый разгон, мягкое торможение.</div>
+            <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Капсула.</b> Радиус 18, ширина = 100% / число разделов минус 13 с каждой стороны — почти квадрат, а не полоса. Заливка — блик <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px">--glass-hi</span> поверх стекла таббара, то есть второй слой стекла.</div>
+            <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Подпись.</b> Цвет иконки и текста меняется за 260 ms, чуть быстрее капсулы: подпись «загорается» до её приезда.</div>
+            <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">Анимируем только transform</b> — не left и не width, иначе на слабых телефонах переезд дёргается.</div>
+            <div>Тот же приём работает в любом сегментном переключателе: фильтры статистики, выбор темы в профиле, чипы предметов.</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:18px 22px;border-radius:18px;background:var(--surface-2,oklch(0.97 0.006 60));font-size:13.5px;line-height:1.55;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Спектральный градиент не участвует в семантике: он не может означать «верно», «ошибка» или «пора повторить». Прогресс по заданиям остаётся оранжевым, точность — зелёной и красной.</div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">04</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Типографика</h2>
+      </div>
+      <p style="margin:0;max-width:62ch;font-size:15px;line-height:1.55;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">Manrope во всём интерфейсе, SF Pro Text как системный фолбэк. Крупные размеры — 800 с отрицательным трекингом, служебные — 600–700 без него. Больше трёх начертаний на экране не нужно.</p>
+      <div style="border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);overflow:hidden">
+        <div style="display:flex;align-items:baseline;gap:24px;padding:20px 22px;border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))"><div style="flex:1;font-size:52px;font-weight:800;letter-spacing:-0.03em;line-height:1;color:var(--accent,oklch(0.58 0.19 41))">24 / 28</div><div style="width:220px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">score · 52/800/-0.03em<br>балл варианта</div></div>
+        <div style="display:flex;align-items:baseline;gap:24px;padding:20px 22px;border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))"><div style="flex:1;font-size:26px;font-weight:800;letter-spacing:-0.02em;color:var(--ink-strong,oklch(0.22 0.010 60))">Тренажёр по заданиям</div><div style="width:220px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">h1 · 26/800/-0.02em<br>заголовок экрана</div></div>
+        <div style="display:flex;align-items:baseline;gap:24px;padding:20px 22px;border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))"><div style="flex:1;font-size:22px;font-weight:800;letter-spacing:-0.02em;color:var(--ink-strong,oklch(0.22 0.010 60))">Задание 8. Синтаксис</div><div style="width:220px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">h2 · 22/800/1.25<br>раздел, диалог</div></div>
+        <div style="display:flex;align-items:baseline;gap:24px;padding:20px 22px;border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))"><div style="flex:1;font-size:17px;font-weight:600;line-height:1.45;color:var(--ink-strong,oklch(0.22 0.010 60))">Укажите варианты ответов, в которых верно передана информация</div><div style="width:220px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">question · 17/600/1.45<br>формулировка задания</div></div>
+        <div style="display:flex;align-items:baseline;gap:24px;padding:20px 22px;border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))"><div style="flex:1;font-size:15.5px;font-weight:600;color:var(--ink,oklch(0.26 0.010 60))">Вариант ответа в списке</div><div style="width:220px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">body · 15.5/600<br>ответы, строки списков</div></div>
+        <div style="display:flex;align-items:baseline;gap:24px;padding:20px 22px;border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))"><div style="flex:1;font-size:13px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Пояснение под строкой, служебная подпись</div><div style="width:220px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">caption · 13/500<br>подписи</div></div>
+        <div style="display:flex;align-items:baseline;gap:24px;padding:20px 22px"><div style="flex:1;font-size:12.5px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted,oklch(0.60 0.010 60))">Продолжить тренировку</div><div style="width:220px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))">eyebrow · 12.5/800/0.06em<br>надзаголовок, плашка</div></div>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">05</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Ритм, радиусы, слои</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Отступы</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px"><div style="height:10px;width:6px;border-radius:3px;background:var(--accent,oklch(0.58 0.19 41))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;color:var(--muted,oklch(0.60 0.010 60))">6 · внутри строки</div></div>
+            <div style="display:flex;align-items:center;gap:10px"><div style="height:10px;width:10px;border-radius:3px;background:var(--accent,oklch(0.58 0.19 41))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;color:var(--muted,oklch(0.60 0.010 60))">10 · между плитками</div></div>
+            <div style="display:flex;align-items:center;gap:10px"><div style="height:10px;width:16px;border-radius:3px;background:var(--accent,oklch(0.58 0.19 41))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;color:var(--muted,oklch(0.60 0.010 60))">16 · поля экрана (--pad)</div></div>
+            <div style="display:flex;align-items:center;gap:10px"><div style="height:10px;width:22px;border-radius:3px;background:var(--accent,oklch(0.58 0.19 41))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;color:var(--muted,oklch(0.60 0.010 60))">22 · верх страницы</div></div>
+            <div style="display:flex;align-items:center;gap:10px"><div style="height:10px;width:34px;border-radius:3px;background:var(--accent,oklch(0.58 0.19 41))"></div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;color:var(--muted,oklch(0.60 0.010 60))">24–28 · между блоками</div></div>
+          </div>
+        </div>
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Радиусы</div>
+          <div style="display:flex;align-items:flex-end;gap:10px">
+            <div style="flex:1;height:56px;border-radius:999px;background:var(--surface-3,oklch(0.95 0.010 60));border:1px solid var(--border,oklch(0.90 0.008 60))"></div>
+            <div style="flex:1;height:56px;border-radius:20px;background:var(--surface-3,oklch(0.95 0.010 60));border:1px solid var(--border,oklch(0.90 0.008 60))"></div>
+            <div style="flex:1;height:56px;border-radius:18px;background:var(--surface-3,oklch(0.95 0.010 60));border:1px solid var(--border,oklch(0.90 0.008 60))"></div>
+            <div style="flex:1;height:56px;border-radius:14px;background:var(--surface-3,oklch(0.95 0.010 60));border:1px solid var(--border,oklch(0.90 0.008 60))"></div>
+            <div style="flex:1;height:56px;border-radius:12px;background:var(--surface-3,oklch(0.95 0.010 60));border:1px solid var(--border,oklch(0.90 0.008 60))"></div>
+          </div>
+          <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.7;color:var(--muted,oklch(0.60 0.010 60))">999 чип · 20 карточка-слово<br>18 карточка · 14 кнопка/строка · 12 иконка</div>
+        </div>
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Слои</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="padding:12px 14px;border-radius:12px;background:var(--surface,#fff);border:1px solid var(--border,oklch(0.90 0.008 60));box-shadow:var(--shadow-card,0 1px 2px oklch(0.4 0.02 60 / 0.05));font-size:13px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Контент · граница, без тени</div>
+            <div style="padding:12px 14px;border-radius:12px;background:var(--surface,#fff);box-shadow:var(--shadow-lift,0 8px 28px oklch(0.35 0.03 45 / 0.12));font-size:13px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Диалог, тост · --shadow-lift</div>
+            <div style="padding:12px 14px;border-radius:12px;background:var(--overlay,oklch(0.24 0.02 45 / 0.38));color:#fff;font-size:13px;font-weight:700">Затемнение · --overlay</div>
+          </div>
+          <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;line-height:1.7;color:var(--muted,oklch(0.60 0.010 60))">z: 5 таймер · 20 хедер<br>40 диалог · 60 тост</div>
+        </div>
+      </div>
+      <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;gap:32px;align-items:center;flex-wrap:wrap">
+        <div style="font-size:16px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60));min-width:120px">Motion</div>
+        <div style="display:flex;gap:28px;flex-wrap:wrap;font-size:13.5px;line-height:1.6;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">
+          <div>Нажатие<br><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">opacity .75 / 150ms ease</span></div>
+          <div>Полоса прогресса<br><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">width 300ms ease</span></div>
+          <div>Диалог<br><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">rise 200ms cubic-bezier(.2,.8,.3,1)</span></div>
+          <div>Смена темы<br><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">background/color 250ms ease</span></div>
+          <div>Капсула таббара<br><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">transform 460ms cubic-bezier(.32,.72,0,1)</span></div>
+          <div>Загрузка<br><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">pulse 1.1–1.4s infinite</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:28px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">06</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Компоненты</h2>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Кнопки</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.btn</div></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="padding:15px;border-radius:14px;background:var(--accent,oklch(0.58 0.19 41));color:var(--accent-on,#fff);font-size:16px;font-weight:700;text-align:center">Проверить</div>
+            <div style="padding:14px;border-radius:14px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);color:var(--ink,oklch(0.26 0.010 60));font-size:15px;font-weight:700;text-align:center">Пропустить</div>
+            <div style="padding:12px;font-size:14px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60));text-align:center">Выйти из варианта</div>
+            <div style="padding:14px;border-radius:14px;border:1px solid var(--red-border,oklch(0.76 0.11 25));color:var(--red,oklch(0.55 0.16 25));font-size:15px;font-weight:700;text-align:center">Сбросить прогресс</div>
+            <div style="padding:15px;border-radius:14px;background:var(--surface-3,oklch(0.95 0.010 60));color:var(--faint,oklch(0.75 0.010 60));font-size:16px;font-weight:700;text-align:center">Выберите ответ</div>
+          </div>
+          <div style="font-size:12.5px;line-height:1.5;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">Primary на экране один. Ширина всегда 100%, высота от 46 px.</div>
+        </div>
+
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Поля и чипы</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.answer-input · .chip</div></div>
+          <div style="padding:16px;border-radius:14px;border:1.5px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);font-size:18px;font-weight:700;color:var(--faint,oklch(0.75 0.010 60));text-align:center">введите ответ</div>
+          <div style="padding:16px;border-radius:14px;border:1.5px solid var(--accent,oklch(0.58 0.19 41));background:var(--surface,#fff);font-size:18px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60));text-align:center">неистово</div>
+          <div style="display:flex;gap:8px">
+            <div style="flex:1;padding:16px;border-radius:14px;border:1.5px solid var(--green-border,oklch(0.72 0.09 150));background:var(--green-bg,oklch(0.97 0.02 150));font-size:18px;font-weight:700;color:var(--green-ink,oklch(0.36 0.07 150));text-align:center">верно</div>
+            <div style="flex:1;padding:16px;border-radius:14px;border:1.5px solid var(--red-border,oklch(0.76 0.11 25));background:var(--red-bg,oklch(0.97 0.02 25));font-size:18px;font-weight:700;color:var(--red-ink,oklch(0.42 0.09 25));text-align:center">ошибка</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div style="padding:7px 12px;border-radius:999px;border:1px solid var(--accent,oklch(0.58 0.19 41));background:var(--accent-bg,oklch(0.97 0.03 45));font-size:12.5px;font-weight:700;color:var(--accent-ink,oklch(0.48 0.15 38))">Все задания</div>
+            <div style="padding:7px 12px;border-radius:999px;border:1px solid var(--border,oklch(0.90 0.008 60));font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">Слабые</div>
+            <div style="padding:7px 12px;border-radius:999px;border:1px solid var(--border,oklch(0.90 0.008 60));font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">За неделю</div>
+            <div style="padding:7px 12px;border-radius:999px;border:1px solid var(--border,oklch(0.90 0.008 60));font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">Ударения</div>
+          </div>
+        </div>
+
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Варианты ответа</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.option</div></div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:50%;border:1.5px solid var(--faint,oklch(0.75 0.010 60))"></div><div style="flex:1;font-size:15.5px;font-weight:600;color:var(--ink,oklch(0.26 0.010 60))">Обычное состояние</div></div>
+            <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--accent,oklch(0.58 0.19 41));background:var(--accent-bg,oklch(0.97 0.03 45));display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:50%;background:var(--accent,oklch(0.58 0.19 41));display:flex;align-items:center;justify-content:center;color:var(--accent-on,#fff);font-size:11px;font-weight:800">✓</div><div style="flex:1;font-size:15.5px;font-weight:600;color:var(--ink,oklch(0.26 0.010 60))">Выбрано</div></div>
+            <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--green-border,oklch(0.72 0.09 150));background:var(--green-bg,oklch(0.97 0.02 150));display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:50%;background:var(--green,oklch(0.52 0.12 150));display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800">✓</div><div style="flex:1;font-size:15.5px;font-weight:600;color:var(--green-ink,oklch(0.36 0.07 150))">Правильный</div></div>
+            <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--red-border,oklch(0.76 0.11 25));background:var(--red-bg,oklch(0.97 0.02 25));display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:50%;background:var(--red,oklch(0.55 0.16 25));display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800">×</div><div style="flex:1;font-size:15.5px;font-weight:600;color:var(--red-ink,oklch(0.42 0.09 25))">Ошибочный выбор</div></div>
+            <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:6px;border:1.5px solid var(--faint,oklch(0.75 0.010 60))"></div><div style="flex:1;font-size:15.5px;font-weight:600;color:var(--ink,oklch(0.26 0.010 60))">Множественный выбор</div></div>
+          </div>
+        </div>
+
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Вердикт и разбор</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.verdict · .answer-line</div></div>
+          <div style="padding:14px 16px;border-radius:14px;background:var(--green-bg,oklch(0.97 0.02 150))"><div style="font-size:15px;font-weight:800;color:var(--green-ink,oklch(0.36 0.07 150))">Верно, +1 балл</div><div style="margin-top:5px;font-size:14px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Ударение падает на второй слог.</div></div>
+          <div style="padding:14px 16px;border-radius:14px;background:var(--red-bg,oklch(0.97 0.02 25))"><div style="font-size:15px;font-weight:800;color:var(--red-ink,oklch(0.42 0.09 25))">Ошибка</div><div style="margin-top:5px;font-size:14px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Задание 8: одна неточность из пяти — 1 балл из 2.</div></div>
+          <div style="padding:13px 14px;border-radius:13px;background:var(--red-bg,oklch(0.97 0.02 25));font-size:14px;font-weight:600;color:var(--red-ink,oklch(0.42 0.09 25))">Ваш ответ: 13524</div>
+          <div style="padding:13px 14px;border-radius:13px;background:var(--green-bg,oklch(0.97 0.02 150));font-size:14px;font-weight:600;color:var(--green-ink,oklch(0.36 0.07 150))">Правильно: 13254</div>
+        </div>
+
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Строки и карточки</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.card · .task-row · .sheet-row</div></div>
+          <div style="padding:18px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;align-items:center;gap:14px">
+            <div style="width:42px;height:42px;flex:none;border-radius:12px;background:var(--accent-bg,oklch(0.97 0.03 45));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:var(--accent-ink,oklch(0.48 0.15 38))">26</div>
+            <div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Полный вариант</div><div style="margin-top:3px;font-size:13px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">26 заданий · 28 баллов · 3 ч 30 мин</div></div>
+            <div style="color:var(--faint,oklch(0.75 0.010 60));font-size:18px">›</div>
+          </div>
+          <div style="padding:14px;border-radius:14px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff);display:flex;align-items:center;gap:13px">
+            <div style="width:38px;height:38px;flex:none;border-radius:11px;background:var(--surface-3,oklch(0.95 0.010 60));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:var(--accent-ink,oklch(0.48 0.15 38))">4</div>
+            <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60));line-height:1.3">Нормы ударения</div><div style="margin-top:2px;font-size:12.5px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">База · 1 балл</div></div>
+            <div style="font-size:12px;font-weight:700;color:var(--faint,oklch(0.75 0.010 60))">248</div>
+          </div>
+          <div style="padding:13px 14px;border-radius:14px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff);display:flex;align-items:center;gap:12px">
+            <div style="flex:none;min-width:32px;font-size:13px;font-weight:800;color:var(--accent,oklch(0.58 0.19 41))">15</div>
+            <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Н и НН в словах</div><div style="margin-top:2px;font-size:12px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">Шпаргалка · 4 мин</div></div>
+            <div style="font-size:12px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">→</div>
+          </div>
+        </div>
+
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Прогресс и данные</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.bar · .ring · .tiles · .stat-row</div></div>
+          <div style="height:8px;border-radius:4px;background:var(--track,oklch(0.92 0.008 60));overflow:hidden"><div style="width:64%;height:100%;border-radius:4px;background:var(--accent,oklch(0.58 0.19 41))"></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div style="padding:14px 8px;border-radius:14px;background:var(--chrome-panel,linear-gradient(150deg,oklch(1 0 0/0.70),oklch(0.88 0.008 250/0.45),oklch(1 0 0/0.78),oklch(0.84 0.012 250/0.40),oklch(0.97 0.004 250/0.65)));border:1px solid var(--chrome-panel-border,oklch(0.82 0.010 250 / 0.55));backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));-webkit-backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));text-align:center"><div style="font-size:20px;font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">18</div><div style="margin-top:2px;font-size:11.5px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">решено</div></div>
+            <div style="padding:14px 8px;border-radius:14px;background:var(--green-bg,oklch(0.97 0.02 150));text-align:center"><div style="font-size:20px;font-weight:800;color:var(--green-ink,oklch(0.36 0.07 150))">14</div><div style="margin-top:2px;font-size:11.5px;font-weight:600;color:var(--green-ink,oklch(0.36 0.07 150))">верно</div></div>
+            <div style="padding:14px 8px;border-radius:14px;background:var(--red-bg,oklch(0.97 0.02 25));text-align:center"><div style="font-size:20px;font-weight:800;color:var(--red-ink,oklch(0.42 0.09 25))">4</div><div style="margin-top:2px;font-size:11.5px;font-weight:600;color:var(--red-ink,oklch(0.42 0.09 25))">ошибки</div></div>
+          </div>
+          <div style="padding:13px 14px;border-radius:13px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff)">
+            <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:13.5px;font-weight:800;color:var(--ink-dim,oklch(0.40 0.010 60))">№12</div><div style="flex:1;font-size:13px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Окончания глаголов</div><div style="font-size:13.5px;font-weight:800;color:var(--red,oklch(0.55 0.16 25))">42%</div></div>
+            <div style="margin-top:7px;height:5px;border-radius:3px;background:var(--track,oklch(0.92 0.008 60));overflow:hidden"><div style="width:42%;height:100%;background:var(--red,oklch(0.55 0.16 25))"></div></div>
+            <div style="margin-top:7px;font-size:12px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">21 попытка · последняя вчера</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="position:relative;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green,oklch(0.52 0.12 150)) 0 66%, var(--track,oklch(0.92 0.008 60)) 66% 100%)"><div style="position:absolute;inset:5px;border-radius:50%;background:var(--surface,#fff)"></div><div style="position:relative;font-size:11px;font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">2/3</div></div>
+            <div style="font-size:12.5px;line-height:1.5;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">Кольцо этапов карточки:<br>сегмент = пройденный интервал повтора</div>
+          </div>
+        </div>
+
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Карточки слов</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.flashcard · .word-row</div></div>
+          <div style="min-height:150px;padding:24px 18px;border-radius:20px;border:1px solid var(--accent-border,oklch(0.88 0.07 45));background:var(--surface,#fff);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px">
+            <div style="font-size:32px;font-weight:800;letter-spacing:-0.02em;color:var(--ink-strong,oklch(0.22 0.010 60))">свёкл<span style="color:var(--accent,oklch(0.58 0.19 41))">а</span></div>
+            <div style="font-size:13.5px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">Ударение на первый слог во всех формах</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="padding:14px;border-radius:14px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);text-align:center;font-size:15px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Не знаю</div>
+            <div style="padding:14px;border-radius:14px;background:var(--accent,oklch(0.58 0.19 41));color:var(--accent-on,#fff);text-align:center;font-size:15px;font-weight:700">Знаю</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:var(--surface,#fff)">
+            <div style="flex:1;font-size:17px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">жалюз<span style="color:var(--accent,oklch(0.58 0.19 41))">и</span></div>
+            <div style="padding:4px 8px;border-radius:999px;background:var(--accent,oklch(0.58 0.19 41));color:var(--accent-on,#fff);font-size:10.5px;font-weight:800">пора повторить</div>
+          </div>
+        </div>
+
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Навигация варианта</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.timer-bar · .nav-grid</div></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:14px;background:var(--surface,#fff);border:1px solid var(--border-soft,oklch(0.93 0.006 60))">
+            <div style="font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink,oklch(0.26 0.010 60))">2:41:08</div>
+            <div style="flex:1"></div>
+            <div style="padding:7px 13px;border-radius:999px;border:1px solid var(--border,oklch(0.90 0.008 60));font-size:12.5px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Пауза</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
+            <div style="aspect-ratio:1;border-radius:10px;background:var(--green-bg,oklch(0.97 0.02 150));border:1px solid var(--green-border,oklch(0.72 0.09 150));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--green-ink,oklch(0.36 0.07 150))">1</div>
+            <div style="aspect-ratio:1;border-radius:10px;background:var(--green-bg,oklch(0.97 0.02 150));border:1px solid var(--green-border,oklch(0.72 0.09 150));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--green-ink,oklch(0.36 0.07 150))">2</div>
+            <div style="aspect-ratio:1;border-radius:10px;background:var(--red-bg,oklch(0.97 0.02 25));border:1px solid var(--red-border,oklch(0.76 0.11 25));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--red-ink,oklch(0.42 0.09 25))">3</div>
+            <div style="aspect-ratio:1;border-radius:10px;background:var(--surface,#fff);border:2px solid var(--accent,oklch(0.58 0.19 41));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--accent,oklch(0.58 0.19 41))">4</div>
+            <div style="aspect-ratio:1;border-radius:10px;background:var(--surface,#fff);border:1px solid var(--border,oklch(0.90 0.008 60));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">5</div>
+            <div style="aspect-ratio:1;border-radius:10px;background:var(--surface,#fff);border:1px solid var(--border,oklch(0.90 0.008 60));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">6</div>
+            <div style="aspect-ratio:1;border-radius:10px;background:var(--surface,#fff);border:1px solid var(--border,oklch(0.90 0.008 60));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">7</div>
+          </div>
+          <div style="display:flex;padding:8px 0 10px;border-top:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff);border-radius:0 0 14px 14px">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--accent,oklch(0.58 0.19 41))"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:700">Тренажёр</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--faint,oklch(0.75 0.010 60))"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:700">Шпаргалки</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--faint,oklch(0.75 0.010 60))"><div style="width:18px;height:18px;border-radius:5px;background:currentColor"></div><div style="font-size:10.5px;font-weight:700">Статистика</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--faint,oklch(0.75 0.010 60))"><div style="width:18px;height:18px;border-radius:50%;border:2px solid currentColor"></div><div style="font-size:10.5px;font-weight:700">Профиль</div></div>
+          </div>
+        </div>
+
+        <div style="padding:22px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface-2,oklch(0.97 0.006 60));display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:10px"><div style="font-size:15px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Служебные состояния</div><div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--muted,oklch(0.60 0.010 60))">.banner · .empty · .toast · .dialog</div></div>
+          <div style="padding:16px 18px;border-radius:14px;background:var(--amber-bg,oklch(0.97 0.03 80));font-size:14px;font-weight:600;line-height:1.45;color:var(--amber-ink,oklch(0.46 0.10 70))">Пока мало данных для статистики.<div style="margin-top:6px;font-size:12.5px;font-weight:700;color:var(--amber-ink,oklch(0.46 0.10 70));opacity:.8">Решено 6 из 20 заданий</div></div>
+          <div style="padding:14px 16px;border-radius:14px;background:var(--ink-strong,oklch(0.22 0.010 60));color:var(--page,#fff);font-size:14px;font-weight:600;text-align:center">Прогресс сохранён</div>
+          <div style="padding:20px;border-radius:20px;background:var(--surface,#fff);box-shadow:var(--shadow-lift,0 8px 28px oklch(0.35 0.03 45 / 0.12));display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:18px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Выйти из варианта?</div>
+            <div style="font-size:14.5px;font-weight:500;line-height:1.5;color:var(--ink-dim,oklch(0.40 0.010 60))">Таймер остановится, ответы сохранятся. Вернуться можно с того же задания.</div>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+              <div style="padding:14px;border-radius:14px;background:var(--accent,oklch(0.58 0.19 41));color:var(--accent-on,#fff);text-align:center;font-size:15px;font-weight:700">Продолжить решать</div>
+              <div style="padding:12px;text-align:center;font-size:14px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">Выйти</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:7px;align-items:center;justify-content:center;padding:12px 0">
+            <div style="width:9px;height:9px;border-radius:50%;background:var(--faint,oklch(0.75 0.010 60));animation:ds-pulse 1.1s ease-in-out infinite"></div>
+            <div style="width:9px;height:9px;border-radius:50%;background:var(--faint,oklch(0.75 0.010 60));animation:ds-pulse 1.1s ease-in-out .15s infinite"></div>
+            <div style="width:9px;height:9px;border-radius:50%;background:var(--faint,oklch(0.75 0.010 60));animation:ds-pulse 1.1s ease-in-out .3s infinite"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">07</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Экраны в сборе</h2>
+      </div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+
+        <div style="width:340px;border-radius:28px;overflow:hidden;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--page,#fff);box-shadow:var(--shadow-lift,0 8px 28px oklch(0.35 0.03 45 / 0.12));display:flex;flex-direction:column">
+          <div style="height:44px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))">
+            <div style="font-size:20px;font-weight:500;color:var(--accent-ink,oklch(0.48 0.15 38))">←</div>
+            <div><div style="font-size:15px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Задание 4</div><div style="font-size:11px;font-weight:500;color:var(--muted,oklch(0.60 0.010 60))">нормы ударения</div></div>
+          </div>
+          <div style="padding:20px 16px 24px;display:flex;flex-direction:column;gap:0">
+            <div style="display:flex;align-items:baseline;justify-content:space-between"><div style="font-size:14px;font-weight:700;color:var(--ink-dim,oklch(0.40 0.010 60))">Вопрос 3 из 10</div><div style="font-size:13px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">2 верно</div></div>
+            <div style="margin-top:10px;height:5px;border-radius:3px;background:var(--track,oklch(0.92 0.008 60));overflow:hidden"><div style="width:30%;height:100%;background:var(--accent,oklch(0.58 0.19 41))"></div></div>
+            <div style="margin-top:22px;font-size:17px;font-weight:600;line-height:1.45;color:var(--ink-strong,oklch(0.22 0.010 60))">В каком слове допущена ошибка в постановке ударения?</div>
+            <div style="margin-top:18px;display:flex;flex-direction:column;gap:9px">
+              <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:50%;border:1.5px solid var(--faint,oklch(0.75 0.010 60))"></div><div style="font-size:15.5px;font-weight:600;color:var(--ink,oklch(0.26 0.010 60))">включИт</div></div>
+              <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--accent,oklch(0.58 0.19 41));background:var(--accent-bg,oklch(0.97 0.03 45));display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:50%;background:var(--accent,oklch(0.58 0.19 41));display:flex;align-items:center;justify-content:center;color:var(--accent-on,#fff);font-size:11px;font-weight:800">✓</div><div style="font-size:15.5px;font-weight:600;color:var(--ink,oklch(0.26 0.010 60))">тОрты</div></div>
+              <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:50%;border:1.5px solid var(--faint,oklch(0.75 0.010 60))"></div><div style="font-size:15.5px;font-weight:600;color:var(--ink,oklch(0.26 0.010 60))">докумЕнт</div></div>
+              <div style="padding:15px 14px;border-radius:14px;border:1.5px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;align-items:center;gap:12px"><div style="width:20px;height:20px;flex:none;border-radius:50%;border:1.5px solid var(--faint,oklch(0.75 0.010 60))"></div><div style="font-size:15.5px;font-weight:600;color:var(--ink,oklch(0.26 0.010 60))">крАны</div></div>
+            </div>
+            <div style="margin-top:22px;padding:15px;border-radius:14px;background:var(--accent,oklch(0.58 0.19 41));color:var(--accent-on,#fff);text-align:center;font-size:16px;font-weight:700">Проверить</div>
+          </div>
+        </div>
+
+        <div style="width:340px;border-radius:28px;overflow:hidden;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--page,#fff);box-shadow:var(--shadow-lift,0 8px 28px oklch(0.35 0.03 45 / 0.12));display:flex;flex-direction:column">
+          <div style="padding:26px 16px;background:var(--grad-accent,linear-gradient(155deg,oklch(0.68 0.19 55),oklch(0.46 0.17 30)));display:flex;flex-direction:column;gap:6px;align-items:center">
+            <div style="font-size:12.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:oklch(1 0 0 / 0.8)">Вариант завершён</div>
+            <div style="font-size:52px;font-weight:800;letter-spacing:-0.03em;color:#fff;line-height:1.05">24</div>
+            <div style="font-size:14px;font-weight:700;color:oklch(1 0 0 / 0.85)">из 28 первичных · 82 тестовых</div>
+          </div>
+          <div style="padding:20px 16px 24px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="padding:16px;border-radius:14px;background:var(--chrome-panel,linear-gradient(150deg,oklch(1 0 0/0.70),oklch(0.88 0.008 250/0.45),oklch(1 0 0/0.78),oklch(0.84 0.012 250/0.40),oklch(0.97 0.004 250/0.65)));border:1px solid var(--chrome-panel-border,oklch(0.82 0.010 250 / 0.55));backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));-webkit-backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));text-align:center"><div style="font-size:28px;font-weight:800;letter-spacing:-0.02em;color:var(--ink,oklch(0.26 0.010 60))">2:41</div><div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--muted,oklch(0.60 0.010 60))">затрачено</div></div>
+              <div style="padding:16px;border-radius:14px;background:var(--accent-bg,oklch(0.97 0.03 45));text-align:center"><div style="font-size:28px;font-weight:800;letter-spacing:-0.02em;color:var(--accent-ink,oklch(0.48 0.15 38))">+3</div><div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--accent-ink,oklch(0.48 0.15 38))">к прошлому</div></div>
+            </div>
+            <div style="font-size:12.5px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted,oklch(0.60 0.010 60))">Разобрать ошибки</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="padding:13px 14px;border-radius:13px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff);display:flex;align-items:center;gap:10px"><div style="font-size:14px;font-weight:800;color:var(--red,oklch(0.55 0.16 25))">×</div><div style="flex:1;font-size:14px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">№8 Синтаксические нормы</div><div style="color:var(--faint,oklch(0.75 0.010 60))">›</div></div>
+              <div style="padding:13px 14px;border-radius:13px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff);display:flex;align-items:center;gap:10px"><div style="font-size:14px;font-weight:800;color:var(--red,oklch(0.55 0.16 25))">×</div><div style="flex:1;font-size:14px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">№12 Окончания глаголов</div><div style="color:var(--faint,oklch(0.75 0.010 60))">›</div></div>
+              <div style="padding:13px 14px;border-radius:13px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff);display:flex;align-items:center;gap:10px"><div style="font-size:14px;font-weight:800;color:var(--red,oklch(0.55 0.16 25))">×</div><div style="flex:1;font-size:14px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">№22 Средства выразительности</div><div style="color:var(--faint,oklch(0.75 0.010 60))">›</div></div>
+            </div>
+            <div style="padding:14px;border-radius:14px;border:1px solid var(--border,oklch(0.90 0.008 60));text-align:center;font-size:15px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">К статистике</div>
+          </div>
+        </div>
+
+        <div style="width:340px;border-radius:28px;overflow:hidden;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--page,#fff);box-shadow:var(--shadow-lift,0 8px 28px oklch(0.35 0.03 45 / 0.12));display:flex;flex-direction:column">
+          <div style="height:44px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border-soft,oklch(0.93 0.006 60))"><div style="font-size:15px;font-weight:700;color:var(--ink,oklch(0.26 0.010 60))">Статистика</div></div>
+          <div style="padding:20px 16px 24px;display:flex;flex-direction:column;gap:14px">
+            <div style="padding:18px;border-radius:18px;background:var(--chrome-panel,linear-gradient(150deg,oklch(1 0 0/0.70),oklch(0.88 0.008 250/0.45),oklch(1 0 0/0.78),oklch(0.84 0.012 250/0.40),oklch(0.97 0.004 250/0.65)));border:1px solid var(--chrome-panel-border,oklch(0.82 0.010 250 / 0.55));backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6));-webkit-backdrop-filter:var(--glass-blur,blur(20px) saturate(1.6))">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between">
+                <div><div style="font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">Средний балл</div><div style="margin-top:4px;font-size:40px;font-weight:800;letter-spacing:-0.03em;line-height:1;color:var(--ink-strong,oklch(0.22 0.010 60))">21,4</div></div>
+                <div style="text-align:right;font-size:13px;font-weight:600;line-height:1.6;color:var(--muted,oklch(0.60 0.010 60))"><div style="color:var(--green,oklch(0.52 0.12 150))">+2,1 за неделю</div><div>7 вариантов</div></div>
+              </div>
+              <div style="margin-top:16px;display:flex;align-items:flex-end;gap:5px;height:70px">
+                <div style="flex:1;height:38%;border-radius:4px 4px 0 0;background:var(--accent-border,oklch(0.88 0.07 45))"></div>
+                <div style="flex:1;height:52%;border-radius:4px 4px 0 0;background:var(--accent-border,oklch(0.88 0.07 45))"></div>
+                <div style="flex:1;height:44%;border-radius:4px 4px 0 0;background:var(--accent-border,oklch(0.88 0.07 45))"></div>
+                <div style="flex:1;height:66%;border-radius:4px 4px 0 0;background:var(--accent-border,oklch(0.88 0.07 45))"></div>
+                <div style="flex:1;height:74%;border-radius:4px 4px 0 0;background:var(--accent,oklch(0.58 0.19 41))"></div>
+                <div style="flex:1;height:86%;border-radius:4px 4px 0 0;background:var(--accent,oklch(0.58 0.19 41))"></div>
+                <div style="flex:1;height:100%;border-radius:4px 4px 0 0;background:var(--accent,oklch(0.58 0.19 41))"></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <div style="padding:7px 12px;border-radius:999px;border:1px solid var(--accent,oklch(0.58 0.19 41));background:var(--accent-bg,oklch(0.97 0.03 45));font-size:12.5px;font-weight:700;color:var(--accent-ink,oklch(0.48 0.15 38))">Слабые темы</div>
+              <div style="padding:7px 12px;border-radius:999px;border:1px solid var(--border,oklch(0.90 0.008 60));font-size:12.5px;font-weight:700;color:var(--muted,oklch(0.60 0.010 60))">Все задания</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="padding:13px 14px;border-radius:13px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff)"><div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:13.5px;font-weight:800;color:var(--ink-dim,oklch(0.40 0.010 60))">№12</div><div style="flex:1;font-size:13px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Окончания глаголов</div><div style="font-size:13.5px;font-weight:800;color:var(--red,oklch(0.55 0.16 25))">42%</div></div><div style="margin-top:7px;height:5px;border-radius:3px;background:var(--track,oklch(0.92 0.008 60));overflow:hidden"><div style="width:42%;height:100%;background:var(--red,oklch(0.55 0.16 25))"></div></div></div>
+              <div style="padding:13px 14px;border-radius:13px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff)"><div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:13.5px;font-weight:800;color:var(--ink-dim,oklch(0.40 0.010 60))">№8</div><div style="flex:1;font-size:13px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Синтаксические нормы</div><div style="font-size:13.5px;font-weight:800;color:var(--amber-ink,oklch(0.46 0.10 70))">61%</div></div><div style="margin-top:7px;height:5px;border-radius:3px;background:var(--track,oklch(0.92 0.008 60));overflow:hidden"><div style="width:61%;height:100%;background:var(--amber,oklch(0.66 0.14 75))"></div></div></div>
+              <div style="padding:13px 14px;border-radius:13px;border:1px solid var(--border-soft,oklch(0.93 0.006 60));background:var(--surface,#fff)"><div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:13.5px;font-weight:800;color:var(--ink-dim,oklch(0.40 0.010 60))">№4</div><div style="flex:1;font-size:13px;font-weight:600;color:var(--ink-dim,oklch(0.40 0.010 60))">Нормы ударения</div><div style="font-size:13.5px;font-weight:800;color:var(--green,oklch(0.52 0.12 150))">88%</div></div><div style="margin-top:7px;height:5px;border-radius:3px;background:var(--track,oklch(0.92 0.008 60));overflow:hidden"><div style="width:88%;height:100%;background:var(--green,oklch(0.52 0.12 150))"></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">08</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Как расширять систему</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div style="padding:24px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:17px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Новый экран</div>
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">
+            <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">1.</b> Определите уровень: таб (их всегда 4), раздел внутри таба или полноэкранный поток с таймером.</div>
+            <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">2.</b> Хедер: заголовок + подзаголовок, кнопка «назад» только у вложенных экранов.</div>
+            <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">3.</b> Контент собирается из существующих строк и карточек. Новый примитив вводится, только если ни одна из семи существующих строк не подходит.</div>
+            <div><b style="font-weight:800;color:var(--ink,oklch(0.26 0.010 60))">4.</b> Обязательны четыре состояния: загрузка (skeleton), пусто, ошибка, успех.</div>
+          </div>
+        </div>
+        <div style="padding:24px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:17px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Новый тип задания</div>
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">
+            <div>Каркас один: заголовок задания → текст → ввод ответа → вердикт → «Дальше». Меняется только средний слой.</div>
+            <div>Уже есть: выбор одного, множественный выбор, ввод строки, ввод цифр, соответствие, карточка со словом, цитата со средством выразительности.</div>
+            <div>Для сочинения и развёрнутого ответа новый слой — многострочное поле на токенах <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12.5px">.answer-input</span> плюс блок критериев на плитках, как в результате варианта.</div>
+            <div>Балл всегда показывается рядом с вердиктом: правила начисления описаны в state.md.</div>
+          </div>
+        </div>
+        <div style="padding:24px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:17px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Три темы</div>
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">
+            <div>Светлая — по умолчанию. Тёмная включается, если Telegram отдал тёмную схему. Оранжевая — только вручную, из профиля.</div>
+            <div>Ни один компонент не знает о темах: он пользуется токенами. Новый цвет сначала появляется как токен во всех трёх темах, потом в компоненте.</div>
+            <div>В оранжевой теме поверхности полупрозрачные, а акцент — белый. Поэтому на ней нельзя использовать белый как цвет текста на карточке и оранжевый как заливку кнопки.</div>
+            <div>Проверка контраста: основной текст от 4.5:1, служебный от 3:1 в каждой теме.</div>
+          </div>
+        </div>
+        <div style="padding:24px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:17px;font-weight:800;color:var(--ink-strong,oklch(0.22 0.010 60))">Стекло и градиенты</div>
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">
+            <div>Четыре материала с разными ролями: плотная поверхность — для чтения и решения, хром-стекло <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12.5px">.panel</span> — для информационных панелей (итоги, серия, плитки статистики), стекло <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12.5px">.glass</span> — для плавающих слоёв, градиент — для событий.</div>
+            <div>Раньше эти панели были серыми: везде, где стоял <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12.5px">--surface-2</span> как фон данных, теперь хром-стекло. Кнопки, строки списков и поля ввода остаются плотными.</div>
+            <div>Оранжевый градиент — обложки и итоги. Спектральный — достижения, серии, статус, аватар. Оба только на площади до трети экрана.</div>
+            <div>Новый элемент со стеклом добавляется классом <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12.5px">.glass</span>, новый градиентный текст — <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12.5px">.grad-text</span>. Своих значений размытия и градиента в компонентах не бывает.</div>
+          </div>
+        </div>
+        <div style="padding:24px;border-radius:18px;border:1px solid var(--accent-border,oklch(0.88 0.07 45));background:var(--accent-bg,oklch(0.97 0.03 45));display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:17px;font-weight:800;color:var(--accent-ink,oklch(0.48 0.15 38))">Чего не делаем</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5;font-weight:600;color:var(--accent-ink,oklch(0.48 0.15 38))">
+            <div>— Градиент на карточках и кнопках списка.</div>
+            <div>— Больше одного хром-объекта на экране.</div>
+            <div>— Цвет вне токенов, даже «на один экран».</div>
+            <div>— Две primary-кнопки рядом.</div>
+            <div>— Тени на контентных карточках: только граница.</div>
+            <div>— Иконки-эмодзи в интерфейсе.</div>
+            <div>— Стекло под текстом задания.</div>
+            <div>— Спектральный градиент в значении «верно» или «ошибка».</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <sc-if value="{{ showCode }}" hint-placeholder-val="{{ true }}">
+    <section style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;color:var(--accent,oklch(0.58 0.19 41))">09</div>
+        <h2 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-0.025em;color:var(--ink-strong,oklch(0.22 0.010 60))">Токены для разработки</h2>
+      </div>
+      <p style="margin:0;max-width:62ch;font-size:15px;line-height:1.55;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">Заменяет блок <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13.5px">:root</span> в static/app.css. Тема ставится атрибутом на <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13.5px">&lt;html data-theme&gt;</span>; остальные правила app.css остаются как есть, меняются только значения переменных.</p>
+      <pre style="margin:0;padding:24px;border-radius:18px;background:var(--surface-2,oklch(0.97 0.006 60));border:1px solid var(--border,oklch(0.90 0.008 60));overflow-x:auto;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px;line-height:1.65;color:var(--ink-dim,oklch(0.40 0.010 60))">:root, [data-theme="light"] {
+  --page:#fff;                    --surface:#fff;
+  --surface-2:oklch(.97 .006 60); --surface-3:oklch(.95 .010 60);
+  --border:oklch(.90 .008 60);    --border-soft:oklch(.93 .006 60);
+  --track:oklch(.92 .008 60);
+
+  --ink-strong:oklch(.22 .010 60); --ink:oklch(.26 .010 60);
+  --ink-dim:oklch(.40 .010 60);    --muted:oklch(.60 .010 60);
+  --faint:oklch(.75 .010 60);
+
+  --accent:oklch(.58 .19 41);      --accent-on:#fff;
+  --accent-ink:oklch(.48 .15 38);  --accent-bg:oklch(.97 .03 45);
+  --accent-border:oklch(.88 .07 45);
+
+  --green:oklch(.52 .12 150); --green-bg:oklch(.97 .02 150);
+  --green-border:oklch(.72 .09 150); --green-ink:oklch(.36 .07 150);
+  --red:oklch(.55 .16 25);    --red-bg:oklch(.97 .02 25);
+  --red-border:oklch(.76 .11 25);    --red-ink:oklch(.42 .09 25);
+  --amber:oklch(.66 .14 75);  --amber-bg:oklch(.97 .03 80);
+  --amber-ink:oklch(.46 .10 70);
+
+  --grad-accent:linear-gradient(155deg,oklch(.68 .19 55) 0%,
+                oklch(.56 .20 38) 55%,oklch(.46 .17 30) 100%);
+  --chrome:linear-gradient(150deg,oklch(.97 .004 250) 0%,
+           oklch(.80 .010 250) 32%,oklch(.99 .002 250) 52%,
+           oklch(.74 .014 250) 74%,oklch(.92 .006 250) 100%);
+  --grad-spectrum:linear-gradient(100deg,oklch(.72 .20 45) 0%,
+                  oklch(.65 .24 20) 38%,oklch(.58 .27 345) 66%,
+                  oklch(.52 .29 300) 100%);
+  --grad-spectrum-ring:conic-gradient(from 210deg,oklch(.72 .20 45),
+                       oklch(.65 .24 20),oklch(.58 .27 345),
+                       oklch(.52 .29 300),oklch(.72 .20 45));
+
+  --chrome-panel:linear-gradient(150deg,oklch(1 0 0/.70) 0%,
+                 oklch(.88 .008 250/.45) 30%,oklch(1 0 0/.78) 52%,
+                 oklch(.84 .012 250/.40) 74%,oklch(.97 .004 250/.65) 100%);
+  --chrome-panel-border:oklch(.82 .010 250/.55);
+
+  --glass-bg:oklch(1 0 0/.55);   --glass-border:oklch(1 0 0/.65);
+  --glass-edge:oklch(.80 .01 60/.35);
+  --glass-blur:blur(20px) saturate(1.6);
+  --glass-hi:linear-gradient(180deg,oklch(1 0 0/.75),oklch(1 0 0/0) 60%);
+
+  --shadow-card:0 1px 2px oklch(.4 .02 60/.05);
+  --shadow-lift:0 8px 28px oklch(.35 .03 45/.12);
+  --shadow-glass:0 6px 24px oklch(.35 .03 45/.14);
+  --overlay:oklch(.24 .02 45/.38);
+
+  --radius-card:18px; --radius:14px; --radius-sm:12px; --pad:16px;
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+
+[data-theme="dark"] {
+  --page:oklch(.17 .008 60);      --surface:oklch(.21 .009 60);
+  --surface-2:oklch(.25 .010 60); --surface-3:oklch(.29 .012 60);
+  --border:oklch(.33 .012 60);    --border-soft:oklch(.28 .010 60);
+  --track:oklch(.31 .012 60);
+  --ink-strong:oklch(.98 .004 60); --ink:oklch(.94 .005 60);
+  --ink-dim:oklch(.83 .008 60);    --muted:oklch(.68 .010 60);
+  --faint:oklch(.52 .010 60);
+  --accent:oklch(.70 .18 48);      --accent-on:oklch(.20 .05 35);
+  --accent-ink:oklch(.78 .14 55);  --accent-bg:oklch(.28 .06 40);
+  --accent-border:oklch(.42 .10 42);
+  --green:oklch(.72 .15 150); --green-bg:oklch(.27 .05 150);
+  --green-border:oklch(.45 .10 150); --green-ink:oklch(.85 .11 150);
+  --red:oklch(.68 .17 25);    --red-bg:oklch(.28 .06 25);
+  --red-border:oklch(.45 .12 25);    --red-ink:oklch(.86 .09 25);
+  --amber:oklch(.78 .14 80);  --amber-bg:oklch(.30 .06 75);
+  --amber-ink:oklch(.88 .11 80);
+  --chrome-panel:linear-gradient(150deg,oklch(.44 .010 250/.55) 0%,
+                 oklch(.28 .008 250/.50) 30%,oklch(.50 .010 250/.55) 52%,
+                 oklch(.26 .008 250/.50) 74%,oklch(.40 .010 250/.55) 100%);
+  --chrome-panel-border:oklch(1 0 0/.13);
+  --glass-bg:oklch(.30 .012 60/.55); --glass-border:oklch(1 0 0/.16);
+  --glass-edge:oklch(0 0 0/.4);
+  --glass-hi:linear-gradient(180deg,oklch(1 0 0/.14),oklch(1 0 0/0) 60%);
+  --shadow-card:0 1px 2px oklch(0 0 0/.4);
+  --shadow-lift:0 10px 32px oklch(0 0 0/.5);
+  --shadow-glass:0 8px 28px oklch(0 0 0/.45);
+  --overlay:oklch(.10 .01 45/.6);
+}
+
+[data-theme="orange"] {
+  --page:oklch(.55 .20 38);
+  --surface:oklch(1 0 0/.13);   --surface-2:oklch(1 0 0/.09);
+  --surface-3:oklch(1 0 0/.18); --border:oklch(1 0 0/.26);
+  --border-soft:oklch(1 0 0/.18); --track:oklch(1 0 0/.22);
+  --ink-strong:#fff;            --ink:oklch(.98 .01 45);
+  --ink-dim:oklch(.94 .02 45);  --muted:oklch(.88 .03 45);
+  --faint:oklch(.80 .05 45);
+  --accent:#fff;                --accent-on:oklch(.47 .18 34);
+  --accent-ink:#fff;            --accent-bg:oklch(1 0 0/.16);
+  --accent-border:oklch(1 0 0/.40);
+  --green:oklch(.90 .14 150); --green-bg:oklch(.55 .12 150/.35);
+  --green-border:oklch(.85 .12 150/.6); --green-ink:oklch(.96 .08 150);
+  --red:oklch(.94 .06 20);    --red-bg:oklch(.30 .10 25/.35);
+  --red-border:oklch(.90 .06 20/.55);   --red-ink:#fff;
+  --amber:oklch(.93 .13 90);  --amber-bg:oklch(.75 .14 85/.28);
+  --amber-ink:oklch(.98 .06 90);
+  --chrome-panel:linear-gradient(150deg,oklch(1 0 0/.32) 0%,
+                 oklch(1 0 0/.12) 30%,oklch(1 0 0/.36) 52%,
+                 oklch(1 0 0/.10) 74%,oklch(1 0 0/.26) 100%);
+  --chrome-panel-border:oklch(1 0 0/.36);
+  --glass-bg:oklch(1 0 0/.18);  --glass-border:oklch(1 0 0/.34);
+  --glass-edge:oklch(.35 .12 30/.25);
+  --glass-hi:linear-gradient(180deg,oklch(1 0 0/.30),oklch(1 0 0/0) 60%);
+  --shadow-card:none;
+  --shadow-lift:0 14px 40px oklch(.30 .12 30/.35);
+  --shadow-glass:0 10px 32px oklch(.30 .12 30/.28);
+  --overlay:oklch(.30 .12 30/.5);
+}
+
+/* Стеклянный слой: таббар, карточка поверх градиента, кнопка на цвете */
+.glass {
+  background:var(--glass-bg);
+  backdrop-filter:var(--glass-blur);
+  -webkit-backdrop-filter:var(--glass-blur);
+  border:1px solid var(--glass-border);
+  box-shadow:var(--shadow-glass);
+}
+@supports not (backdrop-filter:blur(1px)) {
+  .glass { background:var(--surface); border-color:var(--border); }
+}
+
+/* Информационная панель: хром-стекло. Итоги, серия, плитки статистики.
+   Только для показа данных — кнопки и строки-ссылки остаются плотными. */
+.panel {
+  background:var(--chrome-panel);
+  border:1px solid var(--chrome-panel-border);
+  backdrop-filter:var(--glass-blur);
+  -webkit-backdrop-filter:var(--glass-blur);
+  border-radius:var(--radius-card);
+}
+@supports not (backdrop-filter:blur(1px)) {
+  .panel { background:var(--surface-2); border-color:var(--border); }
+}
+/* Семантику панель не перебивает: у зелёных и красных плиток
+   остаётся --green-bg / --red-bg без хрома. */
+
+/* Капсула активного раздела: переезжает, а не перерисовывается */
+.tabbar { position:relative; }
+.tabbar__pill {
+  position:absolute; top:6px; bottom:6px; left:0;
+  width:calc(100% / 4);           /* 100% / число разделов */
+  padding:0 13px; box-sizing:border-box; pointer-events:none;
+  transform:translateX(calc(var(--tab, 0) * 100%));
+  transition:transform 460ms cubic-bezier(.32,.72,0,1);
+}
+.tabbar__pill > i {
+  display:block; width:100%; height:100%; border-radius:18px;
+  background:var(--glass-hi); border:1px solid var(--glass-border);
+  box-shadow:0 2px 10px oklch(.35 .03 45/.12);
+}
+.tab { transition:color 260ms ease, opacity 260ms ease; }
+@media (prefers-reduced-motion:reduce) {
+  .tabbar__pill { transition:none; }
+}
+
+/* Градиент по тексту: цифры достижений, стрик */
+.grad-text {
+  background-image:var(--grad-spectrum);
+  -webkit-background-clip:text; background-clip:text;
+  color:transparent;
+}</pre>
+      <div style="padding:20px 24px;border-radius:18px;border:1px solid var(--border,oklch(0.90 0.008 60));background:var(--surface,#fff);font-size:14px;line-height:1.6;font-weight:500;color:var(--ink-dim,oklch(0.40 0.010 60))">
+        Порядок внедрения: заменить <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">:root</span> в app.css на этот блок → убрать <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">meta color-scheme=light</span> из index.html → в app.js читать <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">Telegram.WebApp.colorScheme</span> и выбор пользователя, ставить <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">data-theme</span> на <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">&lt;html&gt;</span> до снятия сплэша → добавить переключатель темы в профиль → навесить <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">.glass</span> на <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">.tabbar</span> и <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">.timer-bar</span> вместо их собственных <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">rgba</span> и <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px">backdrop-filter</span>.
+      </div>
+    </section>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;,&quot;orange&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark' | 'orange'&quot;,&quot;section&quot;:&quot;Тема&quot;},&quot;showCode&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Разделы&quot;}}">
+class Component extends DCLogic {
+  state = { theme: null, tab: 0 };
+
+  tabStyle(i) {
+    const on = this.state.tab === i;
+    return 'position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0;border:none;background:none;font:inherit;cursor:pointer;transition:color 260ms ease,opacity 260ms ease;'
+      + (on
+        ? 'color:var(--accent-ink,oklch(0.48 0.15 38));opacity:1'
+        : 'color:var(--ink-dim,oklch(0.40 0.010 60));opacity:.6');
+  }
+
+  pick(t) { this.setState({ theme: t }); }
+
+  chip(active) {
+    return active
+      ? 'padding:8px 16px;border-radius:999px;border:none;background:var(--accent,oklch(0.58 0.19 41));color:var(--accent-on,#fff);font:inherit;font-size:12.5px;font-weight:800;cursor:pointer'
+      : 'padding:8px 16px;border-radius:999px;border:none;background:transparent;color:var(--muted,oklch(0.60 0.010 60));font:inherit;font-size:12.5px;font-weight:700;cursor:pointer';
+  }
+
+  renderVals() {
+    const theme = this.state.theme ?? this.props.theme ?? 'light';
+    return {
+      theme,
+      showCode: this.props.showCode ?? true,
+      pickLight: () => this.pick('light'),
+      pickDark: () => this.pick('dark'),
+      pickOrange: () => this.pick('orange'),
+      btnLight: this.chip(theme === 'light'),
+      btnDark: this.chip(theme === 'dark'),
+      btnOrange: this.chip(theme === 'orange'),
+      setTab0: () => this.setState({ tab: 0 }),
+      setTab1: () => this.setState({ tab: 1 }),
+      setTab2: () => this.setState({ tab: 2 }),
+      setTab3: () => this.setState({ tab: 3 }),
+      tab0: this.tabStyle(0),
+      tab1: this.tabStyle(1),
+      tab2: this.tabStyle(2),
+      tab3: this.tabStyle(3),
+      pill: 'position:absolute;top:6px;bottom:6px;left:0;width:25%;padding:0 13px;box-sizing:border-box;transform:translateX(' + (this.state.tab * 100) + '%);transition:transform 460ms cubic-bezier(0.32,0.72,0,1)'
+    };
+  }
+}
+</script>
+</body>
+</html>
