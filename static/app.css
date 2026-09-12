@@ -892,12 +892,33 @@ button {
 }
 /* Активный профиль. Заливка та же, что у прижатой линзы, — состояние «здесь
    вы сейчас» во всём таббаре выглядит одинаково. */
+/* Подсветка активного профиля — ВНУТРЕННИЙ кружок, а не заливка всей кнопки.
+   Так она устроена точно как в плашке: там маркером служит линза, и вокруг неё
+   остаётся 4 px воздуха. Раньше круг заливался целиком и был одновременно и
+   контейнером, и маркером, отчего две подсветки выглядели по-разному.
+
+   Отступ 3, а не 4: у абсолютного потомка отсчёт идёт от padding box, то есть
+   уже внутри рамки в пиксель. От внешнего края выходит те же 4, что у линзы, а
+   диаметр кружка — 45, ровно её высота.
+
+   Материал тоже её: заливка `--lens-body` и контур `--lens-ring`. Один вид у
+   обеих подсветок — один набор токенов. */
+.tabbar__side::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  background: var(--lens-body);
+  box-shadow: inset 0 0 0 1px var(--lens-ring);
+  visibility: hidden;
+}
+.tabbar__side.is-active::before { visibility: visible; }
 .tabbar__side.is-active {
   color: var(--accent-ink);
   opacity: 1;
-  background: var(--plate-solid);
 }
-.tabbar__side .tab__icon { width: 21px; height: 21px; }
+/* Иконка поверх кружка: без этого она осталась бы под ним. */
+.tabbar__side .tab__icon { width: 21px; height: 21px; position: relative; z-index: 1; }
 .tabbar__side .tab__icon--user i { width: 17px; height: 17px; }
 
 /* Контейнер SVG-фильтров: нулевого размера, нужен только как хранилище defs. */
