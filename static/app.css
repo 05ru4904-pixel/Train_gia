@@ -655,7 +655,10 @@ button {
 
 /* Иконки перенесены из прежнего таббара без изменений: они и есть
    «существующие иконки», менять их задачей не ставилось. */
-.tab__icon { width: 18px; height: 18px; display: flex; }
+/* 21, а не прежние 18: линза стала шире на всю вкладку, и в ней иконка прежнего
+   кегля читалась мелкой. Внутренности иконок от размера не зависят — все они
+   собраны из долей и зазоров, поэтому меняется одно число. */
+.tab__icon { width: 21px; height: 21px; display: flex; }
 .tab__icon i { background: currentColor; display: block; }
 .tab__icon--grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
 .tab__icon--grid i { border-radius: 2px; }
@@ -917,9 +920,10 @@ button {
   color: var(--accent-ink);
   opacity: 1;
 }
-/* Иконка поверх кружка: без этого она осталась бы под ним. */
-.tabbar__side .tab__icon { width: 21px; height: 21px; position: relative; z-index: 1; }
-.tabbar__side .tab__icon--user i { width: 17px; height: 17px; }
+/* Иконка поверх кружка: без этого она осталась бы под ним. Крупнее, чем в
+   строке (24 против 21): у профиля подписи нет, и иконка несёт кнопку одна. */
+.tabbar__side .tab__icon { width: 24px; height: 24px; position: relative; z-index: 1; }
+.tabbar__side .tab__icon--user i { width: 19px; height: 19px; }
 
 /* Контейнер SVG-фильтров: нулевого размера, нужен только как хранилище defs. */
 .tabbar__defs { position: absolute; width: 0; height: 0; overflow: hidden; }
