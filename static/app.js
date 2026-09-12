@@ -3626,6 +3626,9 @@
       formK: 150, formC: 11,
       // Нажатие: почти без перелёта, оно не должно «звенеть».
       pressK: 260, pressC: 26,
+      // Пружина округления. Мягче и глуше нажатия: ζ около единицы, поэтому
+      // форма приходит к кругу без перелёта. Перелёт формы читался бы дрожью.
+      roundK: 150, roundC: 25,
       // Скорость -> растяжение. Скорость меряется во вкладках в секунду.
       stretchGain: 0.034,
       stretchMax: 0.32,
@@ -3660,7 +3663,11 @@
     var sim = {
       pos: 0, vel: 0, target: 0,
       form: 0, formVel: 0,
-      press: 0, pressVel: 0, pressTarget: 0
+      press: 0, pressVel: 0, pressTarget: 0,
+      // Округление: капсула стягивается в круг, пока линзу ВЕДУТ. Своя пружина,
+      // а не общая с нажатием, потому что событие другое — не касание, а
+      // перетаскивание, и жить она должна ровно столько, сколько длится жест.
+      round: 0, roundVel: 0, roundTarget: 0
     };
     var frame = 0;
     var lastTime = 0;
@@ -3671,6 +3678,10 @@
     var dragPrev = 0;    // положение линзы в прошлом кадре ведения
     var dispScale = 0;   // последнее записанное значение, чтобы не дёргать SVG зря
     var lastPlateT = '';
+    // Последняя записанная форма угла. Радиус пишется только на изменение:
+    // присвоение стиля каждый кадр без нужды сбрасывает расчёт стилей.
+    var lastRadius = '';
+    var roundOn = false;  // класс круглой формы уже стоит на таббаре
 
     /* --- мелкая математика ------------------------------------------- */
 
@@ -4560,6 +4571,10 @@
       el.lens.style.width = geo.w + 'px';
       el.lens.style.height = geo.h + 'px';
       el.lens.style.borderRadius = (geo.h / 2) + 'px';
+      // Форму угла дальше ведёт paint(): она зависит от масштаба, а он меняется
+      // каждый кадр. Забываем записанное, иначе после переизмерения радиус
+      // остался бы от прежних размеров.
+      lastRadius = '';
       // Белая капсула под кнопками повторяет линзу один в один: и размер, и
       // ход. Иначе в покое заливка осталась бы на прежней вкладке.
       if (el.pill) {
@@ -4585,8 +4600,44 @@
       var tx = sim.pos * geo.step;
       // Растяжение вдоль хода и встречное сжатие поперёк: объём стекла
       // сохраняется, поэтому на разгоне линза не раздувается.
-      var sx = clamp(1 + sim.form + sim.press * GLASS.pressLens, 0.5, 2);
       var sy = clamp(1 - sim.form * GLASS.squash + sim.press * GLASS.pressLens, 0.5, 2);
+
+      // Пока линзу ВЕДУТ, капсула стягивается в круг: ширина съезжает к высоте,
+      // коробка становится квадратной, а радиус в половину стороны делает из
+      // квадрата круг.
+      //
+      // Ведёт это `sim.round`, а не `sim.press`, и разница принципиальна. От
+      // простого тапа форма меняться не должна: круг у́же капсулы, он режет
+      // подпись кромкой, а у кромки стекло гнёт сильнее всего — слово рвётся.
+      // Лечится это тем, что подписи на время жеста убираются, но убирать их на
+      // каждом переключении раздела значило бы мигать ими.
+      var narrow = 1 + (geo.h / geo.w - 1) * sim.round;
+      var sx = clamp((1 + sim.form + sim.press * GLASS.pressLens) * narrow, 0.3, 2);
+
+      // Круглая линза несёт только иконку. Класс висит на таббаре, а не на
+      // строке: под ним лежит и настоящая строка, и её копия внутри линзы,
+      // поэтому подписи гаснут одним кадром и стыка на кромке не возникает.
+      var wantRound = sim.round > 0.06;
+      if (wantRound !== roundOn) {
+        roundOn = wantRound;
+        el.tabbar.classList.toggle('is-round', wantRound);
+      }
+
+      // Радиус приходится пересчитывать каждый кадр, и вот почему. Он задан в
+      // пикселях, а масштаб растягивает его вместе с коробкой: по горизонтали
+      // выходит R*sx, по вертикали R*sy. При сужении R*sx становится меньше
+      // половины стороны, и вместо круга получается скруглённый квадрат.
+      // Поэтому радиус задаётся двумя числами, каждое поделено на свой
+      // масштаб, — тогда НА ЭКРАНЕ оба равны половине высоты коробки. В покое
+      // (sx=sy=1) формула даёт прежние h/2 и капсулу, так что отдельного
+      // случая для покоя не нужно.
+      var rr = (geo.h * sy) / 2;
+      var radius = (rr / sx).toFixed(2) + 'px / ' + (rr / sy).toFixed(2) + 'px';
+      if (radius !== lastRadius) {
+        lastRadius = radius;
+        el.lens.style.borderRadius = radius;
+        if (el.pill) el.pill.style.borderRadius = radius;
+      }
 
       // Только двумерные трансформации: translate3d вынес бы линзу в
       // отдельный слой композитора, а WebKit внутри такого слоя выбрасывает
@@ -4675,7 +4726,8 @@
       if (dragging) return false;
       return Math.abs(sim.target - sim.pos) < 0.0004 && Math.abs(sim.vel) < 0.0015
         && Math.abs(sim.form) < 0.0006 && Math.abs(sim.formVel) < 0.002
-        && Math.abs(sim.pressTarget - sim.press) < 0.001 && Math.abs(sim.pressVel) < 0.002;
+        && Math.abs(sim.pressTarget - sim.press) < 0.001 && Math.abs(sim.pressVel) < 0.002
+        && Math.abs(sim.roundTarget - sim.round) < 0.001 && Math.abs(sim.roundVel) < 0.002;
     }
 
     function step(now) {
@@ -4715,6 +4767,13 @@
       sim.pressVel += (-GLASS.pressK * (sim.press - sim.pressTarget)
         - GLASS.pressC * sim.pressVel) * dt;
       sim.press += sim.pressVel * dt;
+
+      // Округление идёт мягче нажатия: демпфирование выше, перелёта нет.
+      // Форма не должна пружинить — качание даёт пружина деформации, и вторая
+      // качающаяся величина на той же фигуре читается как дрожь.
+      sim.roundVel += (-GLASS.roundK * (sim.round - sim.roundTarget)
+        - GLASS.roundC * sim.roundVel) * dt;
+      sim.round += sim.roundVel * dt;
 
       paint();
 
@@ -4782,6 +4841,10 @@
           drag.moved = true;
           dragging = true;
           dragPrev = sim.pos;
+          // Ведут — значит округляем. Именно здесь, а не на pointerdown:
+          // от простого тапа форма меняться не должна, иначе подписи мигали бы
+          // на каждом переключении раздела.
+          sim.roundTarget = 1;
           // Захват на плашке, а не на линзе: у линзы pointer-events: none.
           try { el.plate.setPointerCapture(event.pointerId); } catch (e) { /* старый WebView */ }
         }
@@ -4800,6 +4863,7 @@
         drag = null;
         dragging = false;
         sim.pressTarget = 0;
+        sim.roundTarget = 0;
         el.tabbar.classList.remove('is-pressed');
         run();
         if (!moved) return;   // это был тап, его доведёт click
@@ -4987,7 +5051,10 @@
         sim.pressTarget = 0;
         sim.press = 0;
         sim.pressVel = 0;
-        el.tabbar.classList.remove('is-pressed');
+        sim.roundTarget = 0;
+        sim.round = 0;
+        sim.roundVel = 0;
+        el.tabbar.classList.remove('is-pressed', 'is-round');
         setGlass(false);
         // Следующий выбор раздела считается первым и ставит линзу на место
         // мгновенно: ученик не видел, откуда она поехала бы.
